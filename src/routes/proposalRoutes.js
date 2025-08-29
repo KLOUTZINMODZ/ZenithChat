@@ -81,9 +81,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
       } catch (lookupError) {
         console.error(`❌ [Proposal Accept] Lookup failed:`, lookupError.message);
-        // As a last resort, use proposalId (this will likely fail but provides better error info)
-        boostingId = proposalId;
-        console.log(`⚠️ [Proposal Accept] Using proposalId as fallback boostingId: ${boostingId}`);
+        console.error(`❌ [Proposal Accept] Lookup error details:`, lookupError.response?.data || lookupError);
+        
+        return res.status(500).json({
+          success: false,
+          message: 'Não foi possível encontrar o boostingId para esta proposta',
+          error: `Lookup failed: ${lookupError.message}`,
+          details: {
+            proposalId: proposalId,
+            lookupUrl: `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/${proposalId}/boosting-id`,
+            originalError: lookupError.response?.data || lookupError.message
+          }
+        });
       }
     }
     
