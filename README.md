@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # HackLote Chat API
 
 API WebSocket dedicada para mensagens em tempo real do marketplace HackLote.
@@ -212,5 +213,6 @@ Para problemas ou dúvidas, abra uma issue no repositório.
 # ZenithChat
 # ZenithChat
 =======
+=======
+>>>>>>> 5ece3faad725953919a46a845d8189eaebff9bd0
 dps eu edito sa prr
->>>>>>> 07d31f4c6b2a8b259eaf9ec52306c565203ff4d4
