@@ -225,7 +225,7 @@ process.on('SIGINT', () => {
 });
 
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   logger.info(`🚀 Chat API Server running on port ${PORT}`);
   logger.info(`🔌 WebSocket server ready for connections`);

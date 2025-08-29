@@ -41,8 +41,8 @@ cp .env.example .env
 Edite o arquivo `.env` com suas configurações:
 
 ```env
-# Porta do servidor (padrão: 3001)
-PORT=3001
+# Porta do servidor (padrão: 5000)
+PORT=5000
 
 # MongoDB - Use a mesma conexão da API principal
 MONGODB_URI=mongodb+srv://seu_usuario:sua_senha@cluster.mongodb.net/hacklote
@@ -173,7 +173,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 COPY . .
-EXPOSE 3001
+EXPOSE 5000
 CMD ["npm", "start"]
 ```
 

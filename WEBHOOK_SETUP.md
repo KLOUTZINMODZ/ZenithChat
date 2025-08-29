@@ -15,7 +15,7 @@ O sistema de webhook foi movido da API principal (Vercel) para a HackloteChatApi
 ### HackloteChatApi (.env)
 ```env
 # Configuração existente...
-PORT=3001
+PORT=5000
 MONGODB_URI=your_mongodb_connection_string
 NODE_ENV=development
 

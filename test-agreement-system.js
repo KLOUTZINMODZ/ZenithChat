@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 
-const BASE_URL = 'http://localhost:3001/api';
+const BASE_URL = 'http://localhost:5000/api';
 const TEST_JWT = 'your_test_jwt_token_here';
 
 class AgreementSystemTest {
