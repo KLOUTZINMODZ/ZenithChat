@@ -51,6 +51,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log(`🔍 [Proposal Accept] ConversationId: ${conversationId}`);
     console.log(`🔍 [Proposal Accept] BoosterId: ${boosterId}`);
     console.log(`🔍 [Proposal Accept] ClientId: ${clientId}`);
+    console.log(`🔍 [Proposal Accept] Full request body:`, JSON.stringify(req.body, null, 2));
     console.log(`🔍 [Proposal Accept] Metadata:`, JSON.stringify(metadata, null, 2));
     
     // Forward to HackLoteAPI
