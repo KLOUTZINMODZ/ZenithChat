@@ -6,7 +6,7 @@ const Report = require('../models/Report');
 const axios = require('axios');
 
 class BoostingChatController {
-  // Ver proposta aceita para uma conversa (com suporte a Agreement)
+
   async getAcceptedProposal(req, res) {
     try {
       const { conversationId } = req.params;
@@ -16,20 +16,20 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      // Verificar se usuário é participante da conversa
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      // Buscar Agreement primeiro (novo padrão)
-      let agreement = await Agreement.findOne({ conversationId, status: { $in: ['active', 'completed'] } })
-        .sort({ createdAt: -1 }); // Mais recente primeiro
 
-      // Fallback para AcceptedProposal (retrocompatibilidade)
+      let agreement = await Agreement.findOne({ conversationId, status: { $in: ['active', 'completed'] } })
+        .sort({ createdAt: -1 });
+
+
       let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
       
-      // Se tem AcceptedProposal mas não Agreement, migrar automaticamente
+
       if (acceptedProposal && !agreement) {
         try {
           const AgreementMigration = require('../middleware/agreementMigrationMiddleware');
@@ -39,7 +39,7 @@ class BoostingChatController {
         }
       }
 
-      // Se não encontrou nenhum
+
       if (!acceptedProposal && !agreement) {
         return res.status(404).json({ 
           success: false, 
@@ -47,10 +47,10 @@ class BoostingChatController {
         });
       }
 
-      // Resposta unificada (prioriza Agreement, mantém AcceptedProposal para compatibilidade)
+
       const response = {
         success: true,
-        // Formato legacy (AcceptedProposal)
+
         proposal: acceptedProposal || {
           _id: agreement.acceptedProposalId,
           conversationId: agreement.conversationId,
@@ -72,7 +72,7 @@ class BoostingChatController {
         }
       };
 
-      // Adicionar dados do Agreement se existir
+
       if (agreement) {
         response.agreement = {
           agreementId: agreement.agreementId,
@@ -90,7 +90,7 @@ class BoostingChatController {
     }
   }
 
-  // Renegociar proposta (apenas booster)
+
   async renegotiateProposal(req, res) {
     try {
       const { conversationId } = req.params;
@@ -101,13 +101,13 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      // Verificar se o usuário é participante da conversa
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      // Enviar mensagem automática sobre renegociação
+
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
@@ -123,12 +123,12 @@ class BoostingChatController {
 
       await systemMessage.save();
 
-      // Atualizar conversa
+
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-      // Notificar backend principal
+
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
       
       try {
@@ -157,7 +157,7 @@ class BoostingChatController {
     }
   }
 
-  // Cancelar atendimento/boosting
+
   async cancelService(req, res) {
     try {
       const { conversationId } = req.params;
@@ -168,13 +168,13 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      // Verificar se o usuário é participante da conversa
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      // Enviar mensagem automática sobre cancelamento
+
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
@@ -189,7 +189,7 @@ class BoostingChatController {
 
       await systemMessage.save();
 
-      // Desativar conversa
+
       conversation.isActive = false;
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
@@ -198,11 +198,11 @@ class BoostingChatController {
       conversation.metadata.set('cancelledBy', userId);
       await conversation.save();
 
-      // Notificar backend principal
+
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
       
       try {
-        // Usar proposal ID se marketplaceItem estiver undefined
+
         const itemId = conversation.marketplaceItem || conversation.proposal;
         
         if (itemId) {
@@ -233,7 +233,7 @@ class BoostingChatController {
     }
   }
 
-  // Confirmar entrega (apenas cliente)
+
   async confirmDelivery(req, res) {
     try {
       const { conversationId } = req.params;
@@ -243,17 +243,17 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      // Verificar se o usuário é participante da conversa
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      // Buscar Agreement e AcceptedProposal primeiro
+
       let agreement = await Agreement.findOne({ conversationId });
       let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
       
-      // Auto-migrar se necessário
+
       if (acceptedProposal && !agreement) {
         try {
           const AgreementMigration = require('../middleware/agreementMigrationMiddleware');
@@ -263,12 +263,12 @@ class BoostingChatController {
         }
       }
 
-      // Identificar booster
+
       const boosterUserId = acceptedProposal?.booster?.userid || 
                            agreement?.boosterUserId || 
                            conversation.participants.find(p => p.toString() !== userId);
 
-      // Enviar mensagem automática sobre confirmação de entrega
+
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
@@ -283,11 +283,11 @@ class BoostingChatController {
 
       await systemMessage.save();
 
-      // Enviar mensagem específica para o booster
+
       if (boosterUserId) {
         const boosterMessage = new Message({
           conversation: conversationId,
-          sender: userId, // Cliente que confirmou
+          sender: userId,
           content: `🎉 Parabéns! O cliente confirmou a entrega do seu serviço.\n\n💰 O pagamento será processado em breve.\n🔒 Este chat foi finalizado.\n\nObrigado por usar nossa plataforma!`,
           type: 'system',
           metadata: {
@@ -301,14 +301,14 @@ class BoostingChatController {
         console.log(`✅ Mensagem para booster ${boosterUserId} criada`);
       }
 
-      // Marcar atendimento como completado e BLOQUEAR CHAT
+
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       conversation.boostingStatus = 'completed';
       conversation.metadata.set('status', 'delivery_confirmed');
-      conversation.deliveryConfirmedAt = new Date(); // Para histórico
+      conversation.deliveryConfirmedAt = new Date();
       
-      // 🔒 BLOQUEAR CONVERSA NO BANCO DE DADOS
+
       console.log(`🔒 [DEBUG] Bloqueando conversa ${conversationId} no HackloteChatApi...`);
       console.log(`   Estado anterior: isBlocked=${conversation.isBlocked}`);
       
@@ -324,7 +324,7 @@ class BoostingChatController {
       console.log(`   blockedReason: ${savedConversation.blockedReason}`);
       console.log(`   conversationId: ${savedConversation._id}`);
 
-      // Completar acordo com idempotência
+
       if (agreement) {
         if (agreement.status === 'completed') {
           console.log(`✅ Agreement ${agreement.agreementId} já está completado - operação idempotente`);
@@ -341,11 +341,11 @@ class BoostingChatController {
         }
       }
 
-      // Notificar backend principal
+
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
       
       try {
-        // Usar proposal ID se marketplaceItem estiver undefined
+
         const itemId = conversation.marketplaceItem || conversation.proposal;
         
         if (itemId) {
@@ -368,7 +368,7 @@ class BoostingChatController {
         success: true,
         message: 'Entrega confirmada com sucesso',
         systemMessage,
-        blocked: true // Chat bloqueado instantaneamente
+        blocked: true
       });
     } catch (error) {
       console.error('Erro ao confirmar entrega:', error);
@@ -376,7 +376,7 @@ class BoostingChatController {
     }
   }
 
-  // Denunciar atendimento
+
   async reportService(req, res) {
     try {
       const { conversationId } = req.params;
@@ -394,7 +394,7 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      // Verificar se o usuário é participante da conversa
+
       console.log('🔍 [DEBUG] Buscando conversa...');
       const conversation = await Conversation.findById(conversationId).populate('participants');
       
@@ -415,7 +415,7 @@ class BoostingChatController {
       const isParticipant = conversation.isParticipant(userId);
       console.log('   É participante?', isParticipant);
       
-      // Debug adicional para entender o problema
+
       conversation.participants.forEach((p, index) => {
         const participantId = p._id ? p._id.toString() : p.toString();
         const match = participantId === userId.toString();
@@ -429,10 +429,10 @@ class BoostingChatController {
 
       console.log('✅ [DEBUG] Usuário autorizado, continuando...');
 
-      // Buscar proposta aceita para contexto
+
       const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
 
-      // Identificar quem denunciou e quem foi denunciado
+
       const reporter = conversation.participants.find(p => p._id.toString() === userId.toString());
       const reported = conversation.participants.find(p => p._id.toString() !== userId.toString());
 
@@ -440,14 +440,14 @@ class BoostingChatController {
         return res.status(400).json({ success: false, message: 'Erro ao identificar participantes' });
       }
 
-      // Buscar dados adicionais dos usuários via API principal
+
       let reporterData = null;
       let reportedData = null;
 
       try {
         const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
         
-        // Buscar dados do denunciante
+
         try {
           const reporterResponse = await axios.get(`${apiUrl}/api/users/${reporter._id}`, {
             headers: { 'Authorization': req.headers.authorization }
@@ -457,7 +457,7 @@ class BoostingChatController {
           console.log('Erro ao buscar dados do denunciante:', apiError.message);
         }
 
-        // Buscar dados do denunciado
+
         try {
           const reportedResponse = await axios.get(`${apiUrl}/api/users/${reported._id}`, {
             headers: { 'Authorization': req.headers.authorization }
@@ -470,7 +470,7 @@ class BoostingChatController {
         console.log('Erro na comunicação com API principal:', error.message);
       }
 
-      // Criar registro completo da denúncia
+
       const reportData = new Report({
         conversationId,
         proposalId: acceptedProposal?._id,
@@ -511,7 +511,7 @@ class BoostingChatController {
           proposalValue: acceptedProposal?.price,
           startDate: acceptedProposal?.acceptedAt,
           expectedEndDate: acceptedProposal?.acceptedAt ? 
-            new Date(acceptedProposal.acceptedAt.getTime() + (24 * 60 * 60 * 1000)) : // +24h como fallback
+            new Date(acceptedProposal.acceptedAt.getTime() + (24 * 60 * 60 * 1000)) : 
             null,
           messagesCount: await Message.countDocuments({ conversation: conversationId }),
           conversationDuration: Math.floor((new Date() - conversation.createdAt) / (1000 * 60))
@@ -522,7 +522,7 @@ class BoostingChatController {
 
       await reportData.save();
 
-      // Bloquear a conversa quando reportada
+
       await Conversation.findByIdAndUpdate(conversationId, {
         isReported: true,
         reportedAt: new Date(),
@@ -531,7 +531,7 @@ class BoostingChatController {
 
       console.log('✅ [DEBUG] Conversa bloqueada após denúncia');
 
-      // Enviar mensagem automática sobre denúncia
+
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
@@ -548,7 +548,7 @@ class BoostingChatController {
 
       await systemMessage.save();
 
-      // Atualizar conversa
+
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       conversation.boostingStatus = 'disputed';
@@ -558,7 +558,7 @@ class BoostingChatController {
       conversation.metadata.set('reportId', reportData._id);
       await conversation.save();
 
-      // Notificar backend principal (opcional, dados já salvos localmente)
+
       try {
         const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
         const itemId = conversation.marketplaceItem || conversation.proposal;
@@ -596,7 +596,7 @@ class BoostingChatController {
   }
 
 
-  // Salvar proposta aceita na database local (agora cria Agreement + AcceptedProposal)
+
   async saveAcceptedProposal(req, res) {
     try {
       const { 
@@ -616,11 +616,11 @@ class BoostingChatController {
         });
       }
 
-      // ⚠️ NOVO: Não mais bloquear múltiplas propostas - Agreement permite isso
-      // Buscar proposta existente apenas para compatibilidade, não para bloquear
+
+
       const existingProposal = await AcceptedProposal.findOne({ conversationId });
       
-      // Verificar idempotência por Agreement
+
       const existingAgreement = await Agreement.findOne({
         'actionHistory.idempotencyKey': idempotencyKey
       });
@@ -634,7 +634,7 @@ class BoostingChatController {
         });
       }
 
-      // Criar registro da proposta aceita
+
       const acceptedProposal = new AcceptedProposal({
         conversationId,
         proposalId,
@@ -671,19 +671,19 @@ class BoostingChatController {
         acceptedAt: new Date()
       });
 
-      // 🚨 IMPORTANTE: Só salvar AcceptedProposal se for a primeira (compatibilidade)
+
       if (!existingProposal) {
         await acceptedProposal.save();
       } else {
-        // Para múltiplas propostas, usar apenas Agreement
+
         acceptedProposal = null;
       }
 
-      // 🆕 SEMPRE criar Agreement independente
+
       const agreement = new Agreement({
         conversationId,
         proposalId,
-        acceptedProposalId: acceptedProposal?._id, // null se múltipla proposta
+        acceptedProposalId: acceptedProposal?._id,
         
         proposalSnapshot: {
           game: proposalData.game,
@@ -734,7 +734,7 @@ class BoostingChatController {
         status: 'active'
       });
 
-      // Adicionar ação de criação
+
       agreement.addAction('created', clientData.userid, {
         proposalId,
         isMultiple: !!existingProposal
@@ -742,20 +742,20 @@ class BoostingChatController {
 
       await agreement.save();
 
-      // Atualizar conversa (manter compatibilidade + Agreement ID)
+
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
-        // Manter referência legacy apenas se primeira proposta
+
         if (acceptedProposal) {
           conversation.acceptedProposal = acceptedProposal._id;
         }
-        // Reativar mensagens ao aceitar nova proposta (mesmo booster)
+
         conversation.boostingStatus = 'active';
         conversation.metadata = conversation.metadata || new Map();
         conversation.metadata.set('latestAgreementId', agreement.agreementId);
-        conversation.metadata.set('status', 'active'); // Resetar status
+        conversation.metadata.set('status', 'active');
         
-        // Limpar histórico de entrega anterior se existir
+
         if (conversation.deliveryConfirmedAt) {
           conversation.deliveryConfirmedAt = undefined;
         }
@@ -769,9 +769,9 @@ class BoostingChatController {
         message: existingProposal 
           ? 'Nova proposta aceita criada com sucesso (múltiplas propostas permitidas)'
           : 'Proposta aceita salva com sucesso',
-        // Compatibilidade
+
         proposalId: acceptedProposal?._id || agreement._id,
-        // Novo padrão  
+
         agreementId: agreement.agreementId,
         agreementStatus: agreement.status,
         isMultiple: !!existingProposal
@@ -782,7 +782,7 @@ class BoostingChatController {
     }
   }
 
-  // Obter status da conversa
+
   async getConversationStatus(req, res) {
     try {
       const { conversationId } = req.params;
@@ -822,7 +822,7 @@ class BoostingChatController {
     }
   }
 
-  // ADMIN: Desbloquear conversa reportada (para testes e situações específicas)
+
   async unreportConversation(req, res) {
     try {
       const { conversationId } = req.params;
@@ -832,13 +832,13 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      // Verificar se usuário é participante da conversa
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      // Desbloquear conversa
+
       await Conversation.findByIdAndUpdate(conversationId, {
         $unset: { 
           isReported: "",
@@ -851,7 +851,7 @@ class BoostingChatController {
         }
       });
 
-      // Mensagem de sistema
+
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
@@ -866,7 +866,7 @@ class BoostingChatController {
 
       await systemMessage.save();
 
-      // Atualizar conversa
+
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       conversation.metadata.set('status', 'active');
@@ -885,14 +885,14 @@ class BoostingChatController {
   }
 }
 
-// Função auxiliar para calcular prioridade da denúncia
+
 function calculateReportPriority(type, previousReportsCount) {
-  // Tipos críticos
+
   if (['fraud', 'harassment'].includes(type)) {
     return 'critical';
   }
   
-  // Alta prioridade se usuário já foi denunciado antes
+
   if (previousReportsCount >= 3) {
     return 'high';
   }
@@ -901,7 +901,7 @@ function calculateReportPriority(type, previousReportsCount) {
     return 'medium';
   }
   
-  // Tipos que merecem atenção especial
+
   if (['service_not_delivered', 'payment_issues'].includes(type)) {
     return 'high';
   }

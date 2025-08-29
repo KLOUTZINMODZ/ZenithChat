@@ -8,24 +8,24 @@ class TemporaryChatCleanupService {
     this.intervalId = null;
   }
 
-  // Iniciar serviço de limpeza automática (executa a cada hora)
+
   start() {
     if (this.isRunning) {
       logger.warn('Serviço de limpeza de chats temporários já está rodando');
       return;
     }
 
-    // Executar imediatamente e depois a cada hora (3600000 ms = 1 hora)
+
     this.cleanupExpiredChats();
     this.intervalId = setInterval(async () => {
       await this.cleanupExpiredChats();
-    }, 3600000); // 1 hora em milissegundos
+    }, 3600000);
 
     this.isRunning = true;
     logger.info('✅ Serviço de limpeza de chats temporários iniciado (executa a cada hora)');
   }
 
-  // Parar serviço
+
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -35,7 +35,7 @@ class TemporaryChatCleanupService {
     logger.info('🛑 Serviço de limpeza de chats temporários parado');
   }
 
-  // Limpar chats temporários expirados
+
   async cleanupExpiredChats() {
     try {
       logger.info('🧹 Iniciando limpeza de chats temporários expirados...');
@@ -58,10 +58,10 @@ class TemporaryChatCleanupService {
 
       for (const chat of expiredChats) {
         try {
-          // Expirar o chat
+
           await chat.expireTemporaryChat();
           
-          // Criar mensagem de expiração
+
           const expirationMessage = new Message({
             conversation: chat._id,
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
@@ -75,7 +75,7 @@ class TemporaryChatCleanupService {
 
           await expirationMessage.save();
           
-          // Atualizar última mensagem
+
           chat.lastMessage = expirationMessage._id;
           chat.lastMessageAt = new Date();
           await chat.save();
@@ -106,37 +106,37 @@ class TemporaryChatCleanupService {
     }
   }
 
-  // Executar limpeza manual
+
   async manualCleanup() {
     logger.info('🧹 Executando limpeza manual de chats temporários...');
     return await this.cleanupExpiredChats();
   }
 
-  // Obter estatísticas de chats temporários
+
   async getStats() {
     try {
       const stats = await Promise.all([
-        // Chats temporários ativos (pendentes)
+
         Conversation.countDocuments({
           isTemporary: true,
           status: 'pending',
           expiresAt: { $gt: new Date() }
         }),
         
-        // Chats temporários expirados (mas ainda não limpos)
+
         Conversation.countDocuments({
           isTemporary: true,
           status: 'pending',
           expiresAt: { $lt: new Date() }
         }),
         
-        // Chats temporários já expirados (status expired)
+
         Conversation.countDocuments({
           isTemporary: true,
           status: 'expired'
         }),
         
-        // Chats temporários aceitos (convertidos para permanentes)
+
         Conversation.countDocuments({
           isTemporary: false,
           status: 'active',
@@ -158,7 +158,7 @@ class TemporaryChatCleanupService {
     }
   }
 
-  // Verificar se o serviço está rodando
+
   getStatus() {
     return {
       isRunning: this.isRunning,

@@ -10,7 +10,7 @@ const authenticateCache = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const source = req.headers['x-cache-source'];
   
-  // Verificar se é da API principal
+
   if (source !== 'HackLoteAPI') {
     return res.status(401).json({
       success: false,
@@ -18,7 +18,7 @@ const authenticateCache = (req, res, next) => {
     });
   }
   
-  // Token opcional para cache interno
+
   if (authHeader) {
     const token = authHeader.replace('Bearer ', '');
     if (token !== process.env.VERCEL_API_SECRET && token !== process.env.JWT_SECRET) {
@@ -46,7 +46,7 @@ router.post('/marketplace-items', authenticateCache, async (req, res) => {
     
     const { externalReference, items, timestamp } = req.body;
     
-    // Validar dados obrigatórios
+
     if (!externalReference || !items || !Array.isArray(items)) {
       return res.status(400).json({
         success: false,
@@ -54,7 +54,7 @@ router.post('/marketplace-items', authenticateCache, async (req, res) => {
       });
     }
     
-    // Armazenar no cache
+
     const cached = paymentCacheService.storeMarketplaceItems(externalReference, items);
     
     logger.info('✅ Itens armazenados no cache com sucesso:', {
@@ -159,7 +159,7 @@ router.post('/retry-highlights', authenticateCache, async (req, res) => {
     const { paymentId } = req.body;
     
     if (paymentId) {
-      // Retry específico
+
       const highlightRetryService = require('../services/highlightRetryService');
       const success = await highlightRetryService.forceRetry(paymentId);
       
@@ -169,7 +169,7 @@ router.post('/retry-highlights', authenticateCache, async (req, res) => {
         data: { paymentId, retrySuccess: success }
       });
     } else {
-      // Processar todos os retries
+
       const highlightRetryService = require('../services/highlightRetryService');
       await highlightRetryService.processRetries();
       

@@ -1,7 +1,7 @@
 const CacheService = require('./CacheService');
 const logger = require('../utils/logger');
 
-// Singleton instance for global cache access
+
 class GlobalCache {
   constructor() {
     if (GlobalCache.instance) {
@@ -14,7 +14,7 @@ class GlobalCache {
     logger.info('🌐 Global Cache initialized');
   }
 
-  // Proxy all methods to the cache service
+
   set(key, value, ttlSeconds) {
     return this.cacheService.set(key, value, ttlSeconds);
   }
@@ -27,7 +27,7 @@ class GlobalCache {
     return this.cacheService.delete(key);
   }
 
-  // Message cache methods
+
   cacheMessage(conversationId, message) {
     return this.cacheService.cacheMessage(conversationId, message);
   }
@@ -40,7 +40,7 @@ class GlobalCache {
     return this.cacheService.getCachedMessages(conversationId);
   }
 
-  // Conversation cache methods
+
   cacheConversations(userId, conversations) {
     return this.cacheService.cacheConversations(userId, conversations);
   }
@@ -49,7 +49,7 @@ class GlobalCache {
     return this.cacheService.getCachedConversations(userId);
   }
 
-  // Session cache methods
+
   cacheUserSession(userId, sessionData) {
     return this.cacheService.cacheUserSession(userId, sessionData);
   }
@@ -58,7 +58,7 @@ class GlobalCache {
     return this.cacheService.getUserSession(userId);
   }
 
-  // Offline message methods
+
   cacheOfflineMessage(userId, message) {
     return this.cacheService.cacheOfflineMessage(userId, message);
   }
@@ -71,7 +71,7 @@ class GlobalCache {
     return this.cacheService.clearOfflineMessages(userId);
   }
 
-  // Cache invalidation
+
   invalidateConversationCache(conversationId, participantIds) {
     return this.cacheService.invalidateConversationCache(conversationId, participantIds);
   }
@@ -80,7 +80,7 @@ class GlobalCache {
     return this.cacheService.invalidateUserCache(userId);
   }
 
-  // Utility methods
+
   getStats() {
     return this.cacheService.getStats();
   }
@@ -94,5 +94,5 @@ class GlobalCache {
   }
 }
 
-// Export singleton instance
+
 module.exports = new GlobalCache();

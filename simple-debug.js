@@ -17,7 +17,7 @@ async function testNotifications() {
   
   console.log('\n🚀 Enviando notificações em sequência...');
 
-  // Teste 1: Notificação que FUNCIONA
+
   console.log('\n✅ TESTE 1: Notificação FUNCIONA');
   await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
     userIds: [USER_ID],
@@ -34,7 +34,7 @@ async function testNotifications() {
   
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // Teste 2: Igual mas type diferente
+
   console.log('\n🧪 TESTE 2: Mesma notificação, type = new_proposal');
   await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
     userIds: [USER_ID],
@@ -42,7 +42,7 @@ async function testNotifications() {
       id: `type_test_${Date.now()}`,
       title: 'TESTE TYPE - Direcionada',
       message: 'Esta notificação tem type new_proposal!',
-      type: 'new_proposal', // MUDANÇA AQUI
+      type: 'new_proposal',
       timestamp: new Date().toISOString(),
       isRead: false
     }
@@ -51,7 +51,7 @@ async function testNotifications() {
   
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // Teste 3: Formato completo
+
   console.log('\n📝 TESTE 3: Notificação formato completo');
   await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
     userIds: [USER_ID],
@@ -72,7 +72,7 @@ async function testNotifications() {
   
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // Teste 4: Diferentes types
+
   const types = ['proposal_accepted', 'new_boosting', 'boosting_completed'];
   
   for (let i = 0; i < types.length; i++) {

@@ -191,7 +191,7 @@
 
             addMessage('pending', 'Connecting to WebSocket...');
             
-            // Connect to local WebSocket server
+
             const wsUrl = `ws://12zku8.instatunnel.my/ws?token=${encodeURIComponent(token)}`;
             ws = new WebSocket(wsUrl);
 
@@ -307,7 +307,7 @@
             document.getElementById('messages').innerHTML = '';
         }
 
-        // Test HTTP endpoints
+
         async function testHealth() {
             try {
                 const response = await fetch('http://12zku8.instatunnel.my/health');
@@ -318,7 +318,7 @@
             }
         }
 
-        // Run health check on load
+
         window.onload = () => {
             testHealth();
         };

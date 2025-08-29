@@ -2,25 +2,25 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const AcceptedProposal = require('../models/AcceptedProposal');
 
-// Função auxiliar para extrair ObjectId válido de IDs compostos
+
 function extractValidObjectId(id) {
   if (!id) return null;
   
-  // Se o ID contém underscores, pegar apenas a primeira parte
+
   const cleanId = id.toString().split('_')[0];
   
-  // Verificar se é um ObjectId válido (24 caracteres hex)
+
   if (cleanId.length === 24 && /^[0-9a-fA-F]{24}$/.test(cleanId)) {
     return cleanId;
   }
   
-  // Se não for válido, retornar null
+
   console.warn('⚠️ ID inválido detectado:', id, '-> Extraído:', cleanId);
   return null;
 }
 
 class TemporaryChatController {
-  // Criar chat temporário quando proposta é enviada
+
   async createTemporaryChat(req, res) {
     console.log('🔥 createTemporaryChat endpoint chamado:', req.body);
     try {
@@ -40,14 +40,14 @@ class TemporaryChatController {
         });
       }
 
-      // Verificar se já existe conversa entre os usuários
+
       let conversation = await Conversation.findOne({
         participants: { $all: [clientId, boosterId] },
         type: 'direct'
       });
 
       if (conversation) {
-        // Se já existe conversa, apenas adicionar mensagem sobre nova proposta
+
         const proposalMessage = new Message({
           conversation: conversation._id,
           sender: boosterId,
@@ -62,7 +62,7 @@ class TemporaryChatController {
 
         await proposalMessage.save();
         
-        // Atualizar conversa
+
         conversation.lastMessage = proposalMessage._id;
         conversation.lastMessageAt = new Date();
         await conversation.save();
@@ -74,11 +74,11 @@ class TemporaryChatController {
         });
       }
 
-      // Criar nova conversa temporária
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 3); // 3 dias
 
-      // Buscar dados completos dos usuários
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 3);
+
+
       const User = require('../models/User');
       const clientUser = await User.findById(clientId);
       const boosterUser = await User.findById(boosterId);
@@ -90,7 +90,7 @@ class TemporaryChatController {
         expiresAt: expiresAt,
         status: 'pending',
         proposal: proposalId,
-        // Campos específicos para identificação clara
+
         client: {
           userid: clientUser._id,
           name: clientUser.name,
@@ -122,7 +122,7 @@ class TemporaryChatController {
 
       await conversation.save();
 
-      // Criar mensagem inicial automática
+
       const initialMessage = new Message({
         conversation: conversation._id,
         sender: boosterId,
@@ -137,7 +137,7 @@ class TemporaryChatController {
 
       await initialMessage.save();
 
-      // Atualizar conversa com a mensagem inicial
+
       conversation.lastMessage = initialMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
@@ -159,20 +159,20 @@ class TemporaryChatController {
   }
 
 
-  // Aceitar proposta e converter chat temporário em permanente
+
   async acceptTemporaryProposal(req, res) {
     try {
       const { conversationId } = req.params;
       const { proposalId: rawProposalId } = req.body;
       const userId = req.user?.id || req.user?._id;
       
-      // Limpar proposalId se fornecido
+
       const proposalId = rawProposalId ? extractValidObjectId(rawProposalId) : null;
       
       console.log('🔍 [DEBUG] Proposal ID processing:', {
         raw: rawProposalId,
         cleaned: proposalId,
-        conversationProposal: null // Será preenchido abaixo
+        conversationProposal: null
       });
 
       if (!userId) {
@@ -182,7 +182,7 @@ class TemporaryChatController {
         });
       }
 
-      // Buscar conversa
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) {
         return res.status(404).json({
@@ -191,7 +191,7 @@ class TemporaryChatController {
         });
       }
 
-      // Verificar se usuário é participante
+
       if (!conversation.isParticipant(userId)) {
         return res.status(403).json({
           success: false,
@@ -199,7 +199,7 @@ class TemporaryChatController {
         });
       }
 
-      // Verificar se é chat temporário pendente
+
       if (!conversation.isTemporary || conversation.status !== 'pending') {
         return res.status(400).json({
           success: false,
@@ -207,7 +207,7 @@ class TemporaryChatController {
         });
       }
 
-      // Verificar se não expirou
+
       if (conversation.isExpired()) {
         await conversation.expireTemporaryChat();
         return res.status(400).json({
@@ -216,15 +216,15 @@ class TemporaryChatController {
         });
       }
 
-      // Aceitar chat temporário (converter para permanente)
+
       await conversation.acceptTemporaryChat();
 
-      // Obter dados da proposta do metadata
+
       const proposalData = conversation.metadata.get('proposalData');
       const clientData = conversation.metadata.get('clientData');
       const boosterData = conversation.metadata.get('boosterData');
 
-      // Determinar o proposalId final (limpo) para usar no AcceptedProposal
+
       const finalProposalId = proposalId || extractValidObjectId(conversation.proposal);
       
       console.log('🔍 [DEBUG] Final proposal ID for AcceptedProposal:', {
@@ -234,7 +234,7 @@ class TemporaryChatController {
         finalProposalId
       });
 
-      // Criar AcceptedProposal
+
       const acceptedProposal = new AcceptedProposal({
         conversationId: conversation._id,
         proposalId: finalProposalId,
@@ -270,11 +270,11 @@ class TemporaryChatController {
 
       await acceptedProposal.save();
 
-      // Atualizar referência na conversa
+
       conversation.acceptedProposal = acceptedProposal._id;
       await conversation.save();
 
-      // Criar mensagem de aceitação
+
       const acceptanceMessage = new Message({
         conversation: conversation._id,
         sender: userId,
@@ -290,7 +290,7 @@ class TemporaryChatController {
 
       await acceptanceMessage.save();
 
-      // Atualizar conversa
+
       conversation.lastMessage = acceptanceMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
@@ -310,7 +310,7 @@ class TemporaryChatController {
     }
   }
 
-  // Listar chats temporários expirados para limpeza
+
   async getExpiredTemporaryChats(req, res) {
     try {
       const expiredChats = await Conversation.find({
@@ -336,7 +336,7 @@ class TemporaryChatController {
     }
   }
 
-  // Limpar chats temporários expirados
+
   async cleanupExpiredChats(req, res) {
     try {
       const expiredChats = await Conversation.find({
@@ -350,7 +350,7 @@ class TemporaryChatController {
         try {
           await chat.expireTemporaryChat();
           
-          // Criar mensagem de expiração
+
           const expirationMessage = new Message({
             conversation: chat._id,
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
@@ -363,7 +363,7 @@ class TemporaryChatController {
 
           await expirationMessage.save();
           
-          // Atualizar última mensagem
+
           chat.lastMessage = expirationMessage._id;
           chat.lastMessageAt = new Date();
           await chat.save();

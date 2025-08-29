@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Connect to MongoDB
+
 mongoose.connect(process.env.MONGODB_URI);
 
 const Conversation = require('./src/models/Conversation');
@@ -13,7 +13,7 @@ async function debugConversationState() {
   const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
 
   try {
-    // Buscar conversa diretamente no banco
+
     const conversation = await Conversation.findById(CONVERSATION_ID).lean();
 
     if (!conversation) {

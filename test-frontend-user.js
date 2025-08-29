@@ -17,9 +17,9 @@ async function testWithRealUserId() {
     console.log('3. Cole o token abaixo quando solicitado');
     console.log('');
 
-    // Para este teste, vou usar alguns user IDs comuns que podem estar no frontend
+
     const commonUserIds = [
-      '675c123456789012345abcde', // Exemplo de ObjectId MongoDB
+      '675c123456789012345abcde',
       '675c987654321098765edcba',
       'user_123',
       'test_user_123'
@@ -56,7 +56,7 @@ async function testWithRealUserId() {
         console.log(`❌ Erro para ${userId}:`, error.response?.data?.message || error.message);
       }
 
-      // Aguardar 1 segundo entre envios
+
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
@@ -79,7 +79,7 @@ async function testWithRealUserId() {
   }
 }
 
-// Função para testar com um user ID específico
+
 async function testSpecificUserId(userId) {
   if (!userId) {
     console.log('❌ User ID não fornecido');
@@ -115,7 +115,7 @@ async function testSpecificUserId(userId) {
   }
 }
 
-// Se um user ID for passado como argumento, usar ele
+
 const specificUserId = process.argv[2];
 if (specificUserId) {
   testSpecificUserId(specificUserId);

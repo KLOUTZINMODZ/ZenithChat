@@ -15,19 +15,19 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'chat-api' },
   transports: [
-    // Write all logs with importance level of `error` or less to `error.log`
+
     new winston.transports.File({ 
       filename: path.join('logs', 'error.log'), 
       level: 'error' 
     }),
-    // Write all logs with importance level of `info` or less to `combined.log`
+
     new winston.transports.File({ 
       filename: path.join('logs', 'combined.log') 
     }),
   ],
 });
 
-// If we're not in production, log to the console with colorized output
+
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
     format: winston.format.combine(

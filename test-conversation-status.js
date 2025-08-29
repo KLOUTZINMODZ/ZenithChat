@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Configuração
+
 const API_BASE = 'http://localhost:3001/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTdkODJjOGNkZDQwMTg4ZTA4YTIyNCIsImlhdCI6MTc1NjE3NDExNywiZXhwIjoxNzU2Nzc4OTE3fQ.ePaG5v7D1J4Vz3ml_cnVBYlk517fs96z4I95BUhI0nI';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
@@ -17,7 +17,7 @@ async function checkConversationStatus() {
   console.log('=====================================\n');
 
   try {
-    // 1. Verificar status geral
+
     console.log('📝 Status da Conversa:');
     const statusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,
@@ -35,7 +35,7 @@ async function checkConversationStatus() {
       console.log('\n✅ Conversa NÃO está reportada');
     }
 
-    // 2. Verificar propostas aceitas
+
     console.log('\n📝 Verificando Propostas:');
     try {
       const proposalResponse = await axios.get(
@@ -47,7 +47,7 @@ async function checkConversationStatus() {
       console.log('❌ Erro ao buscar proposta:', error.response?.status, error.response?.data?.message);
     }
 
-    // 3. Testar envio de mensagem
+
     console.log('\n📝 Testando Envio de Mensagem:');
     try {
       const messageResponse = await axios.post(
@@ -77,7 +77,7 @@ async function fixConversation() {
   console.log('\n🔧 Tentando Desbloquear Conversa (se necessário)');
   console.log('===============================================\n');
 
-  // Nota: Em produção, seria necessário um endpoint admin para isso
+
   console.log('⚠️  Para desbloquear uma conversa reportada:');
   console.log('1. Acesse diretamente o banco MongoDB');
   console.log('2. Execute: db.conversations.updateOne(');

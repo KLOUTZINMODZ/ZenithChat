@@ -19,20 +19,20 @@ const temporaryChatRoutes = require('./src/routes/temporaryChatRoutes');
 const cache = require('./src/services/GlobalCache');
 const temporaryChatCleanupService = require('./src/services/temporaryChatCleanupService');
 
-// Initialize Express app
+
 const app = express();
-// Trust proxy (required for correct protocol detection behind ngrok / reverse proxies)
+
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
-// Connect to MongoDB
+
 connectDB();
 
-// Security middleware
+
 app.use(helmet());
 app.use(compression());
 
-// CORS configuration
+
 const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
@@ -43,13 +43,13 @@ const corsOptions = {
       'https://12zku8.instatunnel.my'
     ];
     
-    // Allow requests with no origin (mobile apps, etc.)
+
     if (!origin) {
       callback(null, true);
       return;
     }
     
-    // Check if origin is allowed or is a local/development origin
+
     if (allowedOrigins.includes(origin) || 
         origin.includes('localhost') || 
         origin.includes('127.0.0.1') ||
@@ -57,7 +57,7 @@ const corsOptions = {
       callback(null, true);
     } else {
       logger.warn(`CORS blocked origin: ${origin}`);
-      callback(null, true); // Allow for now to debug
+      callback(null, true);
     }
   },
   credentials: true,
@@ -66,7 +66,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Request logging middleware
+
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   if (req.url.includes('boosting-chat')) {
@@ -76,11 +76,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Body parsing middleware
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
+
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
@@ -88,7 +88,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Root endpoint - API documentation
+
 app.get('/', (req, res) => {
   res.json({
     name: 'HackLote Chat API',
@@ -123,7 +123,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check endpoint
+
 app.get('/health', (req, res) => {
   const cacheStats = cache.getStats();
   res.json({ 
@@ -136,7 +136,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes
+
 const cacheRoutes = require('./src/routes/cacheRoutes');
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
@@ -145,7 +145,7 @@ app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);
 
-// Debug: Listar todas as rotas registradas
+
 console.log('🔍 Rotas registradas:');
 app._router.stack.forEach((middleware) => {
   if (middleware.route) {
@@ -160,10 +160,10 @@ app._router.stack.forEach((middleware) => {
 });
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
-// Compatibility routes for HackLoteAPI format
+
 app.use('/api', compatibilityRoutes);
 
-// WebSocket server info endpoint
+
 app.get('/api/ws-info', (req, res) => {
   const wsUrl = process.env.CHAT_PUBLIC_BASE_URL
     ? `${process.env.CHAT_PUBLIC_BASE_URL
@@ -179,7 +179,7 @@ app.get('/api/ws-info', (req, res) => {
   });
 });
 
-// Error handling middleware
+
 app.use((err, req, res, next) => {
   logger.error('Express error:', err);
   res.status(err.status || 500).json({
@@ -189,7 +189,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -197,13 +197,13 @@ app.use((req, res) => {
   });
 });
 
-// Initialize WebSocket server
+
 const wsServer = new WebSocketServer(server);
 
-// Make notification service available to routes
+
 app.locals.notificationService = wsServer.notificationService;
 
-// Graceful shutdown
+
 process.on('SIGTERM', () => {
   logger.info('SIGTERM signal received: closing HTTP server');
   server.close(() => {
@@ -224,7 +224,7 @@ process.on('SIGINT', () => {
   });
 });
 
-// Start server
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   logger.info(`🚀 Chat API Server running on port ${PORT}`);
@@ -232,6 +232,6 @@ server.listen(PORT, () => {
   logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🔗 Allowed origins: ${process.env.ALLOWED_ORIGINS}`);
   
-  // Iniciar serviço de limpeza de chats temporários
+
   temporaryChatCleanupService.start();
 });

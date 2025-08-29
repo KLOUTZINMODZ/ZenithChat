@@ -1,17 +1,17 @@
 const mongoose = require('mongoose');
 
 const agreementSchema = new mongoose.Schema({
-  // Identificação única do acordo
+
   agreementId: {
     type: String,
     required: true,
     unique: true,
     index: true,
-    // Formato: AGR_[timestamp]_[random]
+
     default: () => `AGR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   },
   
-  // Referências
+
   conversationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Conversation',
@@ -23,13 +23,13 @@ const agreementSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  // Referência à proposta aceita original (retrocompatibilidade)
+
   acceptedProposalId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'AcceptedProposal'
   },
   
-  // Dados da proposta (snapshot no momento da aceitação)
+
   proposalSnapshot: {
     game: { type: String, required: true },
     category: { type: String, required: true },
@@ -41,7 +41,7 @@ const agreementSchema = new mongoose.Schema({
     estimatedTime: { type: String, required: true }
   },
   
-  // Participantes (snapshot)
+
   parties: {
     client: {
       userid: { type: mongoose.Schema.Types.ObjectId, required: true },
@@ -60,7 +60,7 @@ const agreementSchema = new mongoose.Schema({
     }
   },
   
-  // Ciclo de vida independente
+
   status: {
     type: String,
     enum: ['pending', 'active', 'completed', 'cancelled', 'expired', 'disputed'],
@@ -68,14 +68,14 @@ const agreementSchema = new mongoose.Schema({
     index: true
   },
   
-  // Controle de versão e concorrência
+
   version: {
     type: Number,
     default: 1,
     index: true
   },
   
-  // Timestamps detalhados
+
   createdAt: { type: Date, default: Date.now },
   activatedAt: Date,
   completedAt: Date,
@@ -83,7 +83,7 @@ const agreementSchema = new mongoose.Schema({
   expiredAt: Date,
   lastUpdatedAt: { type: Date, default: Date.now },
   
-  // Histórico de ações
+
   actionHistory: [{
     action: {
       type: String,
@@ -102,11 +102,11 @@ const agreementSchema = new mongoose.Schema({
       type: Map,
       of: mongoose.Schema.Types.Mixed
     },
-    // Chave de idempotência para evitar duplicação
+
     idempotencyKey: String
   }],
   
-  // Dados de renegociação
+
   renegotiationData: {
     originalPrice: Number,
     currentPrice: Number,
@@ -117,7 +117,7 @@ const agreementSchema = new mongoose.Schema({
     lastRenegotiatedBy: mongoose.Schema.Types.ObjectId
   },
   
-  // Dados financeiros
+
   financial: {
     totalAmount: Number,
     paidAmount: { type: Number, default: 0 },
@@ -130,25 +130,25 @@ const agreementSchema = new mongoose.Schema({
     }
   },
   
-  // Metadados flexíveis
+
   metadata: {
     type: Map,
     of: mongoose.Schema.Types.Mixed
   }
 }, {
   timestamps: true,
-  // Otimistic locking automático
+
   optimisticConcurrency: true
 });
 
-// Índices compostos para performance
+
 agreementSchema.index({ conversationId: 1, status: 1 });
 agreementSchema.index({ 'parties.client.userid': 1, status: 1 });
 agreementSchema.index({ 'parties.booster.userid': 1, status: 1 });
 agreementSchema.index({ status: 1, createdAt: -1 });
 agreementSchema.index({ version: 1, lastUpdatedAt: -1 });
 
-// Middleware para atualizar version e lastUpdatedAt
+
 agreementSchema.pre('save', function(next) {
   if (this.isModified() && !this.isNew) {
     this.version += 1;
@@ -157,7 +157,7 @@ agreementSchema.pre('save', function(next) {
   next();
 });
 
-// Métodos de transição de estado
+
 agreementSchema.methods.activate = function(performedBy, idempotencyKey) {
   if (this.status !== 'pending') {
     throw new Error(`Cannot activate agreement in status: ${this.status}`);
@@ -206,9 +206,9 @@ agreementSchema.methods.expire = function(performedBy = null, idempotencyKey) {
   return this.save();
 };
 
-// Método para adicionar ação ao histórico
+
 agreementSchema.methods.addAction = function(action, performedBy, details = {}, idempotencyKey = null) {
-  // Verificar se ação já foi executada (idempotência)
+
   if (idempotencyKey) {
     const existingAction = this.actionHistory.find(a => a.idempotencyKey === idempotencyKey);
     if (existingAction) {
@@ -228,26 +228,26 @@ agreementSchema.methods.addAction = function(action, performedBy, details = {}, 
   return this;
 };
 
-// Método para renegociar
+
 agreementSchema.methods.renegotiate = function(performedBy, newPrice, newEstimatedTime, reason, idempotencyKey) {
   if (this.status !== 'active') {
     throw new Error(`Cannot renegotiate agreement in status: ${this.status}`);
   }
   
-  // Salvar dados anteriores
+
   if (!this.renegotiationData.originalPrice) {
     this.renegotiationData.originalPrice = this.proposalSnapshot.price;
     this.renegotiationData.originalTime = this.proposalSnapshot.estimatedTime;
   }
   
-  // Aplicar mudanças
+
   this.renegotiationData.currentPrice = newPrice;
   this.renegotiationData.currentEstimatedTime = newEstimatedTime;
   this.renegotiationData.renegotiationCount += 1;
   this.renegotiationData.lastRenegotiatedAt = new Date();
   this.renegotiationData.lastRenegotiatedBy = performedBy;
   
-  // Atualizar snapshot atual
+
   this.proposalSnapshot.price = newPrice;
   this.proposalSnapshot.estimatedTime = newEstimatedTime;
   
@@ -261,19 +261,19 @@ agreementSchema.methods.renegotiate = function(performedBy, newPrice, newEstimat
   return this.save();
 };
 
-// Método estático para buscar por agreement_id
+
 agreementSchema.statics.findByAgreementId = function(agreementId) {
   return this.findOne({ agreementId });
 };
 
-// Método estático para buscar acordos de uma conversa
+
 agreementSchema.statics.findByConversation = function(conversationId, status = null) {
   const query = { conversationId };
   if (status) query.status = status;
   return this.find(query).sort({ createdAt: -1 });
 };
 
-// Método estático para buscar acordos de um usuário
+
 agreementSchema.statics.findByUser = function(userId, role = null, status = null) {
   const query = {};
   

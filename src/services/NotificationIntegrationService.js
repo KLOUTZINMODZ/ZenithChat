@@ -5,19 +5,19 @@ class NotificationIntegrationService {
   constructor(connectionManager) {
     this.connectionManager = connectionManager;
     this.maxRetryAttempts = 3;
-    this.retryDelay = 5000; // 5 seconds
-    this.retryMultiplier = 1.5; // Exponential backoff multiplier
-    this.maxRetryDelay = 60000; // Max 1 minute delay
+    this.retryDelay = 5000;
+    this.retryMultiplier = 1.5;
+    this.maxRetryDelay = 60000;
     
-    // Initialize delivery attempts tracker
+
     this.deliveryAttempts = new Map();
     
-    // Cache TTL settings
+
     this.cacheTTL = {
-      notifications: 604800, // 7 days
-      unreadCount: 604800, // 7 days  
-      userPreferences: 86400, // 24 hours
-      deliveryStatus: 3600 // 1 hour
+      notifications: 604800,
+      unreadCount: 604800,
+      userPreferences: 86400,
+      deliveryStatus: 3600
     };
     
     logger.info('🔔 Notification Integration Service initialized with optimized cache');
@@ -32,12 +32,12 @@ class NotificationIntegrationService {
   async sendNotification(userId, notification, options = {}) {
     try {
       const {
-        priority = 'normal', // normal, high, urgent
-        persistent = true, // Store in cache if user offline
+        priority = 'normal',
+        persistent = true,
         retryOnFailure = true
       } = options;
 
-      // Add metadata
+
       const enrichedNotification = {
         ...notification,
         id: notification._id || notification.id,
@@ -46,12 +46,12 @@ class NotificationIntegrationService {
         delivered: false
       };
 
-      // Cache notification for persistence and offline delivery
+
       if (persistent) {
         this.cacheNotification(userId, enrichedNotification);
       }
 
-      // Try immediate delivery
+
       const delivered = await this.attemptDelivery(userId, enrichedNotification);
 
       if (!delivered && retryOnFailure) {
@@ -151,7 +151,7 @@ class NotificationIntegrationService {
       const sent = this.sendToUser(userId, message);
       
       if (sent) {
-        // Mark as delivered in cache
+
         this.markAsDelivered(userId, notification.id);
         return true;
       }
@@ -176,8 +176,8 @@ class NotificationIntegrationService {
         let sent = false;
 
         connections.forEach(ws => {
-          if (ws.readyState === 1) { // WebSocket.OPEN
-            // Send notification directly via WebSocket
+          if (ws.readyState === 1) {
+
             ws.send(JSON.stringify(message));
             sent = true;
             logger.debug(`Sent notification to user ${userId}: ${message.type}`);
@@ -187,7 +187,7 @@ class NotificationIntegrationService {
         return sent;
       }
 
-      // Cache notification for offline delivery (separate from chat messages)
+
       const offlineKey = `notifications:offline:${userId}`;
       const offlineNotifications = cache.get(offlineKey) || [];
       offlineNotifications.unshift(message);
@@ -211,18 +211,18 @@ class NotificationIntegrationService {
       const cacheKey = `notifications:${userId}`;
       let userNotifications = cache.get(cacheKey) || [];
 
-      // Add to beginning of array (newest first)
+
       userNotifications.unshift(notification);
 
-      // Keep only last 100 notifications
+
       if (userNotifications.length > 100) {
         userNotifications = userNotifications.slice(0, 100);
       }
 
-      // Cache for 7 days
+
       cache.set(cacheKey, userNotifications, this.cacheTTL.notifications);
       
-      // Update unread count cache
+
       const unreadCount = userNotifications.filter(n => !n.isRead).length;
       cache.set(`notifications:${userId}:unread`, unreadCount, this.cacheTTL.unreadCount);
 
@@ -296,7 +296,7 @@ class NotificationIntegrationService {
 
       this.deliveryAttempts.set(attemptKey, currentAttempts + 1);
 
-      const delay = this.retryDelay * Math.pow(2, currentAttempts); // Exponential backoff
+      const delay = this.retryDelay * Math.pow(2, currentAttempts);
 
       setTimeout(async () => {
         logger.debug(`Retrying notification delivery (attempt ${currentAttempts + 1}/${this.maxRetryAttempts})`);
@@ -323,7 +323,7 @@ class NotificationIntegrationService {
     try {
       const pendingNotifications = this.getCachedNotifications(userId)
         .filter(n => !n.delivered && !n.isRead)
-        .slice(0, 20); // Limit to 20 most recent
+        .slice(0, 20);
 
       if (pendingNotifications.length === 0) {
         return;
@@ -331,14 +331,14 @@ class NotificationIntegrationService {
 
       logger.info(`Sending ${pendingNotifications.length} pending notifications to user ${userId}`);
 
-      // Send notifications with delay to avoid overwhelming
+
       for (let i = 0; i < pendingNotifications.length; i++) {
         setTimeout(() => {
           this.attemptDelivery(userId, pendingNotifications[i]);
-        }, i * 500); // 500ms delay between notifications
+        }, i * 500);
       }
 
-      // Send unread count
+
       const unreadCount = cache.get(`notifications:${userId}:unread`) || 0;
       setTimeout(() => {
         this.sendUnreadCount(userId, unreadCount);

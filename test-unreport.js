@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Configuração
+
 const API_BASE = 'http://localhost:3001/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTdkODJjOGNkZDQwMTg4ZTA4YTIyNCIsImlhdCI6MTc1NjE3NDExNywiZXhwIjoxNzU2Nzc4OTE3fQ.ePaG5v7D1J4Vz3ml_cnVBYlk517fs96z4I95BUhI0nI';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
@@ -17,7 +17,7 @@ async function unreportAndTest() {
   console.log('====================================\n');
 
   try {
-    // 1. Desbloquear conversa
+
     console.log('📝 Passo 1: Desbloquear conversa');
     const unreportResponse = await axios.post(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/unreport`,
@@ -28,7 +28,7 @@ async function unreportAndTest() {
     console.log('✅ Conversa desbloqueada:', unreportResponse.data.message);
     console.log('Mensagem de sistema:', unreportResponse.data.systemMessage.content);
 
-    // 2. Verificar novo status
+
     console.log('\n📝 Passo 2: Verificar novo status');
     const statusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,
@@ -43,7 +43,7 @@ async function unreportAndTest() {
       console.log('❌ Conversa ainda está reportada');
     }
 
-    // 3. Testar envio de mensagem
+
     console.log('\n📝 Passo 3: Testar envio de mensagem');
     const messageResponse = await axios.post(
       `${API_BASE}/messages/conversations/${CONVERSATION_ID}/messages`,

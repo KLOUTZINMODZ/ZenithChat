@@ -3,8 +3,8 @@ const cache = require('../services/GlobalCache');
 
 class ConnectionManager {
   constructor() {
-    this.connections = new Map(); // userId -> Set of WebSocket connections
-    this.activeConversations = new Map(); // userId -> conversationId
+    this.connections = new Map();
+    this.activeConversations = new Map();
   }
 
   addConnection(userId, ws) {
@@ -80,7 +80,7 @@ class ConnectionManager {
     usersInConversation.forEach(userId => {
       const connections = this.getUserConnections(userId);
       connections.forEach(ws => {
-        if (ws.readyState === 1) { // WebSocket.OPEN
+        if (ws.readyState === 1) {
           ws.send(JSON.stringify(message));
         }
       });
@@ -104,7 +104,7 @@ class ConnectionManager {
 
     let i = 0;
     const interval = setInterval(() => {
-      if (i >= sortedMessages.length || ws.readyState !== 1) { // WebSocket.OPEN
+      if (i >= sortedMessages.length || ws.readyState !== 1) {
         clearInterval(interval);
         if (i >= sortedMessages.length) {
           logger.info(`Finished sending offline messages to user ${userId}.`);
@@ -115,7 +115,7 @@ class ConnectionManager {
 
       ws.send(JSON.stringify(sortedMessages[i]));
       i++;
-    }, 300); // Envia uma mensagem a cada 300ms
+    }, 300);
   }
 }
 

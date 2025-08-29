@@ -1,11 +1,11 @@
-// Test script for HackLote Chat API
-// Run this with: node test-api.js
+
+
 
 const axios = require('axios');
 
 const API_URL = 'http://12zku8.instatunnel.my';
 
-// Replace with a valid JWT token from your main API
+
 const JWT_TOKEN = 'YOUR_JWT_TOKEN_HERE';
 
 async function testHealthCheck() {

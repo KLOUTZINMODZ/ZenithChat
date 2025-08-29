@@ -8,10 +8,10 @@ const logger = require('../utils/logger');
 const cache = require('../services/GlobalCache');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
 
-// Apply performance monitoring to all routes
+
 router.use(performanceMiddleware());
 
-// Get all conversations for authenticated user
+
 router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -20,7 +20,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
     
     logger.info(`Fetching conversations for user ${userId}`, { page, limit });
     
-    // Try cache first
+
     let cachedData = cache.get(cacheKey);
     if (cachedData) {
       logger.debug(`Cache hit for conversations user ${userId}`);
@@ -52,7 +52,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
 
     logger.info(`Found ${conversations.length} conversations for user ${userId}`);
 
-    // Debug: Log raw conversation data for temporary chats
+
     conversations.forEach(conv => {
       if (conv.isTemporary) {
         logger.debug(`[DEBUG] Raw temporary conversation data:`, {
@@ -67,10 +67,10 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       }
     });
 
-    // Format conversations to match HackLoteAPI structure
+
     const formattedConversations = conversations.map(conv => {
       try {
-        // Find other participant for direct chats
+
         let otherParticipant = null;
         const isGroupChat = conv.type === 'group' || conv.participants.length > 2;
         
@@ -80,10 +80,10 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           );
         }
 
-        // Get unread count for this user
+
         const userUnreadCount = conv.unreadCount?.get(userId.toString()) || 0;
 
-        // Format according to HackLoteAPI structure
+
         return {
           _id: conv._id,
           isGroupChat: isGroupChat,
@@ -105,10 +105,10 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           relatedItem: conv.marketplaceItem || null,
           relatedOrder: conv.proposal || null,
           updatedAt: conv.updatedAt,
-          // Additional HackloteChat specific fields
+
           boostingStatus: conv.boostingStatus || null,
           type: conv.type,
-          // Campos para Chat Temporário
+
           isTemporary: conv.isTemporary || false,
           expiresAt: conv.expiresAt || null,
           status: conv.status || null,
@@ -122,7 +122,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           error: convError.message 
         });
         
-        // Return safe fallback
+
         return {
           _id: conv._id,
           isGroupChat: false,
@@ -149,7 +149,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       }
     };
 
-    // Cache for 2 minutes
+
     cache.set(cacheKey, responseData, 120);
     logger.debug(`Cached conversations for user ${userId}`);
 
@@ -169,7 +169,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
   }
 });
 
-// Get messages for a specific conversation
+
 router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300), async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -177,7 +177,7 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
     const userId = req.user._id || req.userId;
     const cacheKey = `messages:${conversationId}:page:${page}:limit:${limit}`;
 
-    // Try cache first
+
     let cachedData = cache.get(cacheKey);
     if (cachedData) {
       logger.debug(`Cache hit for messages conversation ${conversationId}`);
@@ -190,7 +190,7 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
 
     const skip = (page - 1) * limit;
 
-    // Check if user is participant
+
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !conversation.isParticipant(userId)) {
       return res.status(403).json({
@@ -211,7 +211,7 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
       conversation: conversationId
     });
 
-    // Decrypt messages
+
     const decryptedMessages = messages.map(msg => {
       const msgObj = msg.toObject();
       msgObj.content = decryptMessage(msg.content);
@@ -228,7 +228,7 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
       }
     };
 
-    // Cache for 5 minutes
+
     cache.set(cacheKey, responseData, 300);
     logger.debug(`Cached messages for conversation ${conversationId}`);
 
@@ -246,14 +246,14 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
   }
 });
 
-// Send a message (HTTP fallback)
+
 router.post('/conversations/:conversationId/messages', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { content, type = 'text', attachments = [] } = req.body;
     const userId = req.user._id || req.userId;
 
-    // Validate conversation
+
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !conversation.isParticipant(userId)) {
       return res.status(403).json({
@@ -262,7 +262,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // Check if conversation is reported/blocked
+
     if (conversation.isReported) {
       return res.status(423).json({
         success: false,
@@ -271,7 +271,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // Check if chat is inactive (finalized)
+
     if (!conversation.isActive) {
       return res.status(423).json({
         success: false,
@@ -280,13 +280,13 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // Check if boosting is completed and needs new proposal from same booster
+
     if (conversation.boostingStatus === 'completed') {
-      // Import models
+
       const Agreement = require('../models/Agreement');
       const AcceptedProposal = require('../models/AcceptedProposal');
       
-      // Check if there's an active agreement/proposal for this user (allowing messages)
+
       const activeAgreement = await Agreement.findOne({ 
         conversationId: conversation._id, 
         status: 'active',
@@ -305,7 +305,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
         ]
       });
 
-      // Block messages if no active proposal/agreement for this user
+
       if (!activeAgreement && !activeProposal) {
         return res.status(423).json({
           success: false,
@@ -315,7 +315,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       }
     }
 
-    // Encrypt and save message
+
     const encryptedContent = encryptMessage(content);
     const message = new Message({
       conversation: conversationId,
@@ -328,28 +328,28 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
     await message.save();
 
-    // Update conversation
+
     conversation.lastMessage = message._id;
     conversation.lastMessageAt = new Date();
     await conversation.incrementUnreadCount(userId);
 
     await message.populate('sender', 'name email avatar');
 
-    // Invalidate relevant caches
+
     const participantIds = conversation.participants.map(p => p.toString());
     cache.invalidateConversationCache(conversationId, participantIds);
     
-    // Cache the new message
+
     cache.cacheMessage(conversationId, {
       ...message.toObject(),
-      content: content // Store unencrypted in cache
+      content: content
     });
 
     res.status(201).json({
       success: true,
       data: {
         ...message.toObject(),
-        content: content // Return unencrypted
+        content: content
       }
     });
   } catch (error) {
@@ -362,13 +362,13 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
   }
 });
 
-// Create or get conversation
+
 router.post('/conversations', auth, invalidationMiddleware(['conversations:']), async (req, res) => {
   try {
     const { participantIds, type = 'direct', metadata = {} } = req.body;
     const userId = req.user._id || req.userId;
 
-    // Ensure current user is included
+
     if (!participantIds.includes(userId.toString())) {
       participantIds.push(userId);
     }
@@ -376,7 +376,7 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
     const conversation = await Conversation.findOrCreate(participantIds, metadata);
     await conversation.populate('participants', 'name email avatar');
 
-    // Invalidate conversations cache for all participants
+
     participantIds.forEach(participantId => {
       cache.invalidateUserCache(participantId);
     });
@@ -395,14 +395,14 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
   }
 });
 
-// Mark messages as read
+
 router.put('/conversations/:conversationId/read', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { messageIds = [] } = req.body;
     const userId = req.user._id || req.userId;
 
-    // Update messages as read
+
     await Message.updateMany(
       {
         _id: { $in: messageIds },
@@ -419,13 +419,13 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
       }
     );
 
-    // Reset unread count for user
+
     const conversation = await Conversation.findById(conversationId);
     if (conversation && conversation.unreadCount) {
       conversation.unreadCount[userId.toString()] = 0;
       await conversation.save();
       
-      // Invalidate conversations cache for this user
+
       cache.invalidateUserCache(userId);
     }
 
@@ -443,7 +443,7 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
   }
 });
 
-// Delete a message (soft delete)
+
 router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -457,7 +457,7 @@ router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:',
       });
     }
 
-    // Check if user is the sender
+
     if (message.sender.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
@@ -481,7 +481,7 @@ router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:',
   }
 });
 
-// Cache statistics endpoint
+
 router.get('/cache/stats', auth, async (req, res) => {
   try {
     const stats = cache.getStats();
@@ -503,7 +503,7 @@ router.get('/cache/stats', auth, async (req, res) => {
   }
 });
 
-// Clear cache endpoint (admin only)
+
 router.delete('/cache/clear', auth, async (req, res) => {
   try {
     cache.clear();

@@ -1,14 +1,14 @@
 const axios = require('axios');
 
-// Configuration
+
 const WEBHOOK_URL = 'https://12zku8.instatunnel.my/api/marketplace-webhook/mercadopago-webhook';
 const API_BASE_URL = 'https://12zku8.instatunnel.my';
 
-// Test different webhook notification formats
+
 async function testWebhookFormats() {
   console.log('🧪 Testing Mercado Pago Webhook Formats...\n');
   
-  // Test 1: Query string format (most common from Mercado Pago)
+
   console.log('📝 Test 1: Query string format');
   try {
     const response1 = await axios.post(
@@ -49,7 +49,7 @@ async function testWebhookFormats() {
   }
 }
 
-// Test with a real payment ID (if available)
+
 async function testRealPayment() {
   console.log('\n🔍 Testing with real payment data...\n');
   
@@ -59,7 +59,7 @@ async function testRealPayment() {
       {
         type: 'payment',
         data: { 
-          id: '122930854647' // Real payment ID from your logs
+          id: '122930854647'
         }
       },
       { timeout: 15000 }
@@ -72,7 +72,7 @@ async function testRealPayment() {
   }
 }
 
-// Check health status
+
 async function checkHealth() {
   console.log('\n🏥 Checking webhook service health...\n');
   
@@ -84,7 +84,7 @@ async function checkHealth() {
   }
 }
 
-// Main execution
+
 async function main() {
   console.log('='.repeat(50));
   console.log('   MERCADO PAGO WEBHOOK TEST SUITE');
@@ -99,5 +99,5 @@ async function main() {
   console.log('='.repeat(50));
 }
 
-// Run tests
+
 main().catch(console.error);

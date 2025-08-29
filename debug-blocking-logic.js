@@ -2,7 +2,7 @@ const axios = require('axios');
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Connect to MongoDB
+
 mongoose.connect(process.env.MONGODB_URI);
 
 const Conversation = require('./src/models/Conversation');
@@ -14,17 +14,17 @@ async function debugBlockingLogic() {
   console.log('========================================\n');
 
   const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
-  const USER_ID = '68a27017da1e592e291956df1'; // Cliente
+  const USER_ID = '68a27017da1e592e291956df1';
 
   try {
-    // 1. Estado da conversa
+
     const conversation = await Conversation.findById(CONVERSATION_ID).lean();
     console.log('📊 Estado da Conversa:');
     console.log(`  boostingStatus: ${conversation.boostingStatus}`);
     console.log(`  isActive: ${conversation.isActive}`);
     console.log(`  status: ${conversation.metadata?.status}`);
 
-    // 2. Verificar Agreements ativos
+
     console.log('\n📋 Verificando Agreements:');
     const activeAgreements = await Agreement.find({ 
       conversationId: CONVERSATION_ID, 
@@ -36,7 +36,7 @@ async function debugBlockingLogic() {
       console.log(`    ${idx + 1}. Status: ${agreement.status}, ID: ${agreement.agreementId}`);
     });
 
-    // Todos os agreements (incluindo completed)
+
     const allAgreements = await Agreement.find({ 
       conversationId: CONVERSATION_ID 
     }).lean();
@@ -46,7 +46,7 @@ async function debugBlockingLogic() {
       console.log(`    ${idx + 1}. Status: ${agreement.status}, Created: ${agreement.createdAt}`);
     });
 
-    // 3. Verificar AcceptedProposals ativos
+
     console.log('\n📋 Verificando AcceptedProposals:');
     const activeProposals = await AcceptedProposal.find({
       conversationId: CONVERSATION_ID,
@@ -58,7 +58,7 @@ async function debugBlockingLogic() {
       console.log(`    ${idx + 1}. Status: ${proposal.status}, ID: ${proposal._id}`);
     });
 
-    // Todos os proposals (incluindo completed)
+
     const allProposals = await AcceptedProposal.find({
       conversationId: CONVERSATION_ID
     }).lean();
@@ -68,7 +68,7 @@ async function debugBlockingLogic() {
       console.log(`    ${idx + 1}. Status: ${proposal.status}, Created: ${proposal.createdAt}`);
     });
 
-    // 4. Simular a lógica de bloqueio
+
     console.log('\n🧪 Simulando Lógica de Bloqueio:');
     console.log(`  boostingStatus === 'completed': ${conversation.boostingStatus === 'completed'}`);
     

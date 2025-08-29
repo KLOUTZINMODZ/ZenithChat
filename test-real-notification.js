@@ -12,7 +12,7 @@ console.log('🧪 Testando notificação real via HackLoteAPI...');
 
 async function testRealNotification() {
   try {
-    // 1. Primeiro vamos testar se o endpoint do ChatApi está funcionando
+
     console.log('📡 Testando endpoint ChatApi diretamente...');
     
     const testResponse = await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
@@ -33,13 +33,13 @@ async function testRealNotification() {
 
     console.log('✅ Resposta ChatApi:', testResponse.data);
 
-    // 2. Aguardar um pouco
+
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // 3. Agora vamos simular uma notificação vinda do HackLoteAPI
+
     console.log('\n📨 Simulando notificação via HackLoteAPI...');
     
-    // Simular o que o HackLoteAPI faria
+
     const hackLoteNotification = {
       userIds: 'test_user_123',
       notification: {

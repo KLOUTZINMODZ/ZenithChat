@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Configuração
+
 const API_BASE = 'http://localhost:3001/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTI3MDE3ZGExZTU5MmUyOTE5NWRmMSIsImlhdCI6MTc1NjE5NDk4MiwiZXhwIjoxNzU2Nzk5NzgyfQ.Qy8HEz4X6iWiPm-hkO8P40nSUw2T7elzWXRzuJt1fgo';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
@@ -17,7 +17,7 @@ async function testFullConfirmationFlow() {
   console.log('=======================================\n');
 
   try {
-    // 1. Confirmar entrega (deve gerar mensagens)
+
     console.log('📝 1. Confirmando entrega:');
     const confirmResponse = await axios.post(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/confirm-delivery`,
@@ -26,7 +26,7 @@ async function testFullConfirmationFlow() {
     );
     console.log('✅ Confirmação:', confirmResponse.data.message);
 
-    // 2. Verificar mensagens geradas
+
     console.log('\n📝 2. Verificando mensagens geradas:');
     const messagesResponse = await axios.get(
       `${API_BASE}/messages/conversations/${CONVERSATION_ID}/messages?limit=10`,
@@ -47,7 +47,7 @@ async function testFullConfirmationFlow() {
       }
     });
 
-    // 3. Testar bloqueio de mensagens
+
     console.log('\n📝 3. Testando bloqueio após confirmação:');
     try {
       await axios.post(
@@ -67,7 +67,7 @@ async function testFullConfirmationFlow() {
       }
     }
 
-    // 4. Verificar status final
+
     console.log('\n📝 4. Status final da conversa:');
     const statusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,

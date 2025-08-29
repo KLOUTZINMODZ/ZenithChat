@@ -14,7 +14,7 @@ async function testFrontendReceiving() {
   console.log('1. Abra o console do navegador (F12)');
   console.log('2. Cole este código no console ANTES de executar este teste:');
   console.log(`
-// Debug para capturar TODAS as mensagens WebSocket
+
 window.originalLog = console.log;
 window.wsMessages = [];
 
@@ -38,7 +38,7 @@ console.log('✅ Debug ativado. Aguardando notificações...');
     process.stdin.setRawMode(false);
     process.stdin.pause();
     
-    // Continuar com os testes
+
     runTests();
   });
 }
@@ -46,7 +46,7 @@ console.log('✅ Debug ativado. Aguardando notificações...');
 async function runTests() {
   console.log('\n🚀 Executando testes...\n');
 
-  // Teste 1: Notificação que funciona
+
   console.log('✅ TESTE 1: Enviando notificação que FUNCIONA');
   try {
     await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
@@ -68,7 +68,7 @@ async function runTests() {
 
   await new Promise(resolve => setTimeout(resolve, 2000));
 
-  // Teste 2: Notificação que não funciona
+
   console.log('\n❌ TESTE 2: Enviando notificação que NÃO FUNCIONA');
   try {
     await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
@@ -93,7 +93,7 @@ async function runTests() {
 
   await new Promise(resolve => setTimeout(resolve, 2000));
 
-  // Teste 3: Mesma notificação que funciona, mas com type diferente
+
   console.log('\n🧪 TESTE 3: Notificação que funciona, mas mudando o TYPE');
   try {
     await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
@@ -102,7 +102,7 @@ async function runTests() {
         id: `type_change_${Date.now()}`,
         title: 'Notificação Direcionada (Type Mudado)',
         message: 'Esta deveria funcionar se não for problema de type!',
-        type: 'new_proposal', // MUDANÇA AQUI
+        type: 'new_proposal',
         priority: 'high',
         timestamp: new Date().toISOString(),
         isRead: false
@@ -119,12 +119,12 @@ async function runTests() {
 console.log('📊 MENSAGENS WEBSOCKET CAPTURADAS:', window.wsMessages);
 console.log('📊 Total de mensagens:', window.wsMessages.length);
 
-// Verificar se todas as mensagens chegaram
+
 window.wsMessages.forEach((msg, index) => {
   console.log(\`Mensagem \${index + 1}:\`, msg.message);
 });
 
-// Restaurar console original
+
 console.log = window.originalLog;
   `);
   

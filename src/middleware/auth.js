@@ -12,11 +12,11 @@ const auth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Try to find user in our database first
+
     let user = await User.findById(decoded.id || decoded._id);
     
-    // If user doesn't exist in our database, create a minimal user record
-    // This allows compatibility with the main API's users
+
+
     if (!user && decoded.id) {
       user = await User.findOneAndUpdate(
         { _id: decoded.id },

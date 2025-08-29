@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const algorithm = 'aes-256-gcm';
 const secretKey = process.env.MESSAGE_ENCRYPTION_KEY || 'default_32_character_encryption_key_change_me!!';
 
-// Ensure key is 32 bytes
+
 const key = crypto.scryptSync(secretKey, 'salt', 32);
 
 function encryptMessage(text) {
@@ -19,7 +19,7 @@ function encryptMessage(text) {
     return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
   } catch (error) {
     console.error('Encryption error:', error);
-    return text; // Fallback to unencrypted
+    return text;
   }
 }
 
@@ -27,7 +27,7 @@ function decryptMessage(encryptedText) {
   try {
     const parts = encryptedText.split(':');
     if (parts.length !== 3) {
-      return encryptedText; // Not encrypted or invalid format
+      return encryptedText;
     }
     
     const iv = Buffer.from(parts[0], 'hex');
@@ -43,7 +43,7 @@ function decryptMessage(encryptedText) {
     return decrypted;
   } catch (error) {
     console.error('Decryption error:', error);
-    return encryptedText; // Return as-is if decryption fails
+    return encryptedText;
   }
 }
 

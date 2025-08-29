@@ -26,7 +26,7 @@ const reportSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  // Dados completos de quem fez a denúncia
+
   reporter: {
     userid: {
       type: mongoose.Schema.Types.ObjectId,
@@ -54,7 +54,7 @@ const reportSchema = new mongoose.Schema({
       default: 'active'
     }
   },
-  // Dados completos de quem foi denunciado
+
   reported: {
     userid: {
       type: mongoose.Schema.Types.ObjectId,
@@ -81,14 +81,14 @@ const reportSchema = new mongoose.Schema({
       enum: ['active', 'suspended', 'banned'],
       default: 'active'
     },
-    // Histórico de denúncias anteriores
+
     previousReportsCount: {
       type: Number,
       default: 0
     },
     previousSuspensions: Number
   },
-  // Contexto do boosting/proposta
+
   contextData: {
     game: String,
     category: String,
@@ -97,9 +97,9 @@ const reportSchema = new mongoose.Schema({
     expectedEndDate: Date,
     actualProgress: String,
     messagesCount: Number,
-    conversationDuration: Number // em minutos
+    conversationDuration: Number
   },
-  // Status da denúncia
+
   status: {
     type: String,
     enum: ['pending', 'under_review', 'resolved', 'dismissed', 'escalated'],
@@ -112,7 +112,7 @@ const reportSchema = new mongoose.Schema({
     default: 'medium',
     index: true
   },
-  // Evidências anexadas
+
   evidence: [{
     type: {
       type: String,
@@ -125,7 +125,7 @@ const reportSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-  // Ações tomadas pelos moderadores
+
   moderationActions: [{
     actionType: {
       type: String,
@@ -140,7 +140,7 @@ const reportSchema = new mongoose.Schema({
     },
     notes: String
   }],
-  // Resolução da denúncia
+
   resolution: {
     outcome: {
       type: String,
@@ -155,7 +155,7 @@ const reportSchema = new mongoose.Schema({
     },
     compensationAmount: Number
   },
-  // Comunicação interna
+
   internalNotes: [{
     author: mongoose.Schema.Types.ObjectId,
     authorName: String,
@@ -170,10 +170,10 @@ const reportSchema = new mongoose.Schema({
       default: 'internal'
     }
   }],
-  // Métricas para análise
+
   metrics: {
-    responseTime: Number, // tempo em minutos até primeira resposta
-    resolutionTime: Number, // tempo total em minutos até resolução
+    responseTime: Number,
+    resolutionTime: Number,
     escalationCount: {
       type: Number,
       default: 0
@@ -188,13 +188,13 @@ const reportSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Índices compostos para performance
+
 reportSchema.index({ status: 1, priority: -1, createdAt: -1 });
 reportSchema.index({ 'reporter.userid': 1, createdAt: -1 });
 reportSchema.index({ 'reported.userid': 1, createdAt: -1 });
 reportSchema.index({ type: 1, status: 1 });
 
-// Método para escalar denúncia
+
 reportSchema.methods.escalate = function(reason) {
   this.status = 'escalated';
   this.priority = this.priority === 'critical' ? 'critical' : 'high';
@@ -206,7 +206,7 @@ reportSchema.methods.escalate = function(reason) {
   return this.save();
 };
 
-// Método para resolver denúncia
+
 reportSchema.methods.resolve = function(outcome, resolvedBy, notes, compensation = null) {
   this.status = 'resolved';
   this.resolution = {
@@ -221,7 +221,7 @@ reportSchema.methods.resolve = function(outcome, resolvedBy, notes, compensation
   return this.save();
 };
 
-// Método para adicionar ação de moderação
+
 reportSchema.methods.addModerationAction = function(actionType, moderatorId, moderatorName, reason, notes = '') {
   this.moderationActions.push({
     actionType,
@@ -233,7 +233,7 @@ reportSchema.methods.addModerationAction = function(actionType, moderatorId, mod
   return this.save();
 };
 
-// Método para adicionar nota interna
+
 reportSchema.methods.addInternalNote = function(authorId, authorName, note, visibility = 'internal') {
   this.internalNotes.push({
     author: authorId,

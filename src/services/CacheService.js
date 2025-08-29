@@ -3,8 +3,8 @@ const logger = require('../utils/logger');
 class CacheService {
   constructor() {
     this.cache = new Map();
-    this.ttlMap = new Map(); // Stores expiration times
-    this.maxSize = 10000; // Maximum cache entries
+    this.ttlMap = new Map();
+    this.maxSize = 10000;
     this.stats = {
       hits: 0,
       misses: 0,
@@ -17,7 +17,7 @@ class CacheService {
     logger.info('🧠 In-Memory Cache Service initialized');
   }
 
-  // Core cache operations
+
   set(key, value, ttlSeconds = null) {
     try {
       this.evictIfNecessary();
@@ -39,7 +39,7 @@ class CacheService {
 
   get(key) {
     try {
-      // Check if expired
+
       if (this.isExpired(key)) {
         this.delete(key);
         this.stats.misses++;
@@ -74,7 +74,7 @@ class CacheService {
     }
   }
 
-  // Message-specific cache methods
+
   cacheMessage(conversationId, message) {
     try {
       const key = `messages:${conversationId}`;
@@ -82,12 +82,12 @@ class CacheService {
       
       messages.unshift(message);
       
-      // Keep only last 100 messages
+
       if (messages.length > 100) {
         messages = messages.slice(0, 100);
       }
       
-      this.set(key, messages, 3600); // 1 hour TTL
+      this.set(key, messages, 3600);
       logger.debug(`Cached message for conversation ${conversationId}`);
     } catch (error) {
       logger.error('Error caching message:', error);
@@ -97,7 +97,7 @@ class CacheService {
   cacheMessages(conversationId, messages) {
     try {
       const key = `messages:${conversationId}`;
-      this.set(key, messages, 3600); // 1 hour TTL
+      this.set(key, messages, 3600);
       logger.debug(`Cached ${messages.length} messages for conversation ${conversationId}`);
     } catch (error) {
       logger.error('Error caching messages:', error);
@@ -114,11 +114,11 @@ class CacheService {
     }
   }
 
-  // Conversation cache methods
+
   cacheConversations(userId, conversations) {
     try {
       const key = `conversations:${userId}`;
-      this.set(key, conversations, 300); // 5 minutes TTL
+      this.set(key, conversations, 300);
       logger.debug(`Cached ${conversations.length} conversations for user ${userId}`);
     } catch (error) {
       logger.error('Error caching conversations:', error);
@@ -135,11 +135,11 @@ class CacheService {
     }
   }
 
-  // User session cache methods
+
   cacheUserSession(userId, sessionData) {
     try {
       const key = `session:${userId}`;
-      this.set(key, sessionData, 86400); // 24 hours TTL
+      this.set(key, sessionData, 86400);
       logger.debug(`Cached session for user ${userId}`);
     } catch (error) {
       logger.error('Error caching user session:', error);
@@ -156,7 +156,7 @@ class CacheService {
     }
   }
 
-  // Offline message cache (replacing MessageCache functionality)
+
   cacheOfflineMessage(userId, message) {
     try {
       const key = `offline:${userId}`;
@@ -168,12 +168,12 @@ class CacheService {
         cached: true
       });
       
-      // Keep only last 50 offline messages per user
+
       if (messages.length > 50) {
         messages = messages.slice(-50);
       }
       
-      this.set(key, messages, 1296000); // 15 days TTL
+      this.set(key, messages, 1296000);
       logger.debug(`Cached offline message for user ${userId}`);
     } catch (error) {
       logger.error('Error caching offline message:', error);
@@ -200,13 +200,13 @@ class CacheService {
     }
   }
 
-  // Cache invalidation methods
+
   invalidateConversationCache(conversationId, participantIds = []) {
     try {
-      // Clear conversation messages
+
       this.delete(`messages:${conversationId}`);
       
-      // Clear participant conversations lists
+
       participantIds.forEach(userId => {
         this.delete(`conversations:${userId}`);
       });
@@ -219,7 +219,7 @@ class CacheService {
 
   invalidateUserCache(userId) {
     try {
-      // Clear all user-related caches
+
       const keysToDelete = [];
       
       for (const key of this.cache.keys()) {
@@ -235,7 +235,7 @@ class CacheService {
     }
   }
 
-  // Utility methods
+
   isExpired(key) {
     const expiresAt = this.ttlMap.get(key);
     if (!expiresAt) return false;
@@ -248,7 +248,7 @@ class CacheService {
 
   evictIfNecessary() {
     if (this.cache.size >= this.maxSize) {
-      // LRU eviction - remove oldest entries
+
       const keysToEvict = Array.from(this.cache.keys()).slice(0, Math.floor(this.maxSize * 0.1));
       keysToEvict.forEach(key => {
         this.cache.delete(key);
@@ -260,7 +260,7 @@ class CacheService {
   }
 
   startCleanupInterval() {
-    // Clean expired entries every 5 minutes
+
     setInterval(() => {
       this.cleanup();
     }, 5 * 60 * 1000);
@@ -287,7 +287,7 @@ class CacheService {
     }
   }
 
-  // Legacy method compatibility
+
   clearConversationCache(conversationId) {
     try {
       this.delete(`messages:${conversationId}`);
@@ -297,7 +297,7 @@ class CacheService {
     }
   }
 
-  // Performance and monitoring
+
   getStats() {
     const hitRate = this.stats.hits + this.stats.misses > 0 
       ? (this.stats.hits / (this.stats.hits + this.stats.misses) * 100).toFixed(2)
@@ -313,7 +313,7 @@ class CacheService {
   }
 
   getMemoryEstimate() {
-    // Rough estimate of memory usage
+
     let totalSize = 0;
     for (const [key, value] of this.cache.entries()) {
       totalSize += JSON.stringify(key).length + JSON.stringify(value).length;
@@ -321,7 +321,7 @@ class CacheService {
     return `${(totalSize / 1024 / 1024).toFixed(2)} MB`;
   }
 
-  // Clear all cache
+
   clear() {
     this.cache.clear();
     this.ttlMap.clear();

@@ -50,19 +50,19 @@ const messageSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for performance
+
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
 messageSchema.index({ 'readBy.user': 1 });
 
-// Virtual for checking if message is read by a specific user
+
 messageSchema.virtual('isReadBy').get(function() {
   return (userId) => {
     return this.readBy.some(read => read.user.toString() === userId.toString());
   };
 });
 
-// Method to mark as read
+
 messageSchema.methods.markAsRead = function(userId) {
   if (!this.isReadBy(userId)) {
     this.readBy.push({
@@ -73,7 +73,7 @@ messageSchema.methods.markAsRead = function(userId) {
   return this.save();
 };
 
-// Method to soft delete
+
 messageSchema.methods.softDelete = function() {
   this.deletedAt = new Date();
   this.content = '[Message deleted]';

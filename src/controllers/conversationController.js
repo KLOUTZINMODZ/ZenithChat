@@ -1,7 +1,7 @@
 const Conversation = require('../models/Conversation');
 
 class ConversationController {
-  // Desbloquear conversa (usado quando nova proposta é aceita)
+
   async unblockConversation(req, res) {
     try {
       const { conversationId } = req.params;
@@ -21,7 +21,7 @@ class ConversationController {
 
       console.log(`   Estado anterior: isBlocked=${conversation.isBlocked}`);
 
-      // Desbloquear conversa
+
       conversation.isBlocked = false;
       conversation.blockedReason = null;
       conversation.blockedAt = null;

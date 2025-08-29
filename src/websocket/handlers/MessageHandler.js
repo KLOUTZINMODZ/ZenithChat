@@ -6,38 +6,38 @@ const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
 const { v4: uuidv4 } = require('uuid');
 
-// WhatsApp-like message buffer for pending deliveries
-const messageBuffer = new Map(); // messageId -> { message, recipients, attempts, timestamp }
-const deliveryTimeouts = new Map(); // messageId -> timeoutId
+
+const messageBuffer = new Map();
+const deliveryTimeouts = new Map();
 
 class MessageHandler {
   constructor(connectionManager) {
     this.connectionManager = connectionManager;
     
-    // WhatsApp-like delivery system
+
     this.maxRetryAttempts = 5;
-    this.retryInterval = 2000; // 2 seconds
-    this.maxRetryInterval = 30000; // 30 seconds
+    this.retryInterval = 2000;
+    this.maxRetryInterval = 30000;
     
-    // Start cleanup interval for old buffered messages
-    setInterval(() => this.cleanupOldMessages(), 60000); // Every minute
+
+    setInterval(() => this.cleanupOldMessages(), 60000);
   }
 
   async handleSendMessage(userId, payload) {
     try {
       const { conversationId, content, type = 'text', attachments = [] } = payload;
 
-      // SECURITY: Check message length limit (10,000 characters)
+
       if (content && content.length > 10000) {
         logger.warn(`User ${userId} attempted to send message with ${content.length} characters (limit: 10,000). Banning user for exploit.`);
         
-        // Ban user for exploit attempt
+
         await this.banUserForExploit(userId);
         
         throw new Error('Message exceeds character limit. User has been banned for exploit attempt.');
       }
 
-      // Validate conversation and participants
+
       const conversation = await Conversation.findById(conversationId)
         .populate('participants', 'name email');
 
@@ -45,7 +45,7 @@ class MessageHandler {
         throw new Error('Conversation not found');
       }
 
-      // Check if user is participant
+
       const isParticipant = conversation.participants.some(
         p => p._id.toString() === userId
       );
@@ -54,10 +54,10 @@ class MessageHandler {
         throw new Error('User is not a participant in this conversation');
       }
 
-      // Encrypt message content
+
       const encryptedContent = encryptMessage(content);
 
-      // Create message
+
       const message = new Message({
         conversation: conversationId,
         sender: userId,
@@ -69,12 +69,12 @@ class MessageHandler {
 
       await message.save();
 
-      // Update conversation
+
       conversation.lastMessage = message._id;
       conversation.lastMessageAt = new Date();
       conversation.unreadCount = conversation.unreadCount || {};
       
-      // Update unread count for other participants
+
       conversation.participants.forEach(participant => {
         if (participant._id.toString() !== userId) {
           conversation.unreadCount[participant._id] = 
@@ -84,26 +84,26 @@ class MessageHandler {
 
       await conversation.save();
 
-      // Invalidate conversation cache for all participants
+
       const participantIds = conversation.participants.map(p => p._id.toString());
       cache.invalidateConversationCache(conversationId, participantIds);
 
-      // Populate sender info
+
       await message.populate('sender', 'name email avatar');
 
-      // Cache the new message
+
       cache.cacheMessage(conversationId, {
         ...message.toObject(),
-        content: content // Store unencrypted in cache
+        content: content
       });
 
-      // Decrypt for sending
+
       const messageToSend = {
         ...message.toObject(),
-        content: content // Send unencrypted to connected clients
+        content: content
       };
 
-      // Send to all participants in the conversation
+
       const broadcastMessage = {
         type: 'message:new',
         data: {
@@ -113,20 +113,20 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       };
 
-      // Send to sender (confirmation)
+
       this.sendToUser(userId, {
         ...broadcastMessage,
         type: 'message:sent'
       });
 
-      // Send to other participants
+
       conversation.participants.forEach(participant => {
         if (participant._id.toString() !== userId) {
           this.sendToUser(participant._id.toString(), broadcastMessage);
         }
       });
 
-      // Cache the message
+
       cache.cacheMessage(conversationId, messageToSend);
 
       logger.info(`Message sent in conversation ${conversationId} by user ${userId}`);
@@ -156,7 +156,7 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       };
 
-      // Broadcast to other participants
+
       conversation.participants.forEach(participant => {
         if (participant.toString() !== userId) {
           this.sendToUser(participant.toString(), typingMessage);
@@ -173,7 +173,7 @@ class MessageHandler {
     try {
       const { messageIds, conversationId } = payload;
 
-      // Update messages as read
+
       await Message.updateMany(
         {
           _id: { $in: messageIds },
@@ -190,14 +190,14 @@ class MessageHandler {
         }
       );
 
-      // Reset unread count for user
+
       const conversation = await Conversation.findById(conversationId);
       if (conversation && conversation.unreadCount) {
         conversation.unreadCount[userId] = 0;
         await conversation.save();
       }
 
-      // Send read receipt to other participants
+
       const readReceipt = {
         type: 'message:read',
         data: {
@@ -228,16 +228,16 @@ class MessageHandler {
     try {
       const { conversationId } = payload;
 
-      // Set active conversation
+
       this.connectionManager.setActiveConversation(userId, conversationId);
 
-      // Mark messages as read
+
       await this.handleMarkAsRead(userId, { 
         conversationId,
         messageIds: await this.getUnreadMessageIds(userId, conversationId)
       });
 
-      // Send conversation opened confirmation
+
       this.sendToUser(userId, {
         type: 'conversation:opened',
         data: { conversationId },
@@ -256,10 +256,10 @@ class MessageHandler {
     try {
       const { conversationId } = payload;
 
-      // Remove active conversation
+
       this.connectionManager.removeActiveConversation(userId);
 
-      // Send confirmation
+
       this.sendToUser(userId, {
         type: 'conversation:closed',
         data: { conversationId },
@@ -293,7 +293,7 @@ class MessageHandler {
             p._id.toString() !== userId && 
             this.connectionManager.isUserOnline(p._id.toString())
           ),
-          // Garantir que campos de chat temporário sejam incluídos
+
           isTemporary: convObj.isTemporary || false,
           expiresAt: convObj.expiresAt || null,
           status: convObj.status || null,
@@ -320,7 +320,7 @@ class MessageHandler {
       const { conversationId, limit = 50, before = null } = payload;
       const cacheKey = `messages:${conversationId}:history:${limit}:${before || 'latest'}`;
 
-      // Try cache first
+
       let cachedMessages = cache.get(cacheKey);
       if (cachedMessages) {
         logger.debug(`Cache hit for message history conversation ${conversationId}`);
@@ -336,13 +336,13 @@ class MessageHandler {
         return;
       }
 
-      // Check if user is participant
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.participants.includes(userId)) {
         throw new Error('Conversation not found or access denied');
       }
 
-      // Fetch from database
+
       const query = { conversation: conversationId };
       if (before) {
         query.createdAt = { $lt: before };
@@ -353,13 +353,13 @@ class MessageHandler {
         .sort('-createdAt')
         .limit(limit);
 
-      // Decrypt messages
+
       const decryptedMessages = messages.map(msg => ({
         ...msg.toObject(),
         content: decryptMessage(msg.content)
       }));
 
-      // Cache the messages for 10 minutes
+
       cache.set(cacheKey, decryptedMessages, 600);
       logger.debug(`Cached message history for conversation ${conversationId}`);
 
@@ -380,7 +380,7 @@ class MessageHandler {
 
   async sendPendingMessages(userId, ws) {
     try {
-      // Get unread messages for user
+
       const conversations = await Conversation.find({
         participants: userId,
         [`unreadCount.${userId}`]: { $gt: 0 }
@@ -432,7 +432,7 @@ class MessageHandler {
     if (this.connectionManager.isUserOnline(userId)) {
       const connections = this.connectionManager.getUserConnections(userId);
       connections.forEach(ws => {
-        if (ws.readyState === 1) { // WebSocket.OPEN
+        if (ws.readyState === 1) {
           ws.send(JSON.stringify(message));
         }
       });
@@ -450,9 +450,9 @@ class MessageHandler {
     });
   }
 
-  // ========================================
-  // WHATSAPP-LIKE DELIVERY SYSTEM
-  // ========================================
+
+
+
 
   /**
    * Send message with WhatsApp-like delivery confirmation
@@ -462,16 +462,16 @@ class MessageHandler {
     const messageId = message._id || uuidv4();
     const timestamp = Date.now();
 
-    // Store in buffer for retry logic
+
     messageBuffer.set(messageId, {
       message,
-      recipients: recipients.filter(r => r !== userId), // Don't send to sender
+      recipients: recipients.filter(r => r !== userId),
       attempts: 0,
       timestamp,
       senderId: userId
     });
 
-    // Try to deliver immediately
+
     await this.attemptDelivery(messageId);
 
     return messageId;
@@ -488,7 +488,7 @@ class MessageHandler {
     const onlineRecipients = [];
     const offlineRecipients = [];
 
-    // Check which recipients are online
+
     recipients.forEach(recipientId => {
       if (this.connectionManager.isUserOnline(recipientId)) {
         onlineRecipients.push(recipientId);
@@ -497,7 +497,7 @@ class MessageHandler {
       }
     });
 
-    // Send to online recipients
+
     const deliveryPromises = onlineRecipients.map(recipientId => {
       return new Promise((resolve) => {
         const deliveryMessage = {
@@ -512,12 +512,12 @@ class MessageHandler {
 
         this.sendToUser(recipientId, deliveryMessage);
 
-        // Set timeout for ACK
+
         const ackTimeout = setTimeout(() => {
           resolve({ recipientId, delivered: false });
-        }, 5000); // 5 seconds timeout
+        }, 5000);
 
-        // Store timeout for cleanup
+
         deliveryTimeouts.set(`${messageId}_${recipientId}`, ackTimeout);
         resolve({ recipientId, delivered: true });
       });
@@ -526,7 +526,7 @@ class MessageHandler {
     const deliveryResults = await Promise.all(deliveryPromises);
     const failedDeliveries = deliveryResults.filter(r => !r.delivered);
 
-    // Update buffer with failed recipients
+
     if (failedDeliveries.length > 0 || offlineRecipients.length > 0) {
       const allFailedRecipients = [
         ...failedDeliveries.map(f => f.recipientId),
@@ -536,10 +536,10 @@ class MessageHandler {
       bufferData.recipients = allFailedRecipients;
       bufferData.attempts += 1;
 
-      // Schedule retry if under max attempts
+
       if (bufferData.attempts < this.maxRetryAttempts) {
         const retryDelay = Math.min(
-          this.retryInterval * Math.pow(2, bufferData.attempts), // Exponential backoff
+          this.retryInterval * Math.pow(2, bufferData.attempts),
           this.maxRetryInterval
         );
 
@@ -549,16 +549,16 @@ class MessageHandler {
 
         logger.info(`Scheduled retry ${bufferData.attempts}/${this.maxRetryAttempts} for message ${messageId} in ${retryDelay}ms`);
       } else {
-        // Max retries reached, mark as failed
+
         logger.warn(`Message ${messageId} failed to deliver after ${this.maxRetryAttempts} attempts`);
         this.handleDeliveryFailure(messageId, allFailedRecipients);
       }
     } else {
-      // All delivered successfully
+
       this.handleDeliverySuccess(messageId);
     }
 
-    // Send delivery status to sender
+
     this.sendDeliveryStatus(senderId, messageId, onlineRecipients, offlineRecipients.concat(failedDeliveries.map(f => f.recipientId)));
   }
 
@@ -569,7 +569,7 @@ class MessageHandler {
     const bufferData = messageBuffer.get(messageId);
     if (!bufferData) return;
 
-    // Clear timeout
+
     const timeoutKey = `${messageId}_${recipientId}`;
     const timeout = deliveryTimeouts.get(timeoutKey);
     if (timeout) {
@@ -577,10 +577,10 @@ class MessageHandler {
       deliveryTimeouts.delete(timeoutKey);
     }
 
-    // Remove recipient from pending list
+
     bufferData.recipients = bufferData.recipients.filter(r => r !== recipientId);
 
-    // Send delivery confirmation to sender
+
     this.sendToUser(bufferData.senderId, {
       type: 'message:delivered',
       data: {
@@ -590,7 +590,7 @@ class MessageHandler {
       }
     });
 
-    // If all recipients confirmed, remove from buffer
+
     if (bufferData.recipients.length === 0) {
       this.handleDeliverySuccess(messageId);
     }
@@ -602,7 +602,7 @@ class MessageHandler {
    * Handle read acknowledgment from recipient
    */
   async handleReadAck(messageId, recipientId) {
-    // Send read confirmation to sender
+
     const bufferData = messageBuffer.get(messageId);
     if (bufferData) {
       this.sendToUser(bufferData.senderId, {
@@ -624,7 +624,7 @@ class MessageHandler {
   handleDeliverySuccess(messageId) {
     messageBuffer.delete(messageId);
     
-    // Clear any remaining timeouts
+
     for (const [key, timeout] of deliveryTimeouts.entries()) {
       if (key.startsWith(messageId)) {
         clearTimeout(timeout);
@@ -642,7 +642,7 @@ class MessageHandler {
     const bufferData = messageBuffer.get(messageId);
     if (!bufferData) return;
 
-    // Notify sender of delivery failure
+
     this.sendToUser(bufferData.senderId, {
       type: 'message:delivery_failed',
       data: {
@@ -652,10 +652,10 @@ class MessageHandler {
       }
     });
 
-    // Store as pending for when recipients come online
+
     this.storePendingMessage(messageId, failedRecipients);
     
-    // Remove from active buffer
+
     messageBuffer.delete(messageId);
 
     logger.warn(`Message ${messageId} delivery failed for recipients: ${failedRecipients.join(', ')}`);
@@ -665,8 +665,8 @@ class MessageHandler {
    * Store message as pending for offline recipients
    */
   async storePendingMessage(messageId, recipients) {
-    // Implementation would store in database for when users come online
-    // This is a placeholder for the actual implementation
+
+
     logger.info(`Storing message ${messageId} as pending for offline recipients`);
   }
 
@@ -712,11 +712,11 @@ class MessageHandler {
    */
   async banUserForExploit(userId) {
     try {
-      // Update user banned status
+
       await User.findByIdAndUpdate(userId, { banned: true });
 
-      // Create ban record in banished collection
-      const BanRecord = require('../../models/BanRecord'); // Assuming this model exists
+
+      const BanRecord = require('../../models/BanRecord');
       
       const banRecord = new BanRecord({
         userId: userId,
@@ -728,9 +728,9 @@ class MessageHandler {
           messageLength: 'exceeded_10000_chars',
           detectedAt: new Date()
         },
-        bannedBy: userId, // Self-ban due to exploit
+        bannedBy: userId,
         bannedAt: new Date(),
-        expiresAt: null, // Permanent ban
+        expiresAt: null,
         isActive: true,
         accessAttempts: [],
         actionsExecuted: {
@@ -744,7 +744,7 @@ class MessageHandler {
 
       logger.warn(`User ${userId} banned for exploit attempt: message length exceeded 10,000 characters`);
 
-      // Disconnect user immediately
+
       if (this.connectionManager.isUserOnline(userId)) {
         const connections = this.connectionManager.getUserConnections(userId);
         connections.forEach(ws => {

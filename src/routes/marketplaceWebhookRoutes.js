@@ -6,13 +6,13 @@ const highlightRetryService = require('../services/highlightRetryService');
 const MarketItem = require('../models/MarketItem');
 const router = express.Router();
 
-// Função para aplicar highlights na API principal (Vercel)
+
 const applyHighlightToMainAPI = async (externalReference, paymentData = null) => {
-  let userId = null; // Definir fora do try para acessar no catch
+  let userId = null;
   
   try {
-    // Extrair informações da referência externa
-    // Formato esperado: marketplace_highlight_USER_ID_TIMESTAMP
+
+
     const parts = externalReference.split('_');
     if (parts.length < 4 || parts[0] !== 'marketplace' || parts[1] !== 'highlight') {
       throw new Error('Formato de referência externa inválido');
@@ -21,7 +21,7 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
     userId = parts[2];
     const timestamp = parts[3];
     
-    // Cache payment data se fornecido
+
     if (paymentData) {
       paymentCacheService.storePaymentInfo(paymentData.id, paymentData);
     }
@@ -29,14 +29,14 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
     logger.info('🔄 Aplicando highlight na API principal para userId:', userId);
     logger.info('📋 Dados extraídos do pagamento:', { userId, timestamp, externalReference });
     
-    // Chamar API principal na Vercel para aplicar highlight
+
     const vercelApiUrl = process.env.VERCEL_API_URL || 'https://zenithapi-steel.vercel.app';
     
-    // Tentar buscar itens do cache primeiro
+
     const cachedItems = paymentCacheService.getMarketplaceItems(externalReference);
     
     const response = await axios.post(`${vercelApiUrl}/api/marketplace-highlights-internal`, {
-      userId: userId, // Manter como string (ObjectId)
+      userId: userId,
       externalReference,
       durationDays: 14,
       cachedItems: cachedItems ? cachedItems.items : null
@@ -67,7 +67,7 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
   } catch (error) {
     logger.error('❌ Erro ao comunicar com API principal:', error.message);
     
-    // Adicionar ao retry queue se for erro de conectividade
+
     if (paymentData && error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
       const highlightData = {
         userId,
@@ -87,12 +87,12 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
   }
 };
 
-// Função para processar notificação do Mercado Pago
+
 const processMercadoPagoNotification = async (notification) => {
   try {
     logger.info('💳 Processando notificação do Mercado Pago:', notification);
     
-    // Verificar tipo de notificação
+
     if (notification.type !== 'payment') {
       logger.info('⚠️ Tipo de notificação ignorado:', notification.type);
       return { success: true, message: 'Tipo de notificação ignorado' };
@@ -106,7 +106,7 @@ const processMercadoPagoNotification = async (notification) => {
     
     logger.info('🔍 Consultando detalhes do pagamento no Mercado Pago:', paymentId);
     
-    // Fazer chamada real para a API do Mercado Pago
+
     let paymentDetails;
     try {
       const mpResponse = await axios.get(
@@ -129,7 +129,7 @@ const processMercadoPagoNotification = async (notification) => {
     } catch (error) {
       logger.error('❌ Erro ao consultar API do Mercado Pago:', error.message);
       
-      // Retornar erro se não conseguir acessar API do Mercado Pago
+
       return {
         success: false,
         message: 'Erro ao consultar detalhes do pagamento no Mercado Pago',
@@ -139,22 +139,22 @@ const processMercadoPagoNotification = async (notification) => {
     
     logger.info('💰 Detalhes do pagamento obtidos:', paymentDetails);
     
-    // Processar apenas pagamentos aprovados
+
     if (paymentDetails.status === 'approved') {
       const result = await applyHighlightToMainAPI(paymentDetails.external_reference, paymentDetails);
       
       if (result.success) {
         logger.info('✅ Highlight aplicado com sucesso após confirmação de pagamento');
         
-        // Enviar notificação ao usuário sobre confirmação do pagamento
+
         try {
-          // Extrair userId real da external_reference
-          // Formato esperado: "marketplace_highlight_USERID_TIMESTAMP"
+
+
           const refParts = paymentDetails.external_reference.split('_');
           const userId = refParts.length >= 4 ? refParts[2] : null;
           
           if (userId) {
-            // Usar comunicação direta em vez de HTTP request
+
             const NotificationIntegrationService = require('../services/notificationIntegrationService');
             const notificationService = new NotificationIntegrationService();
             
@@ -207,15 +207,15 @@ const processMercadoPagoNotification = async (notification) => {
   }
 };
 
-// Webhook para receber notificações do Mercado Pago
+
 router.post('/mercadopago-webhook', async (req, res) => {
   logger.info('🔔 Webhook Mercado Pago recebido na HackloteChatApi');
   
   try {
-    // Extrair dados do webhook do Mercado Pago
+
     let notification = {};
     
-    // Verificar se há dados na query string (formato comum do Mercado Pago)
+
     if (req.query.type && req.query['data.id']) {
       notification = {
         type: req.query.type,
@@ -223,12 +223,12 @@ router.post('/mercadopago-webhook', async (req, res) => {
       };
       logger.info('📥 Notificação extraída da query string:', notification);
     } 
-    // Verificar se há dados no body
+
     else if (req.body && typeof req.body === 'object') {
       notification = req.body;
       logger.info('📥 Notificação extraída do body:', notification);
     }
-    // Verificar parâmetros da URL (formato alternativo)
+
     else if (req.query.id && req.query.topic) {
       notification = {
         type: req.query.topic === 'payment' ? 'payment' : req.query.topic,
@@ -237,20 +237,20 @@ router.post('/mercadopago-webhook', async (req, res) => {
       logger.info('📥 Notificação extraída dos parâmetros URL:', notification);
     }
     
-    // Validar se conseguimos extrair uma notificação válida
+
     if (!notification.type || !notification.data?.id) {
       logger.warn('⚠️ Estrutura de notificação inválida ou incompleta');
       logger.debug('Query:', req.query);
       logger.debug('Body:', req.body);
       
-      // Responder com sucesso para evitar reenvios do Mercado Pago
+
       return res.status(200).json({
         success: true,
         message: 'Webhook recebido mas estrutura inválida'
       });
     }
     
-    // Processar apenas notificações de pagamento
+
     if (notification.type !== 'payment') {
       logger.info(`⚠️ Tipo de notificação '${notification.type}' ignorado`);
       return res.status(200).json({
@@ -259,7 +259,7 @@ router.post('/mercadopago-webhook', async (req, res) => {
       });
     }
     
-    // Processar notificação
+
     const result = await processMercadoPagoNotification(notification);
     
     res.status(200).json({
@@ -271,7 +271,7 @@ router.post('/mercadopago-webhook', async (req, res) => {
   } catch (error) {
     logger.error('❌ Erro no webhook marketplace Mercado Pago:', error);
     
-    // Sempre responder com 200 para evitar reenvios desnecessários
+
     res.status(200).json({
       success: false,
       message: 'Erro processado, webhook recebido'
@@ -279,7 +279,7 @@ router.post('/mercadopago-webhook', async (req, res) => {
   }
 });
 
-// Endpoint de teste para simular webhook do Mercado Pago
+
 router.post('/test-webhook', async (req, res) => {
   logger.info('🧪 Teste de webhook recebido');
   
@@ -293,7 +293,7 @@ router.post('/test-webhook', async (req, res) => {
       });
     }
     
-    // Simular notificação do Mercado Pago
+
     const testNotification = {
       type: 'payment',
       data: {
@@ -321,7 +321,7 @@ router.post('/test-webhook', async (req, res) => {
   }
 });
 
-// Health check específico para webhooks
+
 router.get('/health', (req, res) => {
   res.json({
     service: 'Marketplace Webhook Service',

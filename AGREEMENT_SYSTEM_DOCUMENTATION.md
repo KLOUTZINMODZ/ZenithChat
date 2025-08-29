@@ -37,32 +37,32 @@
 
 ```javascript
 {
-  // Identificação
+
   agreementId: "AGR_1640995200000_abc123xyz",
   conversationId: ObjectId,
   proposalId: ObjectId,
-  acceptedProposalId: ObjectId, // Retrocompatibilidade
+  acceptedProposalId: ObjectId,
   
-  // Snapshot da proposta
+
   proposalSnapshot: {
     game: "League of Legends",
     category: "Elo Boost", 
     price: 150,
     estimatedTime: "3 dias",
-    // ... outros campos
+
   },
   
-  // Participantes
+
   parties: {
     client: { userid, name, email, metadata },
     booster: { userid, name, rating, metadata }
   },
   
-  // Estado do acordo
-  status: "active", // pending|active|completed|cancelled|expired|disputed
-  version: 1, // Controle de versão
+
+  status: "active",
+  version: 1,
   
-  // Histórico de ações
+
   actionHistory: [{
     action: "created",
     performedBy: ObjectId,
@@ -70,7 +70,7 @@
     idempotencyKey: "migration_abc123"
   }],
   
-  // Dados financeiros
+
   financial: {
     totalAmount: 150,
     currency: "BRL",
@@ -135,10 +135,10 @@ Content-Type: application/json
 ### **Migração Automática**
 
 ```javascript
-// Middleware detecta AcceptedProposal sem Agreement
+
 const middleware = AgreementMigrationMiddleware.autoMigrate();
 
-// Auto-migra transparentemente
+
 GET /boosting-chat/conversation/123/proposal
 → Cria Agreement baseado em AcceptedProposal existente
 → Resposta unificada (legacy + novo formato)
@@ -149,13 +149,13 @@ GET /boosting-chat/conversation/123/proposal
 ```json
 {
   "success": true,
-  // Formato legacy (AcceptedProposal)
+
   "proposal": { 
     "_id": "old_proposal_id",
     "price": 150,
     "status": "active"
   },
-  // Novo formato (Agreement)  
+
   "agreement": {
     "agreementId": "AGR_1640995200000_abc123",
     "status": "active", 
@@ -178,31 +178,31 @@ Error: "Já existe uma proposta aceita para esta conversa"
 **Depois:** ✅ Permite múltiplas propostas
 ```javascript
 POST /boosting-chat/proposal/save
-// Cria Agreement independente
-// Mantém AcceptedProposal apenas para primeira proposta
+
+
 ```
 
 ### **2. Finalizar Acordo**
 
 **Antes:** ❌ Afetava toda a conversa
 ```javascript  
-acceptedProposal.complete() // ❌ Única proposta afetada
+acceptedProposal.complete()
 ```
 
 **Depois:** ✅ Finaliza apenas o acordo específico
 ```javascript
 agreement.complete(userId, details, idempotencyKey)
-// ✅ Outros acordos não afetados
+
 ```
 
 ### **3. Idempotência**
 
 ```javascript
-// Mesma operação executada múltiplas vezes = mesmo resultado
+
 POST /agreements/AGR_123/complete
 Headers: X-Idempotency-Key: complete_123_20231201
 
-// Segunda chamada retorna:
+
 { "success": true, "message": "Já completado (idempotência)" }
 ```
 
@@ -219,15 +219,15 @@ Headers: X-Idempotency-Key: complete_123_20231201
 2. **Nova proposta aceita:**
    ```javascript
    POST /boosting-chat/proposal/save
-   // ✅ Cria segundo Agreement
-   // ❌ NÃO cria segundo AcceptedProposal
+
+
    ```
 
 3. **Finalização independente:**
    ```javascript
-   POST /agreements/AGR_primeiro/complete   // ✅ Finaliza primeiro acordo
-   POST /agreements/AGR_segundo/complete    // ✅ Finaliza segundo acordo
-   // ✅ Sem interferência entre eles
+   POST /agreements/AGR_primeiro/complete
+   POST /agreements/AGR_segundo/complete
+
    ```
 
 ### **Cenário 2: Migração automática**
@@ -236,9 +236,9 @@ Headers: X-Idempotency-Key: complete_123_20231201
 2. **Primeira requisição nova:**
    ```javascript
    GET /boosting-chat/conversation/123/proposal
-   // Middleware detecta ausência de Agreement
-   // ✅ Auto-migra AcceptedProposal → Agreement  
-   // ✅ Resposta compatível
+
+
+
    ```
 
 ---

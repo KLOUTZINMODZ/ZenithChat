@@ -8,7 +8,7 @@ const path = require('path');
 
 console.log('🔧 Configurando ambiente de teste...');
 
-// Verificar se .env existe
+
 const envPath = path.join(__dirname, '.env');
 const envExamplePath = path.join(__dirname, '.env.example');
 
@@ -21,7 +21,7 @@ if (fs.existsSync(envPath)) {
   envContent = fs.readFileSync(envExamplePath, 'utf8');
   console.log('📋 Usando .env.example como base');
   
-  // Criar .env a partir do exemplo
+
   fs.writeFileSync(envPath, envContent);
   console.log('✅ Arquivo .env criado');
 } else {
@@ -29,11 +29,11 @@ if (fs.existsSync(envPath)) {
   process.exit(1);
 }
 
-// Verificar JWT_SECRET
+
 if (!envContent.includes('JWT_SECRET=') || envContent.includes('JWT_SECRET=your_jwt_secret_here')) {
   console.log('🔑 Configurando JWT_SECRET para testes...');
   
-  // Gerar um JWT_SECRET para testes
+
   const testSecret = 'test_jwt_secret_for_notifications_' + Date.now();
   
   if (envContent.includes('JWT_SECRET=')) {
@@ -46,12 +46,12 @@ if (!envContent.includes('JWT_SECRET=') || envContent.includes('JWT_SECRET=your_
   console.log('✅ JWT_SECRET configurado para testes');
 }
 
-// Configurar variáveis de ambiente para este processo
+
 require('dotenv').config();
 
 console.log('🧪 Executando testes...');
 
-// Executar o teste
+
 const NotificationTester = require('./test-notifications');
 const tester = new NotificationTester();
 

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Connect to MongoDB
+
 mongoose.connect(process.env.MONGODB_URI);
 
 const Message = require('./src/models/Message');
@@ -13,7 +13,7 @@ async function checkBoosterMessages() {
   const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
 
   try {
-    // Buscar mensagens específicas para booster
+
     const boosterMessages = await Message.find({
       conversation: CONVERSATION_ID,
       'metadata.type': 'booster_notification'
@@ -24,11 +24,11 @@ async function checkBoosterMessages() {
     if (boosterMessages.length === 0) {
       console.log('❌ Nenhuma mensagem específica para booster encontrada');
       
-      // Verificar todas as mensagens system recentes
+
       const systemMessages = await Message.find({
         conversation: CONVERSATION_ID,
         type: 'system',
-        createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) } // Últimos 10 minutos
+        createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }
       }).lean();
 
       console.log(`\n📋 Mensagens system dos últimos 10 minutos: ${systemMessages.length}`);

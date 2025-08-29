@@ -10,7 +10,7 @@ const USER_ID = '6897d82c8cdd40188e08a224';
 async function testNewBoosting() {
   console.log('🎯 Teste específico para new_boosting...');
 
-  // Teste 1: new_boosting simples
+
   console.log('\n🧪 TESTE 1: new_boosting básico');
   try {
     await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
@@ -31,7 +31,7 @@ async function testNewBoosting() {
 
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // Teste 2: new_boosting com campos extras (formato original)
+
   console.log('\n🧪 TESTE 2: new_boosting formato completo');
   try {
     await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
@@ -56,7 +56,7 @@ async function testNewBoosting() {
 
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // Teste 3: Comparação com tipo que funciona
+
   console.log('\n✅ TESTE 3: new_proposal (que funciona)');
   try {
     await axios.post(`${CHAT_API_URL}/api/notifications/send`, {

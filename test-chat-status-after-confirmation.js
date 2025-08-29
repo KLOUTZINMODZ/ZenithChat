@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Configuração
+
 const API_BASE = 'http://localhost:3001/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTI3MDE3ZGExZTU5MmUyOTE5NWRmMSIsImlhdCI6MTc1NjE5NDk4MiwiZXhwIjoxNzU2Nzk5NzgyfQ.Qy8HEz4X6iWiPm-hkO8P40nSUw2T7elzWXRzuJt1fgo';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
@@ -17,7 +17,7 @@ async function testChatStatusAfterConfirmation() {
   console.log('=============================================\n');
 
   try {
-    // 1. Verificar status da conversa
+
     console.log('📝 1. Verificando status da conversa:');
     const statusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,
@@ -26,7 +26,7 @@ async function testChatStatusAfterConfirmation() {
     
     console.log('Status completo:', JSON.stringify(statusResponse.data, null, 2));
     
-    // 2. Verificar se chat aceita mensagens
+
     console.log('\n📝 2. Testando envio de mensagem:');
     
     try {
@@ -49,7 +49,7 @@ async function testChatStatusAfterConfirmation() {
       }
     }
 
-    // 3. Buscar Agreement/AcceptedProposal
+
     console.log('\n📝 3. Verificando Agreement:');
     
     try {
@@ -64,7 +64,7 @@ async function testChatStatusAfterConfirmation() {
       console.log('❌ Erro ao buscar Agreement:', error.response?.status, error.response?.data);
     }
 
-    // 4. Verificar mensagens recentes
+
     console.log('\n📝 4. Verificando mensagens recentes:');
     
     try {

@@ -33,7 +33,7 @@ async function testRedisConnection() {
   try {
     await client.connect();
     
-    // Teste básico de escrita/leitura
+
     await client.set('test_key', 'HackLote Redis Test');
     const value = await client.get('test_key');
     
@@ -47,10 +47,10 @@ async function testRedisConnection() {
       console.log('❌ Teste de cache falhou!');
     }
     
-    // Limpar teste
+
     await client.del('test_key');
     
-    // Teste de lista (usado pelo chat)
+
     await client.lPush('test_chat_messages', JSON.stringify({
       id: 'test123',
       message: 'Mensagem de teste',
@@ -61,7 +61,7 @@ async function testRedisConnection() {
     console.log('📝 Teste de lista de mensagens:');
     console.log(`   Mensagens na lista: ${messages.length}`);
     
-    // Limpar teste
+
     await client.del('test_chat_messages');
     
     console.log('🎉 Todos os testes passaram! Redis Cloud configurado corretamente.');

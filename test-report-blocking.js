@@ -1,8 +1,8 @@
 const axios = require('axios');
 
-// Configurações do teste
+
 const BASE_URL = 'http://localhost:3001/api';
-const TEST_JWT = 'your_test_jwt_token_here'; // Substituir por token válido
+const TEST_JWT = 'your_test_jwt_token_here';
 
 class ReportBlockingTest {
   constructor() {
@@ -15,7 +15,7 @@ class ReportBlockingTest {
     console.log('🚀 Iniciando teste do sistema de bloqueio por report...\n');
   }
 
-  // Teste 1: Enviar mensagem em chat normal (deve funcionar)
+
   async testNormalMessageSending() {
     console.log('📝 Teste 1: Enviar mensagem em chat normal');
     
@@ -32,7 +32,7 @@ class ReportBlockingTest {
 
       if (response.data.success) {
         console.log('✅ Mensagem enviada com sucesso em chat normal');
-        this.conversationId = '675b6e7a2e5f8d001f123456'; // Salvar para próximos testes
+        this.conversationId = '675b6e7a2e5f8d001f123456';
       } else {
         console.log('❌ Falha ao enviar mensagem:', response.data.message);
       }
@@ -42,7 +42,7 @@ class ReportBlockingTest {
     console.log('');
   }
 
-  // Teste 2: Reportar chat
+
   async testReportChat() {
     console.log('🚨 Teste 2: Reportar chat');
     
@@ -67,7 +67,7 @@ class ReportBlockingTest {
         console.log('✅ Chat reportado com sucesso');
         this.reportId = response.data.reportId;
         
-        // Aguardar processamento do report
+
         console.log('⏳ Aguardando processamento do report (3s)...');
         await new Promise(resolve => setTimeout(resolve, 3000));
       } else {
@@ -79,12 +79,12 @@ class ReportBlockingTest {
     console.log('');
   }
 
-  // Teste 3: Verificar se chat foi marcado como reportado
+
   async testCheckReportedStatus() {
     console.log('🔍 Teste 3: Verificar status de chat reportado');
     
     try {
-      // Buscar conversa diretamente na API para verificar status
+
       const response = await axios.get(`${BASE_URL}/boosting-chat/conversation/${this.conversationId}/status`, {
         headers: {
           'Authorization': `Bearer ${TEST_JWT}`
@@ -104,7 +104,7 @@ class ReportBlockingTest {
     console.log('');
   }
 
-  // Teste 4: Tentar enviar mensagem em chat reportado (deve falhar)
+
   async testBlockedMessageSending() {
     console.log('🚫 Teste 4: Tentar enviar mensagem em chat reportado');
     
@@ -119,7 +119,7 @@ class ReportBlockingTest {
         }
       });
 
-      // Se chegou aqui, o bloqueio não funcionou
+
       console.log('❌ FALHA CRÍTICA: Mensagem foi enviada em chat reportado!');
       console.log('Response:', response.data);
     } catch (error) {
@@ -133,7 +133,7 @@ class ReportBlockingTest {
     console.log('');
   }
 
-  // Teste 5: Verificar múltiplas tentativas (idempotência)
+
   async testIdempotency() {
     console.log('🔄 Teste 5: Verificar idempotência de bloqueio');
     
@@ -160,7 +160,7 @@ class ReportBlockingTest {
     console.log('');
   }
 
-  // Executar todos os testes
+
   async runAllTests() {
     await this.setup();
     await this.testNormalMessageSending();
@@ -174,7 +174,7 @@ class ReportBlockingTest {
   }
 }
 
-// Executar teste se chamado diretamente
+
 if (require.main === module) {
   const test = new ReportBlockingTest();
   test.runAllTests().catch(console.error);

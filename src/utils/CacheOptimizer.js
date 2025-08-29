@@ -19,24 +19,24 @@ class CacheOptimizer {
   calculateOptimalTTL(dataType, accessFrequency = 'medium') {
     const ttlMap = {
       messages: {
-        high: 1800,    // 30 minutes for active conversations
-        medium: 900,   // 15 minutes for normal conversations  
-        low: 300       // 5 minutes for inactive conversations
+        high: 1800,
+        medium: 900,
+        low: 300
       },
       conversations: {
-        high: 300,     // 5 minutes for active users
-        medium: 180,   // 3 minutes for normal users
-        low: 60        // 1 minute for inactive users
+        high: 300,
+        medium: 180,
+        low: 60
       },
       userSessions: {
-        high: 86400,   // 24 hours
-        medium: 43200, // 12 hours
-        low: 21600     // 6 hours
+        high: 86400,
+        medium: 43200,
+        low: 21600
       },
       offlineMessages: {
-        high: 1296000, // 15 days
-        medium: 604800, // 7 days  
-        low: 86400     // 1 day
+        high: 1296000,
+        medium: 604800,
+        low: 86400
       }
     };
 
@@ -50,13 +50,13 @@ class CacheOptimizer {
     try {
       const startTime = Date.now();
       
-      // Warm up user's recent conversations
+
       const cacheKey = `conversations:${userId}:warmup`;
       if (!this.cache.get(cacheKey)) {
         logger.debug(`Warming up cache for user ${userId}`);
         
-        // This would typically load from database
-        // For now, just mark as warmed up
+
+
         this.cache.set(cacheKey, { warmedUp: true }, 3600);
       }
       
@@ -76,12 +76,12 @@ class CacheOptimizer {
     const memoryUsage = process.memoryUsage();
     const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024;
     
-    // If memory usage is high, reduce cache size
+
     if (heapUsedMB > 500 && this.cache.maxSize > 5000) {
       this.cache.maxSize = Math.max(5000, this.cache.maxSize * 0.8);
       logger.warn(`High memory usage detected. Reducing cache size to ${this.cache.maxSize}`);
     }
-    // If memory usage is low and hit rate is good, increase cache size
+
     else if (heapUsedMB < 200 && parseFloat(stats.hitRate) > 80 && this.cache.maxSize < 20000) {
       this.cache.maxSize = Math.min(20000, this.cache.maxSize * 1.2);
       logger.info(`Good cache performance. Increasing cache size to ${this.cache.maxSize}`);
@@ -92,14 +92,14 @@ class CacheOptimizer {
    * Cache-aside pattern helper
    */
   async getOrSet(key, fetchFunction, ttl = 300) {
-    // Try cache first
+
     let data = this.cache.get(key);
     
     if (data !== null) {
       return data;
     }
 
-    // Cache miss - fetch from source
+
     try {
       data = await fetchFunction();
       if (data !== null && data !== undefined) {
@@ -160,7 +160,7 @@ class CacheOptimizer {
     const times = this.performanceMetrics.queryTimes.get(operation);
     times.push(duration);
     
-    // Keep only last 100 measurements
+
     if (times.length > 100) {
       times.shift();
     }
@@ -173,7 +173,7 @@ class CacheOptimizer {
       recommendations: []
     };
 
-    // Calculate average query times
+
     for (const [operation, times] of this.performanceMetrics.queryTimes.entries()) {
       const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
       report.queryPerformance[operation] = {
@@ -182,7 +182,7 @@ class CacheOptimizer {
       };
     }
 
-    // Generate recommendations
+
     const hitRate = parseFloat(report.cacheStats.hitRate);
     if (hitRate < 50) {
       report.recommendations.push('Low cache hit rate - consider increasing TTL values');

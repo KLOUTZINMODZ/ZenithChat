@@ -10,7 +10,7 @@ const USER_ID = '6897d82c8cdd40188e08a224';
 console.log('🔍 Debug detalhado das notificações...');
 
 async function debugNotifications() {
-  // 1. Teste da notificação que funciona (Direcionada)
+
   console.log('\n✅ TESTE 1: Notificação que FUNCIONA');
   const workingNotification = {
     userIds: [USER_ID],
@@ -40,10 +40,10 @@ async function debugNotifications() {
     console.error('❌ Erro:', error.message);
   }
 
-  // Aguardar 3 segundos
+
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // 2. Teste da notificação que não funciona (formato real)
+
   console.log('\n❌ TESTE 2: Notificação que NÃO FUNCIONA');
   const notWorkingNotification = {
     userIds: [USER_ID],
@@ -80,10 +80,10 @@ async function debugNotifications() {
     console.error('❌ Erro:', error.message);
   }
 
-  // Aguardar 3 segundos
+
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // 3. Teste variando apenas o tipo da notificação que funciona
+
   console.log('\n🧪 TESTE 3: Mudando apenas o TYPE da notificação que funciona');
   const typeTestNotification = {
     userIds: [USER_ID],
@@ -91,7 +91,7 @@ async function debugNotifications() {
       id: `type_test_${Date.now()}`,
       title: 'Notificação Direcionada (Type Alterado)',
       message: 'Mesma notificação, mas com type diferente!',
-      type: 'new_proposal', // Mudança aqui
+      type: 'new_proposal',
       priority: 'high',
       timestamp: new Date().toISOString(),
       isRead: false
@@ -113,10 +113,10 @@ async function debugNotifications() {
     console.error('❌ Erro:', error.message);
   }
 
-  // Aguardar 3 segundos
+
   await new Promise(resolve => setTimeout(resolve, 3000));
 
-  // 4. Teste sem campos extras (link, image, relatedId)
+
   console.log('\n🧪 TESTE 4: Notificação limpa sem campos extras');
   const cleanNotification = {
     userIds: [USER_ID],

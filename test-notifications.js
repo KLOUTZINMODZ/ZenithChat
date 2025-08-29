@@ -15,7 +15,7 @@ const jwt = require('jsonwebtoken');
 const CHAT_API_URL = process.env.CHAT_API_BASE_URL || 'https://12zku8.instatunnel.my/';
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
-// Generate a test JWT token
+
 function generateTestToken() {
   return jwt.sign(
     { 
@@ -81,7 +81,7 @@ class NotificationTester {
         console.log('✅ Conexão WebSocket estabelecida');
         this.addResult('WebSocket Connection', true, 'Connected successfully');
         
-        // Setup message handler
+
         this.ws.on('message', (data) => {
           const message = JSON.parse(data.toString());
           console.log('📨 Mensagem recebida:', message.type);
@@ -142,17 +142,17 @@ class NotificationTester {
       return;
     }
 
-    // Subscribe to notifications
+
     this.ws.send(JSON.stringify({
       type: 'notification:subscribe',
       types: ['test', 'new_proposal', 'proposal_accepted'],
       games: []
     }));
 
-    // Wait a moment then test
+
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Send test notification
+
     this.ws.send(JSON.stringify({
       type: 'notification:test',
       message: 'Teste de notificação direta via WebSocket',
@@ -167,7 +167,7 @@ class NotificationTester {
     console.log('\n📱 Teste 4: Notificações offline (simulação)');
     
     try {
-      // Simulate getting cached notifications
+
       const response = await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
         userIds: ['offline_user_456'],
         notification: {
@@ -193,7 +193,7 @@ class NotificationTester {
       return;
     }
 
-    // Request unread count
+
     this.ws.send(JSON.stringify({
       type: 'notification:get_unread_count'
     }));
@@ -237,7 +237,7 @@ class NotificationTester {
   }
 }
 
-// Executar testes se chamado diretamente
+
 if (require.main === module) {
   const tester = new NotificationTester();
   tester.runAllTests().then(() => {

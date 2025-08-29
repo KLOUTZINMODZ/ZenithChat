@@ -19,7 +19,7 @@ class WebSocketServer {
     this.messageHandler = new MessageHandler(this.connectionManager);
     this.whatsAppHandler = new WhatsAppMessageHandler(this.connectionManager);
     
-    // Initialize notification services
+
     this.notificationService = new NotificationIntegrationService(this.connectionManager);
     this.notificationHandler = new NotificationHandler(this.connectionManager, this.notificationService);
     
@@ -29,7 +29,7 @@ class WebSocketServer {
 
   verifyClient(info, cb) {
     try {
-      // Extract token from query string or headers
+
       const url = new URL(info.req.url, `http://${info.req.headers.host}`);
       const token = url.searchParams.get('token') || 
                     info.req.headers.authorization?.replace('Bearer ', '');
@@ -49,7 +49,7 @@ class WebSocketServer {
         return;
       }
 
-      // Verify JWT token
+
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       info.req.userId = decoded.id || decoded._id;
       info.req.userToken = token;
@@ -76,10 +76,10 @@ class WebSocketServer {
 
       logger.info(`New WebSocket connection from user: ${userId}`);
 
-      // Store connection
+
       this.connectionManager.addConnection(userId, ws);
 
-      // Set up ping-pong for connection health
+
       ws.isAlive = true;
       ws.userId = userId;
       ws.userToken = userToken;
@@ -88,7 +88,7 @@ class WebSocketServer {
         ws.isAlive = true;
       });
 
-      // Handle incoming messages
+
       ws.on('message', async (data) => {
         try {
           const message = JSON.parse(data.toString());
@@ -99,7 +99,7 @@ class WebSocketServer {
         }
       });
 
-      // Handle connection close
+
       ws.on('close', (code, reason) => {
         logger.info(`WebSocket connection closed for user: ${userId}`, {
           code,
@@ -108,7 +108,7 @@ class WebSocketServer {
         });
         this.connectionManager.removeConnection(userId, ws);
         
-        // Handle notification system user disconnection
+
         try {
           this.notificationHandler.handleUserDisconnected(userId);
         } catch (error) {
@@ -116,7 +116,7 @@ class WebSocketServer {
         }
       });
 
-      // Handle errors
+
       ws.on('error', (error) => {
         logger.error(`WebSocket error for user ${userId}:`, {
           error: error.message,
@@ -124,7 +124,7 @@ class WebSocketServer {
           stack: error.stack
         });
         
-        // Try to close connection gracefully
+
         try {
           if (ws.readyState === WebSocket.OPEN) {
             ws.close(1011, 'Server error');
@@ -134,7 +134,7 @@ class WebSocketServer {
         }
       });
 
-      // Send connection success message
+
       this.sendMessage(ws, {
         type: 'connection',
         status: 'connected',
@@ -142,10 +142,10 @@ class WebSocketServer {
         timestamp: new Date().toISOString()
       });
 
-      // Send any pending messages
+
       this.messageHandler.sendPendingMessages(userId, ws);
       
-      // Handle notification system user connection
+
       this.notificationHandler.handleUserConnected(userId);
     });
 
@@ -188,7 +188,7 @@ class WebSocketServer {
         await this.messageHandler.handleGetMessageHistory(ws.userId, payload, ws);
         break;
 
-      // WhatsApp-like delivery acknowledgments
+
       case 'message:delivery_ack':
         await this.messageHandler.handleDeliveryAck(payload.messageId, ws.userId);
         break;
@@ -197,12 +197,12 @@ class WebSocketServer {
         await this.messageHandler.handleReadAck(payload.messageId, ws.userId);
         break;
 
-      // Enhanced message sending with delivery tracking
+
       case 'message:send_with_delivery':
         await this.handleSendMessageWithDelivery(ws.userId, payload);
         break;
 
-      // Notification system events
+
       case 'notification:subscribe':
         await this.notificationHandler.handleSubscribe(ws.userId, payload);
         break;
@@ -248,7 +248,7 @@ class WebSocketServer {
     try {
       const { conversationId, content, type = 'text', attachments = [] } = payload;
 
-      // Get conversation participants
+
       const Conversation = require('../models/Conversation');
       const conversation = await Conversation.findById(conversationId)
         .populate('participants', '_id');
@@ -261,7 +261,7 @@ class WebSocketServer {
         .map(p => p._id.toString())
         .filter(id => id !== userId);
 
-      // Create and save message first
+
       const Message = require('../models/Message');
       const { encryptMessage } = require('../utils/encryption');
       
@@ -277,12 +277,12 @@ class WebSocketServer {
       await message.save();
       await message.populate('sender', 'name email avatar');
 
-      // Send with delivery tracking
+
       const messageId = await this.messageHandler.sendMessageWithDelivery(
         userId,
         {
           ...message.toObject(),
-          content: content // Send unencrypted to clients
+          content: content
         },
         recipients
       );
@@ -310,7 +310,7 @@ class WebSocketServer {
   }
 
   startHeartbeat() {
-    const interval = parseInt(process.env.WS_HEARTBEAT_INTERVAL) || 60000; // Increased to 60s
+    const interval = parseInt(process.env.WS_HEARTBEAT_INTERVAL) || 60000;
     
     logger.info(`Starting WebSocket heartbeat with interval: ${interval}ms`);
     
@@ -326,7 +326,7 @@ class WebSocketServer {
 
         ws.isAlive = false;
         
-        // Only ping if connection is open
+
         if (ws.readyState === WebSocket.OPEN) {
           try {
             ws.ping();

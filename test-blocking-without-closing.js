@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Configuração
+
 const API_BASE = 'http://localhost:3001/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTI3MDE3ZGExZTU5MmUyOTE5NWRmMSIsImlhdCI6MTc1NjE5NDk4MiwiZXhwIjoxNzU2Nzk5NzgyfQ.Qy8HEz4X6iWiPm-hkO8P40nSUw2T7elzWXRzuJt1fgo';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
@@ -17,7 +17,7 @@ async function testBlockingWithoutClosing() {
   console.log('===============================================\n');
 
   try {
-    // 1. Confirmar entrega (deve bloquear mensagens mas manter chat aberto)
+
     console.log('📝 1. Confirmando entrega (bloqueio sem fechamento):');
     const confirmResponse = await axios.post(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/confirm-delivery`,
@@ -26,7 +26,7 @@ async function testBlockingWithoutClosing() {
     );
     console.log('✅ Confirmação:', confirmResponse.data.message);
 
-    // 2. Verificar status após confirmação
+
     console.log('\n📝 2. Status após confirmação:');
     const statusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,
@@ -36,7 +36,7 @@ async function testBlockingWithoutClosing() {
     const status = statusResponse.data;
     console.log('Status:', JSON.stringify(status, null, 2));
     
-    // Validar que chat não foi fechado
+
     if (status.boostingStatus === 'completed' && status.isActive !== false) {
       console.log('✅ Chat permanece aberto (não foi fechado)');
     } else {
@@ -44,7 +44,7 @@ async function testBlockingWithoutClosing() {
       console.log(`   isActive: ${status.isActive}, boostingStatus: ${status.boostingStatus}`);
     }
 
-    // 3. Testar bloqueio de mensagens
+
     console.log('\n📝 3. Testando bloqueio de mensagens:');
     try {
       await axios.post(
@@ -65,7 +65,7 @@ async function testBlockingWithoutClosing() {
       }
     }
 
-    // 4. Verificar persistência após refresh
+
     console.log('\n📝 4. Verificando persistência após refresh:');
     await new Promise(resolve => setTimeout(resolve, 1000));
     
@@ -87,7 +87,7 @@ async function testBlockingWithoutClosing() {
       }
     }
 
-    // 5. Verificar que chat ainda está "vivo" (pode receber status, etc)
+
     console.log('\n📝 5. Verificando que chat ainda está ativo (não fechado):');
     const finalStatusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,

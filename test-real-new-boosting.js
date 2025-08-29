@@ -17,7 +17,7 @@ async function testRealNewBoosting() {
 
   await new Promise(resolve => setTimeout(resolve, 2000));
 
-  // Simular notificação real new_boosting
+
   console.log('\n🧪 Enviando new_boosting real...');
   try {
     const response = await axios.post(`${CHAT_API_URL}/api/notifications/send`, {

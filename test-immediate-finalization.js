@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Configuração
+
 const API_BASE = 'http://localhost:3001/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTI3MDE3ZGExZTU5MmUyOTE5NWRmMSIsImlhdCI6MTc1NjE5NDk4MiwiZXhwIjoxNzU2Nzk5NzgyfQ.Qy8HEz4X6iWiPm-hkO8P40nSUw2T7elzWXRzuJt1fgo';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
@@ -17,7 +17,7 @@ async function testImmediateFinalization() {
   console.log('=====================================\n');
 
   try {
-    // 1. Confirmar entrega (deve finalizar imediatamente)
+
     console.log('📝 1. Confirmando entrega (finalização imediata):');
     const confirmResponse = await axios.post(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/confirm-delivery`,
@@ -26,7 +26,7 @@ async function testImmediateFinalization() {
     );
     console.log('✅ Confirmação:', confirmResponse.data.message);
 
-    // 2. Verificar status imediatamente após confirmação
+
     console.log('\n📝 2. Status imediatamente após confirmação:');
     const statusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,
@@ -36,7 +36,7 @@ async function testImmediateFinalization() {
     const status = statusResponse.data;
     console.log('Status:', JSON.stringify(status, null, 2));
     
-    // Validar estados esperados
+
     if (status.boostingStatus === 'completed' && !status.isActive) {
       console.log('✅ Chat finalizado corretamente (isActive=false, boostingStatus=completed)');
     } else {
@@ -44,7 +44,7 @@ async function testImmediateFinalization() {
       console.log(`   isActive: ${status.isActive}, boostingStatus: ${status.boostingStatus}`);
     }
 
-    // 3. Testar bloqueio imediato
+
     console.log('\n📝 3. Testando bloqueio imediato:');
     try {
       await axios.post(
@@ -65,7 +65,7 @@ async function testImmediateFinalization() {
       }
     }
 
-    // 4. Verificar mensagens geradas
+
     console.log('\n📝 4. Verificando mensagens de finalização:');
     const messagesResponse = await axios.get(
       `${API_BASE}/messages/conversations/${CONVERSATION_ID}/messages?limit=5`,
@@ -84,9 +84,9 @@ async function testImmediateFinalization() {
       }
     });
 
-    // 5. Simular refresh da página (nova consulta de status)
+
     console.log('\n📝 5. Simulando refresh da página:');
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Pequena pausa
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     const refreshStatusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,

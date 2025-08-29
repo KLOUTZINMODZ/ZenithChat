@@ -1,4 +1,4 @@
-// Simple logger fallback
+
 const logger = {
   info: (msg) => console.log(`[INFO] ${msg}`),
   warn: (msg) => console.log(`[WARN] ${msg}`),
@@ -16,7 +16,7 @@ class PaymentCacheService {
     this.pendingHighlights = new Map();
     this.retryQueue = new Map();
     
-    // Limpar cache antigo a cada 24 horas
+
     setInterval(() => {
       this.cleanOldEntries();
     }, 24 * 60 * 60 * 1000);
@@ -86,7 +86,7 @@ class PaymentCacheService {
       retryCount: 0,
       lastRetry: null,
       maxRetries: 10,
-      nextRetry: Date.now() + (5 * 60 * 1000) // 5 minutos
+      nextRetry: Date.now() + (5 * 60 * 1000)
     };
     
     this.pendingHighlights.set(paymentId, retryEntry);
@@ -164,11 +164,11 @@ class PaymentCacheService {
       return true;
     }
 
-    // Incrementa contador de retry
+
     entry.retryCount++;
     entry.lastRetry = Date.now();
     
-    // Backoff exponencial: 5min, 10min, 20min, 40min, etc.
+
     const backoffMinutes = 5 * Math.pow(2, entry.retryCount - 1);
     entry.nextRetry = Date.now() + (backoffMinutes * 60 * 1000);
     
@@ -177,7 +177,7 @@ class PaymentCacheService {
         paymentId, 
         retryCount: entry.retryCount 
       });
-      // Não remove para auditoria, mas marca como failed
+
       entry.status = 'failed';
     } else {
       logger.warn('⏳ Highlight retry scheduled:', { 
@@ -196,7 +196,7 @@ class PaymentCacheService {
   extractUserId(externalReference) {
     if (!externalReference) return null;
     
-    // Formato: marketplace_highlight_{userId}_{timestamp}
+
     const match = externalReference.match(/marketplace_highlight_([^_]+)_/);
     return match ? match[1] : null;
   }
@@ -206,11 +206,11 @@ class PaymentCacheService {
    */
   cleanOldEntries() {
     const now = Date.now();
-    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 dias
+    const maxAge = 7 * 24 * 60 * 60 * 1000;
     
     let cleaned = 0;
     
-    // Limpar payment cache
+
     for (const [key, entry] of this.paymentCache.entries()) {
       if (now - entry.timestamp > maxAge) {
         this.paymentCache.delete(key);
@@ -218,7 +218,7 @@ class PaymentCacheService {
       }
     }
     
-    // Limpar marketplace items cache
+
     for (const [key, entry] of this.marketplaceItemsCache.entries()) {
       if (now - entry.timestamp > maxAge) {
         this.marketplaceItemsCache.delete(key);
@@ -226,7 +226,7 @@ class PaymentCacheService {
       }
     }
     
-    // Limpar highlights failed antigos
+
     for (const [key, entry] of this.pendingHighlights.entries()) {
       if (entry.status === 'failed' && now - entry.timestamp > maxAge) {
         this.pendingHighlights.delete(key);
@@ -265,21 +265,21 @@ class PaymentCacheService {
       pendingHighlights: []
     };
     
-    // Buscar pagamentos
+
     for (const [key, entry] of this.paymentCache.entries()) {
       if (entry.userId === userId) {
         results.payments.push({ paymentId: key, ...entry });
       }
     }
     
-    // Buscar itens de marketplace
+
     for (const [key, entry] of this.marketplaceItemsCache.entries()) {
       if (entry.userId === userId) {
         results.marketplaceItems.push({ externalReference: key, ...entry });
       }
     }
     
-    // Buscar highlights pendentes
+
     for (const [key, entry] of this.pendingHighlights.entries()) {
       if (entry.highlightData?.userId === userId) {
         results.pendingHighlights.push({ paymentId: key, ...entry });
@@ -290,7 +290,7 @@ class PaymentCacheService {
   }
 }
 
-// Instância singleton
+
 const paymentCacheService = new PaymentCacheService();
 
 module.exports = paymentCacheService;

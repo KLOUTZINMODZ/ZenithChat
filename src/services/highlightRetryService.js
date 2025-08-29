@@ -1,5 +1,5 @@
 const axios = require('axios');
-// Simple logger fallback
+
 const logger = {
   info: (msg) => console.log(`[INFO] ${msg}`),
   warn: (msg) => console.log(`[WARN] ${msg}`),
@@ -15,9 +15,9 @@ const MarketItem = require('../models/MarketItem');
 class HighlightRetryService {
   constructor() {
     this.isRunning = false;
-    this.retryInterval = 5 * 60 * 1000; // 5 minutos
+    this.retryInterval = 5 * 60 * 1000;
     
-    // Iniciar processamento automático
+
     this.startRetryProcessor();
     
     logger.info('🔄 Highlight Retry Service initialized');
@@ -77,7 +77,7 @@ class HighlightRetryService {
         retryCount: highlight.retryCount + 1
       });
 
-      // Tentar API principal primeiro
+
       const apiSuccess = await this.tryMainAPI(highlightData);
       
       if (apiSuccess) {
@@ -86,7 +86,7 @@ class HighlightRetryService {
         return true;
       }
 
-      // Se API principal falhou, tentar fallback local
+
       const fallbackSuccess = await this.tryLocalFallback(highlightData);
       
       if (fallbackSuccess) {
@@ -95,7 +95,7 @@ class HighlightRetryService {
         return true;
       }
 
-      // Se tudo falhou, atualizar retry
+
       paymentCacheService.updateHighlightRetry(paymentId, false);
       return false;
 
@@ -154,18 +154,18 @@ class HighlightRetryService {
         externalReference: highlightData.externalReference
       });
 
-      // Buscar itens do cache ou database
+
       let items = [];
       
-      // Tentar cache primeiro
+
       const cachedItems = paymentCacheService.getMarketplaceItems(highlightData.externalReference);
       if (cachedItems && cachedItems.items) {
         items = cachedItems.items;
         logger.info('💾 Using cached marketplace items for fallback');
       } else {
-        // Buscar na database por userId e timestamp aproximado
+
         const timestamp = this.extractTimestampFromReference(highlightData.externalReference);
-        const timeWindow = 30 * 60 * 1000; // 30 minutos
+        const timeWindow = 30 * 60 * 1000;
         
         items = await MarketItem.find({
           sellerId: highlightData.userId,
@@ -184,7 +184,7 @@ class HighlightRetryService {
         return false;
       }
 
-      // Aplicar highlights localmente
+
       const highlightUntil = new Date();
       highlightUntil.setDate(highlightUntil.getDate() + (highlightData.durationDays || 14));
 
@@ -243,7 +243,7 @@ class HighlightRetryService {
    */
   async sendSuccessNotification(userId, externalReference) {
     try {
-      // Importar dinamicamente para evitar circular dependency
+
       const { sendNotificationToUser } = require('./notificationIntegrationService');
       
       await sendNotificationToUser(userId, {
@@ -286,12 +286,12 @@ class HighlightRetryService {
     return {
       ...cacheStats,
       retryProcessorRunning: this.isRunning,
-      retryInterval: this.retryInterval / 1000 / 60, // em minutos
+      retryInterval: this.retryInterval / 1000 / 60,
     };
   }
 }
 
-// Instância singleton
+
 const highlightRetryService = new HighlightRetryService();
 
 module.exports = highlightRetryService;

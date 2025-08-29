@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Connect to MongoDB
+
 mongoose.connect(process.env.MONGODB_URI);
 
 const AcceptedProposal = require('./src/models/AcceptedProposal');
@@ -13,7 +13,7 @@ async function fixProposalStatus() {
   const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
 
   try {
-    // Encontrar e atualizar a proposta
+
     const proposal = await AcceptedProposal.findOneAndUpdate(
       { 
         conversationId: CONVERSATION_ID,

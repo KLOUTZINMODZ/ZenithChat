@@ -7,10 +7,10 @@ async function validateSystems() {
   try {
     console.log('🧪 Validação Rápida dos Sistemas Implementados\n');
 
-    // Conectar ao MongoDB
+
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/hacklote_chat');
     
-    // Teste 1: Verificar se modelo Conversation tem campo isReported
+
     console.log('1️⃣ Sistema de Bloqueio por Report:');
     const conversationSchema = Conversation.schema;
     const hasIsReported = conversationSchema.paths.isReported;
@@ -20,7 +20,7 @@ async function validateSystems() {
       console.log(`   ✅ Tipo: ${hasIsReported.instance}, Default: ${hasIsReported.defaultValue}, Index: ${hasIsReported._index || false}`);
     }
     
-    // Teste 2: Verificar se modelo Agreement existe e tem estrutura correta
+
     console.log('\n2️⃣ Sistema Agreement (Múltiplas Propostas):');
     const agreementSchema = Agreement.schema;
     const hasAgreementId = agreementSchema.paths.agreementId;
@@ -31,7 +31,7 @@ async function validateSystems() {
     console.log(`   ✅ Campo 'version' ${hasVersion ? 'PRESENTE' : 'AUSENTE'} (optimistic locking)`);
     console.log(`   ✅ Campo 'actionHistory' ${hasActionHistory ? 'PRESENTE' : 'AUSENTE'} (idempotência)`);
     
-    // Teste 3: Verificar constraint unique removido
+
     console.log('\n3️⃣ Constraint AcceptedProposal:');
     const acceptedProposalSchema = AcceptedProposal.schema;
     const conversationIdField = acceptedProposalSchema.paths.conversationId;
@@ -39,14 +39,14 @@ async function validateSystems() {
     
     console.log(`   ${isUnique ? '❌' : '✅'} conversationId unique: ${isUnique ? 'AINDA PRESENTE (PROBLEMA!)' : 'REMOVIDO (CORRETO)'}`);
     
-    // Teste 4: Verificar métodos Agreement
+
     console.log('\n4️⃣ Métodos Agreement:');
     const agreementInstance = new Agreement();
     console.log(`   ✅ complete() ${typeof agreementInstance.complete === 'function' ? 'PRESENTE' : 'AUSENTE'}`);
     console.log(`   ✅ cancel() ${typeof agreementInstance.cancel === 'function' ? 'PRESENTE' : 'AUSENTE'}`);
     console.log(`   ✅ addAction() ${typeof agreementInstance.addAction === 'function' ? 'PRESENTE' : 'AUSENTE'}`);
     
-    // Teste 5: Contar documentos existentes
+
     console.log('\n5️⃣ Estado Atual da Database:');
     const conversationCount = await Conversation.countDocuments({});
     const acceptedProposalCount = await AcceptedProposal.countDocuments({});
@@ -58,7 +58,7 @@ async function validateSystems() {
     console.log(`   📊 AcceptedProposals: ${acceptedProposalCount}`);
     console.log(`   📊 Agreements: ${agreementCount}`);
     
-    // Teste 6: Simular criação de Agreement
+
     console.log('\n6️⃣ Teste de Criação Agreement:');
     const testAgreement = new Agreement({
       conversationId: new mongoose.Types.ObjectId(),
@@ -103,7 +103,7 @@ async function validateSystems() {
   }
 }
 
-// Executar validação
+
 if (require.main === module) {
   validateSystems();
 }

@@ -10,7 +10,7 @@
 
 ### 2. **Cache Inteligente por Tipo de Dados**
 ```javascript
-// TTL otimizado por contexto:
+
 - Mensagens: 1 hora (3600s)
 - Conversas: 2-5 minutos (120-300s)  
 - Sessões: 24 horas (86400s)
@@ -30,9 +30,9 @@
 
 ### 5. **Endpoints de Monitoramento**
 ```javascript
-GET /api/messages/cache/stats  // Estatísticas do cache
-DELETE /api/messages/cache/clear  // Limpar cache (admin)
-GET /health  // Inclui métricas de cache
+GET /api/messages/cache/stats
+DELETE /api/messages/cache/clear
+GET /health
 ```
 
 ## 🚀 Funcionalidades Adicionadas
@@ -84,22 +84,22 @@ GET /health  // Inclui métricas de cache
 ```javascript
 const cache = require('./src/services/GlobalCache');
 
-// Salvar dados
-cache.set('minha-chave', dadosComplexos, 300); // 5 min TTL
 
-// Recuperar dados  
+cache.set('minha-chave', dadosComplexos, 300);
+
+
 const dados = cache.get('minha-chave');
 
-// Cache com TTL dinâmico
-cache.cacheMessages(conversationId, messages); // 1h TTL automático
+
+cache.cacheMessages(conversationId, messages);
 ```
 
 ### **Invalidação Inteligente**
 ```javascript
-// Invalidar cache de uma conversa específica
+
 cache.invalidateConversationCache(conversationId, participantIds);
 
-// Invalidar todos os caches de um usuário
+
 cache.invalidateUserCache(userId);
 ```
 
@@ -113,9 +113,9 @@ cache.invalidateUserCache(userId);
 
 ### **Endpoints de Debug**
 ```javascript
-GET /health                    // Inclui stats do cache
-GET /api/messages/cache/stats  // Estatísticas detalhadas
-DELETE /api/messages/cache/clear // Limpar cache
+GET /health
+GET /api/messages/cache/stats
+DELETE /api/messages/cache/clear
 ```
 
 ## 🛡️ Funcionalidades de Segurança

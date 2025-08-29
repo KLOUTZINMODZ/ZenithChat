@@ -13,7 +13,7 @@ class AgreementMigrationMiddleware {
    */
   static async migrateProposalToAgreement(acceptedProposal) {
     try {
-      // Verificar se já existe Agreement para esta proposta
+
       const existingAgreement = await Agreement.findOne({ 
         acceptedProposalId: acceptedProposal._id 
       });
@@ -23,7 +23,7 @@ class AgreementMigrationMiddleware {
         return existingAgreement;
       }
 
-      // Criar Agreement baseado na AcceptedProposal
+
       const agreement = new Agreement({
         conversationId: acceptedProposal.conversationId,
         proposalId: acceptedProposal.proposalId,
@@ -69,16 +69,16 @@ class AgreementMigrationMiddleware {
           }
         },
         
-        // Mapear status
+
         status: this.mapAcceptedProposalStatus(acceptedProposal.status),
         
-        // Timestamps
+
         createdAt: acceptedProposal.acceptedAt,
         activatedAt: acceptedProposal.acceptedAt,
         completedAt: acceptedProposal.completedAt,
         cancelledAt: acceptedProposal.cancelledAt,
         
-        // Migrar histórico de renegociações
+
         renegotiationData: this.migrateRenegotiationHistory(acceptedProposal.renegotiationHistory),
         
         financial: {
@@ -88,7 +88,7 @@ class AgreementMigrationMiddleware {
         }
       });
 
-      // Adicionar ações históricas baseadas no status atual
+
       agreement.addAction('created', acceptedProposal.client.userid, {
         migratedFrom: 'AcceptedProposal',
         originalId: acceptedProposal._id
@@ -165,26 +165,26 @@ class AgreementMigrationMiddleware {
           return next();
         }
 
-        // Buscar AcceptedProposal existente
+
         const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
         
         if (!acceptedProposal) {
           return next();
         }
 
-        // Verificar se já existe Agreement
+
         let agreement = await Agreement.findOne({ 
           acceptedProposalId: acceptedProposal._id 
         });
 
-        // Se não existe, migrar automaticamente
+
         if (!agreement) {
           agreement = await this.migrateProposalToAgreement(acceptedProposal);
         }
 
-        // Disponibilizar Agreement no request
+
         req.agreement = agreement;
-        req.acceptedProposal = acceptedProposal; // Manter para compatibilidade
+        req.acceptedProposal = acceptedProposal;
         
         next();
       } catch (error) {
@@ -204,15 +204,15 @@ class AgreementMigrationMiddleware {
         
         let agreement = null;
         
-        // Buscar por agreementId primeiro
+
         if (agreementId) {
           agreement = await Agreement.findByAgreementId(agreementId);
         }
-        // Fallback: buscar por conversationId
+
         else if (conversationId) {
           agreement = await Agreement.findOne({ conversationId });
           
-          // Se não encontrou, tentar migração automática
+
           if (!agreement) {
             const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
             if (acceptedProposal) {
@@ -249,7 +249,7 @@ class AgreementMigrationMiddleware {
           return next();
         }
 
-        // Buscar ambos
+
         const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
         let agreement = null;
         
@@ -258,27 +258,27 @@ class AgreementMigrationMiddleware {
             acceptedProposalId: acceptedProposal._id 
           });
           
-          // Auto-migrar se não existe Agreement
+
           if (!agreement) {
             agreement = await this.migrateProposalToAgreement(acceptedProposal);
           }
         }
 
-        // Disponibilizar ambos
+
         req.acceptedProposal = acceptedProposal;
         req.agreement = agreement;
         
-        // Função helper para resposta unificada
+
         req.unifiedResponse = (additionalData = {}) => {
           const baseResponse = {
             success: true,
-            // Dados do Agreement (prioridade)
+
             ...(agreement && {
               agreementId: agreement.agreementId,
               agreementStatus: agreement.status,
               agreementVersion: agreement.version
             }),
-            // Dados do AcceptedProposal (compatibilidade)
+
             ...(acceptedProposal && {
               proposalId: acceptedProposal._id,
               proposalStatus: acceptedProposal.status
@@ -304,7 +304,7 @@ class AgreementMigrationMiddleware {
     try {
       logger.info('🚀 Iniciando migração em lote...');
       
-      // Buscar todas AcceptedProposal que não foram migradas
+
       const acceptedProposals = await AcceptedProposal.find({});
       
       let migratedCount = 0;
@@ -313,7 +313,7 @@ class AgreementMigrationMiddleware {
       
       for (const proposal of acceptedProposals) {
         try {
-          // Verificar se já foi migrada
+
           const existingAgreement = await Agreement.findOne({ 
             acceptedProposalId: proposal._id 
           });
@@ -323,7 +323,7 @@ class AgreementMigrationMiddleware {
             continue;
           }
 
-          // Migrar
+
           await this.migrateProposalToAgreement(proposal);
           migratedCount++;
           

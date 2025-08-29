@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Configuração
+
 const API_BASE = 'http://localhost:3001/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTI3MDE3ZGExZTU5MmUyOTE5NWRmMSIsImlhdCI6MTc1NjE5NDk4MiwiZXhwIjoxNzU2Nzk5NzgyfQ.Qy8HEz4X6iWiPm-hkO8P40nSUw2T7elzWXRzuJt1fgo';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
@@ -17,7 +17,7 @@ async function testConfirmDelivery() {
   console.log('================================================\n');
 
   try {
-    // Teste múltiplas confirmações (deve ser idempotente)
+
     for (let i = 1; i <= 3; i++) {
       console.log(`📝 Tentativa ${i}: Confirmar entrega`);
       
@@ -38,11 +38,11 @@ async function testConfirmDelivery() {
         }
       }
       
-      // Pequena pausa entre tentativas
+
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    // Verificar status final
+
     console.log('\n📝 Verificando status final:');
     const statusResponse = await axios.get(
       `${API_BASE}/boosting-chat/conversation/${CONVERSATION_ID}/status`,

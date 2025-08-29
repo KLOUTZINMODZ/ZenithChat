@@ -6,7 +6,7 @@
 const axios = require('axios');
 
 const CHAT_API_URL = 'https://12zku8.instatunnel.my/';
-const USER_ID = '6897d82c8cdd40188e08a224'; // User ID real do frontend
+const USER_ID = '6897d82c8cdd40188e08a224';
 
 console.log('🧪 Testando notificações reais do HackLoteAPI...');
 
@@ -74,7 +74,7 @@ async function testRealNotifications() {
       console.error('❌ Erro:', error.response?.data?.message || error.message);
     }
 
-    // Aguardar 2 segundos entre notificações para simular uso real
+
     if (i < notifications.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }

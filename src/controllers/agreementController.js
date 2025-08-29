@@ -6,7 +6,7 @@ const axios = require('axios');
 
 class AgreementController {
   
-  // Criar novo acordo (migração da funcionalidade saveAcceptedProposal)
+
   async createAgreement(req, res) {
     try {
       const { 
@@ -15,7 +15,7 @@ class AgreementController {
         proposalData,
         clientData,
         boosterData,
-        acceptedProposalId // Para retrocompatibilidade
+        acceptedProposalId
       } = req.body;
       
       const idempotencyKey = req.headers['x-idempotency-key'];
@@ -27,7 +27,7 @@ class AgreementController {
         });
       }
 
-      // Verificar idempotência
+
       if (idempotencyKey) {
         const existingAgreement = await Agreement.findOne({
           'actionHistory.idempotencyKey': idempotencyKey
@@ -46,11 +46,11 @@ class AgreementController {
         }
       }
 
-      // Criar acordo
+
       const agreement = new Agreement({
         conversationId,
         proposalId,
-        acceptedProposalId, // Retrocompatibilidade
+        acceptedProposalId,
         proposalSnapshot: {
           game: proposalData.game,
           category: proposalData.category,
@@ -94,10 +94,10 @@ class AgreementController {
           currency: 'BRL',
           paymentStatus: 'pending'
         },
-        status: 'active' // Diretamente ativo para manter compatibilidade
+        status: 'active'
       });
 
-      // Adicionar ação de criação
+
       agreement.addAction('created', clientData.userid, {
         proposalId,
         createdVia: 'migration'
@@ -105,10 +105,10 @@ class AgreementController {
 
       await agreement.save();
 
-      // Atualizar conversa (manter compatibilidade)
+
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
-        // Manter referência antiga + nova
+
         if (acceptedProposalId) {
           conversation.acceptedProposal = acceptedProposalId;
         }
@@ -134,7 +134,7 @@ class AgreementController {
     }
   }
 
-  // Buscar acordo por ID
+
   async getAgreement(req, res) {
     try {
       const { agreementId } = req.params;
@@ -153,7 +153,7 @@ class AgreementController {
         });
       }
 
-      // Verificar se usuário é participante
+
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -185,7 +185,7 @@ class AgreementController {
     }
   }
 
-  // Completar acordo (substitui confirmDelivery)
+
   async completeAgreement(req, res) {
     try {
       const { agreementId } = req.params;
@@ -203,7 +203,7 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
-      // Verificar se usuário é participante
+
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -212,7 +212,7 @@ class AgreementController {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
 
-      // Controle de versão (optimistic locking)
+
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
@@ -222,7 +222,7 @@ class AgreementController {
         });
       }
 
-      // Verificar idempotência
+
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
           a => a.idempotencyKey === idempotencyKey && a.action === 'completed'
@@ -242,13 +242,13 @@ class AgreementController {
         }
       }
 
-      // Completar acordo
+
       await agreement.complete(userId, {
         completionNotes,
         completedVia: 'api'
       }, idempotencyKey);
 
-      // Enviar mensagem do sistema
+
       const systemMessage = new Message({
         conversation: agreement.conversationId,
         sender: agreement.parties.booster.userid,
@@ -262,7 +262,7 @@ class AgreementController {
       });
       await systemMessage.save();
 
-      // Notificar API principal (manter compatibilidade)
+
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/confirm-delivery`, {
           conversationId: agreement.conversationId.toString(),
@@ -292,7 +292,7 @@ class AgreementController {
     }
   }
 
-  // Cancelar acordo (substitui cancelService)
+
   async cancelAgreement(req, res) {
     try {
       const { agreementId } = req.params;
@@ -310,7 +310,7 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
-      // Verificar se usuário é participante
+
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -319,7 +319,7 @@ class AgreementController {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
 
-      // Controle de versão
+
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
@@ -329,7 +329,7 @@ class AgreementController {
         });
       }
 
-      // Verificar idempotência
+
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
           a => a.idempotencyKey === idempotencyKey && a.action === 'cancelled'
@@ -349,10 +349,10 @@ class AgreementController {
         }
       }
 
-      // Cancelar acordo
+
       await agreement.cancel(userId, cancelReason, idempotencyKey);
 
-      // Enviar mensagem do sistema
+
       const systemMessage = new Message({
         conversation: agreement.conversationId,
         sender: userId,
@@ -366,7 +366,7 @@ class AgreementController {
       });
       await systemMessage.save();
 
-      // Notificar API principal
+
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/cancel`, {
           conversationId: agreement.conversationId.toString(),
@@ -397,7 +397,7 @@ class AgreementController {
     }
   }
 
-  // Renegociar acordo
+
   async renegotiateAgreement(req, res) {
     try {
       const { agreementId } = req.params;
@@ -415,7 +415,7 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
-      // Verificar se usuário é participante
+
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -424,7 +424,7 @@ class AgreementController {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
 
-      // Controle de versão
+
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
@@ -434,7 +434,7 @@ class AgreementController {
         });
       }
 
-      // Verificar idempotência
+
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
           a => a.idempotencyKey === idempotencyKey && a.action === 'renegotiated'
@@ -454,10 +454,10 @@ class AgreementController {
         }
       }
 
-      // Renegociar acordo
+
       await agreement.renegotiate(userId, newPrice, newEstimatedTime, reason, idempotencyKey);
 
-      // Enviar mensagem do sistema
+
       const systemMessage = new Message({
         conversation: agreement.conversationId,
         sender: userId,
@@ -490,7 +490,7 @@ class AgreementController {
     }
   }
 
-  // Listar acordos de uma conversa
+
   async getConversationAgreements(req, res) {
     try {
       const { conversationId } = req.params;
@@ -501,7 +501,7 @@ class AgreementController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      // Verificar se usuário é participante da conversa
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
@@ -529,7 +529,7 @@ class AgreementController {
     }
   }
 
-  // Listar acordos de um usuário
+
   async getUserAgreements(req, res) {
     try {
       const userId = req.user?.id || req.user?._id;

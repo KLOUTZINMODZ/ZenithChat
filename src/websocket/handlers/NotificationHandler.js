@@ -18,7 +18,7 @@ class NotificationHandler {
     try {
       const { types = [], games = [] } = payload;
 
-      // Cache user's notification preferences
+
       const preferencesKey = `notification_prefs:${userId}`;
       const preferences = {
         types,
@@ -26,9 +26,9 @@ class NotificationHandler {
         subscribedAt: new Date().toISOString()
       };
 
-      cache.set(preferencesKey, preferences, 86400); // 24 hours
+      cache.set(preferencesKey, preferences, 86400);
 
-      // Send confirmation
+
       this.sendToUser(userId, {
         type: 'notification:subscribed',
         data: {
@@ -38,7 +38,7 @@ class NotificationHandler {
         }
       });
 
-      // Send any pending notifications
+
       await this.notificationService.sendPendingNotifications(userId);
 
       logger.debug(`User ${userId} subscribed to notifications: types=${types.join(',')} games=${games.join(',')}`);
@@ -58,17 +58,17 @@ class NotificationHandler {
     try {
       const { types = [], games = [] } = payload;
 
-      // Update cached preferences
+
       const preferencesKey = `notification_prefs:${userId}`;
       let preferences = cache.get(preferencesKey) || { types: [], games: [] };
 
-      // Remove specified types and games
+
       preferences.types = preferences.types.filter(t => !types.includes(t));
       preferences.games = preferences.games.filter(g => !games.includes(g));
 
       cache.set(preferencesKey, preferences, 86400);
 
-      // Send confirmation
+
       this.sendToUser(userId, {
         type: 'notification:unsubscribed',
         data: {
@@ -95,10 +95,10 @@ class NotificationHandler {
     try {
       const { notificationId, action = 'received' } = payload;
 
-      // Mark notification as acknowledged in cache
+
       this.notificationService.markAsDelivered(userId, notificationId);
 
-      // Send confirmation
+
       this.sendToUser(userId, {
         type: 'notification:acknowledged',
         data: {
@@ -125,18 +125,18 @@ class NotificationHandler {
     try {
       const { limit = 20, unreadOnly = false, types = [] } = payload;
 
-      // Get cached notifications
+
       let notifications = this.notificationService.getCachedNotifications(userId, { limit: 100, unreadOnly });
 
-      // Filter by types if specified
+
       if (types.length > 0) {
         notifications = notifications.filter(n => types.includes(n.type));
       }
 
-      // Limit results
+
       notifications = notifications.slice(0, limit);
 
-      // Send response
+
       this.sendToUser(userId, {
         type: 'notification:history',
         data: {
@@ -163,7 +163,7 @@ class NotificationHandler {
     try {
       const { notificationIds = [] } = payload;
 
-      // Update cached notifications
+
       const cacheKey = `notifications:${userId}`;
       let notifications = cache.get(cacheKey) || [];
 
@@ -176,14 +176,14 @@ class NotificationHandler {
         return n;
       });
 
-      // Update cache
+
       cache.set(cacheKey, notifications, 604800);
 
-      // Update unread count
+
       const unreadCount = notifications.filter(n => !n.isRead).length;
       cache.set(`notifications:${userId}:unread`, unreadCount, 604800);
 
-      // Send response
+
       this.sendToUser(userId, {
         type: 'notification:marked_read',
         data: {
@@ -194,7 +194,7 @@ class NotificationHandler {
         }
       });
 
-      // Send unread count update
+
       await this.notificationService.sendUnreadCount(userId, unreadCount);
 
       logger.debug(`Marked ${updatedCount} notifications as read for user ${userId}`);
@@ -247,7 +247,7 @@ class NotificationHandler {
         timestamp: new Date().toISOString()
       };
 
-      // Send via notification service
+
       await this.notificationService.sendNotification(userId, testNotification, { persistent: false });
 
       logger.debug(`Sent test notification to user ${userId}`);
@@ -286,14 +286,14 @@ class NotificationHandler {
    */
   async handleUserConnected(userId) {
     try {
-      // Send current unread count
+
       const unreadCount = cache.get(`notifications:${userId}:unread`) || 0;
       
       if (unreadCount > 0) {
         await this.notificationService.sendUnreadCount(userId, unreadCount);
       }
 
-      // Send pending notifications
+
       await this.notificationService.handleUserConnected(userId);
 
       logger.debug(`Notification handler processed user ${userId} connection`);
@@ -309,7 +309,7 @@ class NotificationHandler {
    */
   async handleUserDisconnected(userId) {
     try {
-      // Clean up any user-specific notification state if needed
+
       logger.debug(`User ${userId} disconnected from notifications`);
 
     } catch (error) {

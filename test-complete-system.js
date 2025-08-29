@@ -1,11 +1,11 @@
 const axios = require('axios');
 
-// URLs das APIs
+
 const CHAT_API_URL = 'https://12zku8.instatunnel.my';
 const MAIN_API_URL = 'https://zenithapi-steel.vercel.app';
 const VERCEL_API_SECRET = 'Kl0u7s2llaHu';
 
-// Dados de teste
+
 const TEST_USER_ID = '68a27017da1e592e29195df1';
 const TEST_ITEMS = [
   {
@@ -145,7 +145,7 @@ class CompleteSystemTester {
     return await this.runTest('Main API - Cache Integration Test', async () => {
       console.log('🔄 Testing Main API integration (simulated due to deployment lag)');
       
-      // Simular o comportamento esperado baseado nas correções feitas
+
       const simulatedResult = {
         success: true,
         message: 'Highlights aplicados com sucesso usando cache',
@@ -175,7 +175,7 @@ class CompleteSystemTester {
     return await this.runTest('Webhook System - Simulate Payment Notification', async () => {
       this.paymentId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
       
-      // Simular webhook do Mercado Pago
+
       const webhookData = {
         type: 'payment',
         data: { id: this.paymentId }
@@ -272,7 +272,7 @@ class CompleteSystemTester {
     return await this.runTest('Health Checks', async () => {
       const results = {};
 
-      // Test Chat API health
+
       try {
         const chatHealth = await axios.get(`${CHAT_API_URL}/health`);
         results.chatApi = {
@@ -283,7 +283,7 @@ class CompleteSystemTester {
         results.chatApi = { healthy: false, error: error.message };
       }
 
-      // Test Main API health (with auth)
+
       try {
         const mainHealth = await axios.get(`${MAIN_API_URL}/api/root`, {
           headers: {
@@ -296,7 +296,7 @@ class CompleteSystemTester {
         };
       } catch (error) {
         results.mainApi = { 
-          healthy: error.response?.status === 401, // 401 é esperado sem auth adequada
+          healthy: error.response?.status === 401,
           error: error.message 
         };
       }
@@ -351,13 +351,13 @@ class CompleteSystemTester {
     console.log('🚀 Starting Complete System Test Suite\n');
     
     try {
-      // Core system tests
+
       await this.testHealthChecks();
       await this.testCacheSystem();
       await this.testCacheRetrieval();
       await this.testMainApiWithCache();
       
-      // Advanced flow tests
+
       await this.testWebhookSimulation();
       await this.testRetrySystem();
       await this.testCacheStats();
@@ -373,7 +373,7 @@ class CompleteSystemTester {
   }
 }
 
-// Execute if run directly
+
 if (require.main === module) {
   const tester = new CompleteSystemTester();
   tester.runAllTests().catch(console.error);

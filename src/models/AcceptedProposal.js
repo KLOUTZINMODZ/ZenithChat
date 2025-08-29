@@ -35,7 +35,7 @@ const acceptedProposalSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  // Dados completos do cliente
+
   client: {
     userid: {
       type: mongoose.Schema.Types.ObjectId,
@@ -61,7 +61,7 @@ const acceptedProposalSchema = new mongoose.Schema({
     },
     registeredAt: Date
   },
-  // Dados completos do booster
+
   booster: {
     userid: {
       type: mongoose.Schema.Types.ObjectId,
@@ -105,7 +105,7 @@ const acceptedProposalSchema = new mongoose.Schema({
   },
   completedAt: Date,
   cancelledAt: Date,
-  // Histórico de renegociações
+
   renegotiationHistory: [{
     requestedAt: {
       type: Date,
@@ -134,12 +134,12 @@ const acceptedProposalSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Índices para performance
+
 acceptedProposalSchema.index({ 'client.userid': 1 });
 acceptedProposalSchema.index({ 'booster.userid': 1 });
 acceptedProposalSchema.index({ status: 1, acceptedAt: -1 });
 
-// Método para adicionar renegociação
+
 acceptedProposalSchema.methods.addRenegotiation = function(requestedBy, newPrice, newEstimatedTime, reason) {
   this.renegotiationHistory.push({
     requestedBy,
@@ -152,14 +152,14 @@ acceptedProposalSchema.methods.addRenegotiation = function(requestedBy, newPrice
   return this.save();
 };
 
-// Método para completar proposta
+
 acceptedProposalSchema.methods.complete = function() {
   this.status = 'completed';
   this.completedAt = new Date();
   return this.save();
 };
 
-// Método para cancelar proposta
+
 acceptedProposalSchema.methods.cancel = function() {
   this.status = 'cancelled';
   this.cancelledAt = new Date();

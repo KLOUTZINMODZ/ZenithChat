@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Connect to MongoDB
+
 mongoose.connect(process.env.MONGODB_URI);
 
 const Conversation = require('./src/models/Conversation');
@@ -13,18 +13,18 @@ async function resetConversationState() {
   const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
 
   try {
-    // Resetar conversa para estado correto
+
     const result = await Conversation.findByIdAndUpdate(CONVERSATION_ID, {
       $set: {
-        isActive: true,  // Reativar chat
-        boostingStatus: 'completed', // Manter como completado
+        isActive: true,
+        boostingStatus: 'completed',
         'metadata.status': 'delivery_confirmed'
       },
       $unset: {
-        isFinalized: 1,  // Remover finalização
-        finalizedAt: 1,  // Remover timestamp de finalização
-        finalizedBy: 1,  // Remover quem finalizou
-        closedAt: 1      // Remover fechamento
+        isFinalized: 1,
+        finalizedAt: 1,
+        finalizedBy: 1,
+        closedAt: 1
       }
     }, { new: true });
 

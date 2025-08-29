@@ -1,12 +1,12 @@
 const axios = require('axios');
 
-// Configurações do teste
+
 const BASE_URL = 'http://localhost:3001/api';
-const TEST_JWT = 'your_test_jwt_token_here'; // Substituir por token válido
+const TEST_JWT = 'your_test_jwt_token_here';
 
 class AgreementSystemTest {
   constructor() {
-    this.conversationId = '675b6e7a2e5f8d001f123457'; // ID de teste
+    this.conversationId = '675b6e7a2e5f8d001f123457';
     this.firstAgreementId = null;
     this.secondAgreementId = null;
     this.clientUserId = '675a1b2c3d4e5f6789abcdef';
@@ -17,7 +17,7 @@ class AgreementSystemTest {
     console.log('🚀 Iniciando teste do sistema Agreement (múltiplas propostas)...\n');
   }
 
-  // Teste 1: Criar primeira proposta (AcceptedProposal + Agreement)
+
   async testCreateFirstProposal() {
     console.log('📝 Teste 1: Criar primeira proposta aceita');
     
@@ -77,7 +77,7 @@ class AgreementSystemTest {
     console.log('');
   }
 
-  // Teste 2: Criar segunda proposta do MESMO booster (deve funcionar agora)
+
   async testCreateSecondProposal() {
     console.log('📝 Teste 2: Criar segunda proposta do MESMO booster');
     
@@ -98,7 +98,7 @@ class AgreementSystemTest {
           email: 'cliente@test.com'
         },
         boosterData: {
-          userid: this.boosterUserId, // MESMO booster
+          userid: this.boosterUserId,
           name: 'Booster Teste',
           email: 'booster@test.com'
         }
@@ -131,7 +131,7 @@ class AgreementSystemTest {
     console.log('');
   }
 
-  // Teste 3: Listar todos os agreements da conversa
+
   async testListConversationAgreements() {
     console.log('📋 Teste 3: Listar agreements da conversa');
     
@@ -161,7 +161,7 @@ class AgreementSystemTest {
     console.log('');
   }
 
-  // Teste 4: Completar primeiro agreement (não deve afetar o segundo)
+
   async testCompleteFirstAgreement() {
     console.log('✅ Teste 4: Completar primeiro agreement');
     
@@ -195,7 +195,7 @@ class AgreementSystemTest {
     console.log('');
   }
 
-  // Teste 5: Verificar se segundo agreement ainda está ativo (independência)
+
   async testSecondAgreementStillActive() {
     console.log('🔍 Teste 5: Verificar independência do segundo agreement');
     
@@ -230,7 +230,7 @@ class AgreementSystemTest {
     console.log('');
   }
 
-  // Teste 6: Testar idempotência no completion
+
   async testIdempotency() {
     console.log('🔄 Teste 6: Testar idempotência em completion');
     
@@ -241,7 +241,7 @@ class AgreementSystemTest {
 
     const idempotencyKey = `idempotency_test_${Date.now()}`;
     
-    // Primeira tentativa
+
     try {
       const response1 = await axios.post(`${BASE_URL}/agreements/${this.secondAgreementId}/complete`, {
         version: 1,
@@ -260,7 +260,7 @@ class AgreementSystemTest {
       return;
     }
 
-    // Segunda tentativa (deve retornar idempotência)
+
     try {
       const response2 = await axios.post(`${BASE_URL}/agreements/${this.secondAgreementId}/complete`, {
         version: 1,
@@ -269,7 +269,7 @@ class AgreementSystemTest {
         headers: {
           'Authorization': `Bearer ${TEST_JWT}`,
           'Content-Type': 'application/json',
-          'X-Idempotency-Key': idempotencyKey // Mesma chave
+          'X-Idempotency-Key': idempotencyKey
         }
       });
 
@@ -284,12 +284,12 @@ class AgreementSystemTest {
     console.log('');
   }
 
-  // Teste 7: Verificar migração automática de AcceptedProposal existente
+
   async testAutoMigration() {
     console.log('🔄 Teste 7: Testar migração automática');
     
     try {
-      // Tentar buscar proposta aceita (deve migrar automaticamente se necessário)
+
       const response = await axios.get(`${BASE_URL}/boosting-chat/conversation/${this.conversationId}/proposal`, {
         headers: {
           'Authorization': `Bearer ${TEST_JWT}`
@@ -313,7 +313,7 @@ class AgreementSystemTest {
     console.log('');
   }
 
-  // Executar todos os testes
+
   async runAllTests() {
     await this.setup();
     await this.testCreateFirstProposal();
@@ -333,7 +333,7 @@ class AgreementSystemTest {
   }
 }
 
-// Executar teste se chamado diretamente
+
 if (require.main === module) {
   const test = new AgreementSystemTest();
   test.runAllTests().catch(console.error);

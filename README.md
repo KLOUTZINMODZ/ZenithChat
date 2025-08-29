@@ -101,7 +101,7 @@ function ChatComponent() {
     openConversation
   } = useWebSocket();
 
-  // Seu código aqui
+
 }
 ```
 

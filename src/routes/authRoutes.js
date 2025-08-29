@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const logger = require('../utils/logger');
 
-// Validate token endpoint (for testing WebSocket connection)
+
 router.post('/validate', async (req, res) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -36,7 +36,7 @@ router.post('/validate', async (req, res) => {
   }
 });
 
-// Get WebSocket connection info
+
 router.get('/ws-token', async (req, res) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -48,10 +48,10 @@ router.get('/ws-token', async (req, res) => {
       });
     }
 
-    // Validate token
+
     jwt.verify(token, process.env.JWT_SECRET);
 
-    // Prefer public base URL (e.g., ngrok) when provided
+
     const base = process.env.CHAT_PUBLIC_BASE_URL
       ? process.env.CHAT_PUBLIC_BASE_URL.replace(/\/$/, '')
       : `${req.secure ? 'wss' : 'ws'}://${req.get('host')}`;

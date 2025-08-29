@@ -5,7 +5,7 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const logger = require('../utils/logger');
 
-// Compatibility endpoint that matches HackLoteAPI format exactly
+
 router.get('/v1/messages/conversations', auth, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
@@ -14,7 +14,7 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
     
     logger.info(`[COMPATIBILITY] Fetching conversations for user ${userId}`, { page, limit });
     
-    // Fetch conversations with proper population
+
     const conversations = await Conversation.find({
       participants: userId,
       isActive: true
@@ -33,15 +33,15 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
 
     logger.info(`[COMPATIBILITY] Found ${conversations.length} conversations`);
 
-    // Format conversations exactly like HackLoteAPI
+
     const formattedConversations = conversations.map(conv => {
       try {
-        // Find other participant for direct chats
+
         const otherParticipant = conv.participants.find(
           p => p && p._id && p._id.toString() !== userId.toString()
         );
 
-        // Get unread count
+
         const userUnreadCount = conv.unreadCount?.get?.(userId.toString()) || 
                                conv.unreadCount?.[userId.toString()] || 0;
 
@@ -106,7 +106,7 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
   }
 });
 
-// Compatibility endpoint for messages
+
 router.get('/v1/messages/conversations/:conversationId/messages', auth, async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -116,7 +116,7 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
 
     logger.info(`[COMPATIBILITY] Fetching messages for conversation ${conversationId}`);
 
-    // Check if user has access to conversation
+
     const conversation = await Conversation.findOne({
       _id: conversationId,
       participants: userId,
@@ -130,7 +130,7 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
       });
     }
 
-    // Fetch messages
+
     const messages = await Message.find({
       conversation: conversationId,
       isDeleted: { $ne: true }
@@ -146,12 +146,12 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
       isDeleted: { $ne: true }
     });
 
-    // Format messages for compatibility
+
     const formattedMessages = messages.map(msg => ({
       _id: msg._id,
       conversationId: msg.conversation,
       senderId: msg.sender._id,
-      content: msg.content, // Already decrypted by populate
+      content: msg.content,
       createdAt: msg.createdAt,
       updatedAt: msg.updatedAt,
       sender: {
@@ -162,7 +162,7 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
       },
       attachments: msg.attachments || [],
       type: msg.type || 'text'
-    })).reverse(); // Chronological order
+    })).reverse();
 
     res.json({
       success: true,

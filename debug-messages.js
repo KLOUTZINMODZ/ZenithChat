@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-// Connect to MongoDB
+
 mongoose.connect(process.env.MONGODB_URI);
 
 const Message = require('./src/models/Message');
@@ -13,7 +13,7 @@ async function debugMessages() {
   const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
 
   try {
-    // Buscar todas as mensagens da conversa diretamente no MongoDB
+
     const messages = await Message.find({ conversation: CONVERSATION_ID })
       .sort({ createdAt: -1 })
       .limit(10)
@@ -33,10 +33,10 @@ async function debugMessages() {
       console.log('   ---');
     });
 
-    // Verificar se há mensagens muito recentes (últimos 5 minutos)
+
     const recentMessages = await Message.find({
       conversation: CONVERSATION_ID,
-      createdAt: { $gte: new Date(Date.now() - 5 * 60 * 1000) } // Últimos 5 minutos
+      createdAt: { $gte: new Date(Date.now() - 5 * 60 * 1000) }
     }).lean();
 
     console.log(`\n📅 Mensagens dos últimos 5 minutos: ${recentMessages.length}`);

@@ -21,7 +21,7 @@ const checkChatStatus = async (req, res, next) => {
       });
     }
 
-    // Verificar se o chat está finalizado
+
     if (conversation.isFinalized) {
       return res.status(403).json({ 
         success: false, 
@@ -32,7 +32,7 @@ const checkChatStatus = async (req, res, next) => {
       });
     }
 
-    // Verificar se o chat está ativo
+
     if (!conversation.canReceiveMessages()) {
       return res.status(403).json({ 
         success: false, 
@@ -41,7 +41,7 @@ const checkChatStatus = async (req, res, next) => {
       });
     }
 
-    // Adicionar informações da conversa ao request para uso posterior
+
     req.conversation = conversation;
     next();
   } catch (error) {

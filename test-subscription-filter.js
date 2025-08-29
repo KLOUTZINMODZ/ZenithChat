@@ -15,17 +15,17 @@ async function testSubscriptionFilter() {
   console.log('2. Aguarde conexão WebSocket');
   console.log('3. Verifique console do navegador');
   
-  // Aguardar 5 segundos para refresh
+
   console.log('\n⏱️ Aguarde 5 segundos para refresh do frontend...');
   await new Promise(resolve => setTimeout(resolve, 5000));
 
-  // Teste com tipos já inclusos na subscription
+
   const subscriptionTypes = [
     'new_proposal',
     'proposal_accepted', 
     'new_boosting',
     'boosting_completed',
-    'targeted_test' // Agora incluído
+    'targeted_test'
   ];
 
   for (let i = 0; i < subscriptionTypes.length; i++) {
@@ -53,7 +53,7 @@ async function testSubscriptionFilter() {
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
-  // Teste com tipo NÃO incluído na subscription
+
   console.log(`\n❌ TESTE EXTRA: Type = unknown_type (NÃO NA SUBSCRIPTION)`);
   try {
     await axios.post(`${CHAT_API_URL}/api/notifications/send`, {
