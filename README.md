@@ -209,3 +209,4 @@ pm2 startup
 
 Para problemas ou dúvidas, abra uma issue no repositório.
 # ZenithChat
+# ZenithChat
