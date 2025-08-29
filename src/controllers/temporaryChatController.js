@@ -28,6 +28,7 @@ class TemporaryChatController {
         clientId,
         boosterId,
         proposalId,
+        boostingId,
         proposalData,
         clientData,
         boosterData
@@ -116,7 +117,9 @@ class TemporaryChatController {
         metadata: new Map([
           ['proposalData', proposalData],
           ['clientData', clientData],
-          ['boosterData', boosterData]
+          ['boosterData', boosterData],
+          ['boostingId', boostingId],
+          ['proposalId', proposalId]
         ])
       });
 
