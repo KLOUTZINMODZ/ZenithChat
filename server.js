@@ -16,6 +16,7 @@ const boostingChatRoutes = require('./src/routes/boostingChatRoutes');
 const agreementRoutes = require('./src/routes/agreementRoutes');
 const compatibilityRoutes = require('./src/routes/compatibilityRoutes');
 const temporaryChatRoutes = require('./src/routes/temporaryChatRoutes');
+const proposalRoutes = require('./src/routes/proposalRoutes');
 const cache = require('./src/services/GlobalCache');
 const temporaryChatCleanupService = require('./src/services/temporaryChatCleanupService');
 
@@ -144,6 +145,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);
+app.use('/api/proposals', proposalRoutes);
 
 
 console.log('🔍 Rotas registradas:');
