@@ -40,7 +40,7 @@ const corsOptions = {
       'http://localhost:3000',
       'https://hacklotesite.vercel.app',
       'https://hacklote-front.vercel.app',
-      'https://12zku8.instatunnel.my'
+      'https://zenith.enrelyugi.com.br'
     ];
     
 

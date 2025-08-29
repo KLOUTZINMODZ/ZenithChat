@@ -4,7 +4,7 @@
 
 const axios = require('axios');
 
-const CHAT_API_URL = 'https://12zku8.instatunnel.my/';
+const CHAT_API_URL = 'https://zenith.enrelyugi.com.br/';
 const USER_ID = '6897d82c8cdd40188e08a224';
 
 async function testRealNewBoosting() {

@@ -1,8 +1,8 @@
 const axios = require('axios');
 
 
-const WEBHOOK_URL = 'https://12zku8.instatunnel.my/api/marketplace-webhook/mercadopago-webhook';
-const API_BASE_URL = 'https://12zku8.instatunnel.my';
+const WEBHOOK_URL = 'https://zenith.enrelyugi.com.br/api/marketplace-webhook/mercadopago-webhook';
+const API_BASE_URL = 'https://zenith.enrelyugi.com.br';
 
 
 async function testWebhookFormats() {

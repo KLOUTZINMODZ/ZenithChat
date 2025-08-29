@@ -5,7 +5,7 @@
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 
-const CHAT_API_URL = 'https://12zku8.instatunnel.my/';
+const CHAT_API_URL = 'https://zenith.enrelyugi.com.br/';
 
 console.log('🧪 Testando notificações com user ID real do frontend...');
 

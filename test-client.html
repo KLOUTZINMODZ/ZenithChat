@@ -192,7 +192,7 @@
             addMessage('pending', 'Connecting to WebSocket...');
             
 
-            const wsUrl = `ws://12zku8.instatunnel.my/ws?token=${encodeURIComponent(token)}`;
+            const wsUrl = `ws://zenith.enrelyugi.com.br/ws?token=${encodeURIComponent(token)}`;
             ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
@@ -310,7 +310,7 @@
 
         async function testHealth() {
             try {
-                const response = await fetch('http://12zku8.instatunnel.my/health');
+                const response = await fetch('http://zenith.enrelyugi.com.br/health');
                 const data = await response.json();
                 addMessage('received', `Health check: ${JSON.stringify(data)}`);
             } catch (error) {

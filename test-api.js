@@ -3,7 +3,7 @@
 
 const axios = require('axios');
 
-const API_URL = 'http://12zku8.instatunnel.my';
+const API_URL = 'http://zenith.enrelyugi.com.br';
 
 
 const JWT_TOKEN = 'YOUR_JWT_TOKEN_HERE';

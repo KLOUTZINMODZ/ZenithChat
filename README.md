@@ -73,8 +73,8 @@ npm start
 ```
 
 O servidor estará disponível em:
-- HTTP: `http://12zku8.instatunnel.my`
-- WebSocket: `ws://12zku8.instatunnel.my/ws`
+- HTTP: `http://zenith.enrelyugi.com.br`
+- WebSocket: `ws://zenith.enrelyugi.com.br/ws`
 
 ## 🔌 Integração com o Frontend
 
@@ -83,7 +83,7 @@ O servidor estará disponível em:
 No arquivo `.env` do frontend:
 ```env
 # Desenvolvimento local
-VITE_CHAT_WS_URL=ws://12zku8.instatunnel.my/ws
+VITE_CHAT_WS_URL=ws://zenith.enrelyugi.com.br/ws
 
 # Produção (exemplo)
 VITE_CHAT_WS_URL=wss://chat-api.hacklote.com/ws
@@ -157,7 +157,7 @@ function ChatComponent() {
 
 ### Health Check
 ```bash
-curl http://12zku8.instatunnel.my/health
+curl http://zenith.enrelyugi.com.br/health
 ```
 
 ### Logs
