@@ -1,9 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const mongoose = require('mongoose');
 
 // Import the boosting controller from HackLoteAPI logic
 const axios = require('axios');
+
+// BoostingRequest model schema (simplified for lookup)
+const BoostingRequestSchema = new mongoose.Schema({
+  proposals: [{
+    _id: mongoose.Schema.Types.ObjectId,
+    // other proposal fields...
+  }]
+}, { collection: 'boosting_requests' });
+
+const BoostingRequest = mongoose.model('BoostingRequest', BoostingRequestSchema);
 
 // Base route for proposals
 router.get('/', (req, res) => {
@@ -54,10 +65,39 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log(`🔍 [Proposal Accept] Full request body:`, JSON.stringify(req.body, null, 2));
     console.log(`🔍 [Proposal Accept] Metadata:`, JSON.stringify(metadata, null, 2));
     
-    // Check if metadata has boostingId, if not, extract from proposalId or use proposalId as fallback
-    const boostingId = metadata?.boostingId || proposalId;
+    // Database lookup to find real boostingId from proposalId
+    let boostingId = metadata?.boostingId;
     
-    console.log(`🔍 [Proposal Accept] BoostingId resolved: ${boostingId} (from ${metadata?.boostingId ? 'metadata' : 'proposalId fallback'})`);
+    if (!boostingId) {
+      console.log(`🔍 [Proposal Accept] No boostingId in metadata, performing database lookup...`);
+      
+      try {
+        const boostingRequest = await BoostingRequest.findOne({
+          'proposals._id': new mongoose.Types.ObjectId(proposalId)
+        });
+        
+        if (boostingRequest) {
+          boostingId = boostingRequest._id.toString();
+          console.log(`✅ [Proposal Accept] Found boostingId via database lookup: ${boostingId}`);
+        } else {
+          console.log(`❌ [Proposal Accept] No boosting request found for proposalId: ${proposalId}`);
+          return res.status(404).json({
+            success: false,
+            message: 'Proposta não encontrada no sistema',
+            error: 'No boosting request found for this proposal'
+          });
+        }
+      } catch (dbError) {
+        console.error(`❌ [Proposal Accept] Database lookup error:`, dbError);
+        return res.status(500).json({
+          success: false,
+          message: 'Erro ao buscar dados da proposta',
+          error: dbError.message
+        });
+      }
+    }
+    
+    console.log(`🔍 [Proposal Accept] BoostingId resolved: ${boostingId} (from ${metadata?.boostingId ? 'metadata' : 'database lookup'})`);
     
     // Forward to HackLoteAPI
     const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
