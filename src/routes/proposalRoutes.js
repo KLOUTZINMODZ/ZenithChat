@@ -54,9 +54,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log(`🔍 [Proposal Accept] Full request body:`, JSON.stringify(req.body, null, 2));
     console.log(`🔍 [Proposal Accept] Metadata:`, JSON.stringify(metadata, null, 2));
     
+    // Check if metadata has boostingId, if not, extract from proposalId or use proposalId as fallback
+    const boostingId = metadata?.boostingId || proposalId;
+    
+    console.log(`🔍 [Proposal Accept] BoostingId resolved: ${boostingId} (from ${metadata?.boostingId ? 'metadata' : 'proposalId fallback'})`);
+    
     // Forward to HackLoteAPI
     const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
-    const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${metadata?.boostingId}/proposals/${proposalId}/accept`;
+    const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${boostingId}/proposals/${proposalId}/accept`;
     
     console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
     
