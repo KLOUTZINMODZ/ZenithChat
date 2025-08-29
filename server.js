@@ -146,6 +146,7 @@ app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);
 app.use('/api/proposals', proposalRoutes);
+app.use('/api/agreements', agreementRoutes);
 
 
 console.log('🔍 Rotas registradas:');
@@ -160,7 +161,6 @@ app._router.stack.forEach((middleware) => {
     });
   }
 });
-app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
 
 app.use('/api', compatibilityRoutes);

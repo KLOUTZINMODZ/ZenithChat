@@ -5,7 +5,43 @@ const auth = require('../middleware/auth');
 // Import the boosting controller from HackLoteAPI logic
 const axios = require('axios');
 
-// Accept proposal endpoint that forwards to HackLoteAPI
+// Base route for proposals
+router.get('/', (req, res) => {
+  res.json({
+    message: 'Proposals API',
+    endpoints: {
+      accept: 'POST /:proposalId/accept'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Accept proposal endpoint that forwards to HackLoteAPI (supports both GET and POST)
+router.get('/:proposalId/accept', auth, async (req, res) => {
+  try {
+    const { proposalId } = req.params;
+    
+    console.log(`🔍 [Proposal Accept GET] Received request for proposal: ${proposalId}`);
+    
+    // For GET requests, return method not allowed with proper guidance
+    res.status(405).json({
+      success: false,
+      message: 'Method Not Allowed. Use POST method to accept proposals.',
+      allowedMethods: ['POST'],
+      endpoint: `POST /api/proposals/${proposalId}/accept`,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ [Proposal Accept GET] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor',
+      error: error.message
+    });
+  }
+});
+
 router.post('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
