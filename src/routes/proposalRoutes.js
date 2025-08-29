@@ -54,10 +54,40 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log(`🔍 [Proposal Accept] Full request body:`, JSON.stringify(req.body, null, 2));
     console.log(`🔍 [Proposal Accept] Metadata:`, JSON.stringify(metadata, null, 2));
     
-    // Check if metadata has boostingId, if not, extract from proposalId or use proposalId as fallback
-    const boostingId = metadata?.boostingId || proposalId;
+    // Check if metadata has boostingId
+    let boostingId = metadata?.boostingId;
     
-    console.log(`🔍 [Proposal Accept] BoostingId resolved: ${boostingId} (from ${metadata?.boostingId ? 'metadata' : 'proposalId fallback'})`);
+    if (!boostingId) {
+      console.log(`⚠️ [Proposal Accept] No boostingId in metadata, attempting database lookup for proposalId: ${proposalId}`);
+      
+      try {
+        // Try to find the proposal in HackLoteAPI to get the correct boostingId
+        const proposalLookupUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/${proposalId}/boosting-id`;
+        console.log(`🔍 [Proposal Accept] Looking up boostingId at: ${proposalLookupUrl}`);
+        
+        const lookupResponse = await axios.get(proposalLookupUrl, {
+          headers: {
+            'Authorization': req.headers.authorization,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (lookupResponse.data && lookupResponse.data.boostingId) {
+          boostingId = lookupResponse.data.boostingId;
+          console.log(`✅ [Proposal Accept] Found boostingId from lookup: ${boostingId}`);
+        } else {
+          throw new Error('BoostingId not found in lookup response');
+        }
+        
+      } catch (lookupError) {
+        console.error(`❌ [Proposal Accept] Lookup failed:`, lookupError.message);
+        // As a last resort, use proposalId (this will likely fail but provides better error info)
+        boostingId = proposalId;
+        console.log(`⚠️ [Proposal Accept] Using proposalId as fallback boostingId: ${boostingId}`);
+      }
+    }
+    
+    console.log(`🔍 [Proposal Accept] Final BoostingId: ${boostingId}`);
     
     // Forward to HackLoteAPI
     const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
