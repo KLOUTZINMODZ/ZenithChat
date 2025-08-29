@@ -1,0 +1,83 @@
+const mongoose = require('mongoose');
+
+const messageSchema = new mongoose.Schema({
+  conversation: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Conversation',
+    required: true,
+    index: true
+  },
+  sender: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  content: {
+    type: String,
+    required: function() {
+      return this.type === 'text';
+    }
+  },
+  type: {
+    type: String,
+    enum: ['text', 'image', 'file', 'audio', 'video', 'system'],
+    default: 'text'
+  },
+  attachments: [{
+    url: String,
+    name: String,
+    size: Number,
+    mimeType: String
+  }],
+  readBy: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    readAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  editedAt: Date,
+  deletedAt: Date,
+  metadata: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed
+  }
+}, {
+  timestamps: true
+});
+
+// Indexes for performance
+messageSchema.index({ conversation: 1, createdAt: -1 });
+messageSchema.index({ sender: 1, createdAt: -1 });
+messageSchema.index({ 'readBy.user': 1 });
+
+// Virtual for checking if message is read by a specific user
+messageSchema.virtual('isReadBy').get(function() {
+  return (userId) => {
+    return this.readBy.some(read => read.user.toString() === userId.toString());
+  };
+});
+
+// Method to mark as read
+messageSchema.methods.markAsRead = function(userId) {
+  if (!this.isReadBy(userId)) {
+    this.readBy.push({
+      user: userId,
+      readAt: new Date()
+    });
+  }
+  return this.save();
+};
+
+// Method to soft delete
+messageSchema.methods.softDelete = function() {
+  this.deletedAt = new Date();
+  this.content = '[Message deleted]';
+  return this.save();
+};
+
+module.exports = mongoose.model('Message', messageSchema);
