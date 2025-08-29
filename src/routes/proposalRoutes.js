@@ -51,9 +51,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log(`🔍 [Proposal Accept] ConversationId: ${conversationId}`);
     console.log(`🔍 [Proposal Accept] BoosterId: ${boosterId}`);
     console.log(`🔍 [Proposal Accept] ClientId: ${clientId}`);
+    console.log(`🔍 [Proposal Accept] Metadata:`, JSON.stringify(metadata, null, 2));
     
     // Forward to HackLoteAPI
-    const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://hacklote-api.vercel.app/api';
+    const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
     const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${metadata?.boostingId}/proposals/${proposalId}/accept`;
     
     console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
