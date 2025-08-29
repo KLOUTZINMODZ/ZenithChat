@@ -208,3 +208,4 @@ pm2 startup
 ## 🤝 Suporte
 
 Para problemas ou dúvidas, abra uma issue no repositório.
+# ZenithChat
