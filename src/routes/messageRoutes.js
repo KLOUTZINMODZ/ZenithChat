@@ -6,7 +6,6 @@ const messageController = require('../controllers/messageController');
 const cache = require('../services/GlobalCache');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
 const logger = require('../utils/logger');
-const cache = require('../services/GlobalCache');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
 
 
