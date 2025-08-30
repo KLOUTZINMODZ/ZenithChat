@@ -57,6 +57,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     // Check if metadata has boostingId
     let boostingId = metadata?.boostingId;
     
+    console.log(`🔍 [Proposal Accept] Checking boostingId: ${boostingId} (type: ${typeof boostingId})`);
+    console.log(`🔍 [Proposal Accept] Metadata boostingId exists: ${!!metadata?.boostingId}`);
+    
     if (!boostingId) {
       console.log(`⚠️ [Proposal Accept] No boostingId in metadata, attempting database lookup for proposalId: ${proposalId}`);
       
@@ -98,6 +101,21 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     console.log(`🔍 [Proposal Accept] Final BoostingId: ${boostingId}`);
     
+    // Validate boostingId before forwarding
+    if (!boostingId || boostingId === 'undefined') {
+      console.error(`❌ [Proposal Accept] Invalid boostingId: ${boostingId}`);
+      return res.status(500).json({
+        success: false,
+        message: 'BoostingId inválido ou não encontrado',
+        error: 'Invalid boostingId',
+        details: {
+          proposalId: proposalId,
+          boostingId: boostingId,
+          metadata: metadata
+        }
+      });
+    }
+
     // Forward to HackLoteAPI
     const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
     const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${boostingId}/proposals/${proposalId}/accept`;
