@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 const { routeTrackingMiddleware } = require('../middleware/routeTrackingMiddleware');
 const cache = require('../services/GlobalCache');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
