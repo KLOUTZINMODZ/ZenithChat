@@ -6,6 +6,8 @@ const cache = require('../services/GlobalCache');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
 const logger = require('../utils/logger');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 
 
 router.use(performanceMiddleware());
