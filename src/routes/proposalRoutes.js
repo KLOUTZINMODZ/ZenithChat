@@ -49,6 +49,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     let boostingId = metadata?.boostingId;
     let actualProposalId = proposalId; // Default to the proposalId from URL
     
+    // Initialize hackLoteApiUrl at the top
+    const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
+    
     console.log(`🔍 [Proposal Accept] Received request for proposal: ${proposalId}`);
     console.log(`🔍 [Proposal Accept] ConversationId: ${conversationId}`);
     console.log(`🔍 [Proposal Accept] BoosterId: ${boosterId}`);
@@ -142,7 +145,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
 
     // Forward to HackLoteAPI
-    const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
     
     // If proposalId is actually boostingId, we need to find the actual proposalId
     if (boostingId === proposalId) {
