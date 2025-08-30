@@ -84,6 +84,20 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         if (lookupResponse.data.actualProposalId) {
           actualProposalId = lookupResponse.data.actualProposalId;
           console.log('✅ [Proposal Accept] Using actualProposalId from lookup:', actualProposalId);
+          // Skip the conversation metadata lookup since we already have the correct IDs
+          const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${boostingId}/proposals/${actualProposalId}/accept`;
+          console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
+          
+          const response = await axios.post(forwardUrl, {
+            conversationId,
+            boosterId,
+            clientId
+          }, {
+            headers: { Authorization: req.headers.authorization }
+          });
+          
+          console.log('✅ [Proposal Accept] HackLoteAPI response:', response.data);
+          return res.json(response.data);
         }
       } catch (lookupError) {
         console.log('❌ [Proposal Accept] Lookup failed:', lookupError.message);
