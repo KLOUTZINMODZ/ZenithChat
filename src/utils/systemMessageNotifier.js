@@ -15,7 +15,15 @@ const notifySystemMessage = (io, participants, message) => {
   }
 
   try {
+    console.log(`🔍 [DEBUG] Enviando mensagem system:`, {
+      messageId: message._id,
+      conversationId: message.conversation,
+      participants: participants,
+      content: message.content?.substring(0, 50) + '...'
+    });
+
     participants.forEach(userId => {
+      console.log(`📤 [DEBUG] Enviando para user_${userId}`);
       io.to(`user_${userId}`).emit('message:new', {
         _id: message._id,
         conversation: message.conversation,
