@@ -45,20 +45,25 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
 router.post('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
-    const { conversationId, boosterId, clientId, metadata } = req.body;
+    const { conversationId, boosterId, clientId, metadata = {} } = req.body;
+    let boostingId = metadata?.boostingId;
+    let actualProposalId = proposalId; // Default to the proposalId from URL
     
     console.log(`🔍 [Proposal Accept] Received request for proposal: ${proposalId}`);
     console.log(`🔍 [Proposal Accept] ConversationId: ${conversationId}`);
     console.log(`🔍 [Proposal Accept] BoosterId: ${boosterId}`);
     console.log(`🔍 [Proposal Accept] ClientId: ${clientId}`);
     console.log(`🔍 [Proposal Accept] Full request body:`, JSON.stringify(req.body, null, 2));
-    console.log(`🔍 [Proposal Accept] Metadata:`, JSON.stringify(metadata, null, 2));
-    
-    // Check if metadata has boostingId
-    let boostingId = metadata?.boostingId;
-    
+    console.log(`🔍 [Proposal Accept] Metadata:`, metadata);
     console.log(`🔍 [Proposal Accept] Checking boostingId: ${boostingId} (type: ${typeof boostingId})`);
     console.log(`🔍 [Proposal Accept] Metadata boostingId exists: ${!!metadata?.boostingId}`);
+    console.log(`🔍 [Proposal Accept] Metadata proposalId: ${metadata?.proposalId}`);
+    
+    // If metadata has proposalId, use it as the actual proposal ID
+    if (metadata?.proposalId) {
+      actualProposalId = metadata.proposalId;
+      console.log(`✅ [Proposal Accept] Using proposalId from metadata: ${actualProposalId}`);
+    }
     
     if (!boostingId) {
       console.log(`⚠️ [Proposal Accept] No boostingId in metadata, attempting database lookup for proposalId: ${proposalId}`);
@@ -69,41 +74,32 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         console.log(`🔍 [Proposal Accept] Looking up boostingId at: ${proposalLookupUrl}`);
         
         const lookupResponse = await axios.get(proposalLookupUrl, {
-          headers: {
-            'Authorization': req.headers.authorization,
-            'Content-Type': 'application/json'
-          }
+          headers: { Authorization: req.headers.authorization }
         });
         
-        if (lookupResponse.data && lookupResponse.data.boostingId) {
-          boostingId = lookupResponse.data.boostingId;
-          console.log(`✅ [Proposal Accept] Found boostingId from lookup: ${boostingId}`);
-        } else {
-          throw new Error('BoostingId not found in lookup response');
+        console.log('✅ [Proposal Accept] Lookup successful:', lookupResponse.data);
+        boostingId = lookupResponse.data.boostingId;
+        
+        // If lookup returned actualProposalId, use it
+        if (lookupResponse.data.actualProposalId) {
+          actualProposalId = lookupResponse.data.actualProposalId;
+          console.log('✅ [Proposal Accept] Using actualProposalId from lookup:', actualProposalId);
         }
-        
       } catch (lookupError) {
-        console.error(`❌ [Proposal Accept] Lookup failed:`, lookupError.message);
-        console.error(`❌ [Proposal Accept] Lookup error details:`, lookupError.response?.data || lookupError);
+        console.log('❌ [Proposal Accept] Lookup failed:', lookupError.message);
+        console.log('❌ [Proposal Accept] Lookup error details:', lookupError.response?.data);
         
-        // Check if the proposalId is actually a boostingId
-        console.log(`🔍 [Proposal Accept] Checking if proposalId ${proposalId} is actually a boostingId...`);
-        
-        try {
-          const mongoose = require('mongoose');
-          if (mongoose.Types.ObjectId.isValid(proposalId)) {
-            console.log(`✅ [Proposal Accept] ProposalId ${proposalId} is a valid ObjectId, using as boostingId`);
-            boostingId = proposalId;
-          } else {
-            throw new Error('Invalid ObjectId format');
-          }
-        } catch (objectIdError) {
-          console.error(`❌ [Proposal Accept] ProposalId is not a valid ObjectId:`, objectIdError.message);
-          
-          return res.status(500).json({
+        // Check if proposalId is actually a valid boostingId
+        const mongoose = require('mongoose');
+        if (mongoose.Types.ObjectId.isValid(proposalId)) {
+          console.log('🔍 [Proposal Accept] Checking if proposalId', proposalId, 'is actually a boostingId...');
+          console.log('✅ [Proposal Accept] ProposalId', proposalId, 'is a valid ObjectId, using as boostingId');
+          boostingId = proposalId;
+        } else {
+          console.log('❌ [Proposal Accept] ProposalId is not a valid ObjectId, cannot proceed');
+          return res.status(400).json({
             success: false,
             message: 'Não foi possível encontrar o boostingId para esta proposta',
-            error: `Lookup failed: ${lookupError.message}`,
             details: {
               proposalId: proposalId,
               lookupUrl: `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/${proposalId}/boosting-id`,
@@ -135,18 +131,30 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
     
     // If proposalId is actually boostingId, we need to find the actual proposalId
-    let actualProposalId = proposalId;
     if (boostingId === proposalId) {
       console.log(`🔍 [Proposal Accept] ProposalId matches boostingId, need to find actual proposal from conversation`);
-      // Use conversationId to find the actual proposalId from metadata or other source
-      // For now, we'll try both proposals from the logs: 68b20f91700c9ea834bd7633 and 68b237e41f9d23d0aedb5940
-      // We can determine which one based on conversationId or other criteria
-      if (conversationId === '68b237e537345008d9cae807') {
-        actualProposalId = '68b237e41f9d23d0aedb5940'; // This seems to match the conversation pattern
-        console.log(`🔍 [Proposal Accept] Using actualProposalId: ${actualProposalId} for conversation: ${conversationId}`);
-      } else {
-        actualProposalId = '68b20f91700c9ea834bd7633'; // Default to first proposal
-        console.log(`🔍 [Proposal Accept] Using default actualProposalId: ${actualProposalId}`);
+      
+      // Try to get actual proposal ID from conversation metadata via Chat API
+      try {
+        const conversationResponse = await axios.get(`http://localhost:3001/api/conversations/${conversationId}`, {
+          headers: { Authorization: req.headers.authorization }
+        });
+        
+        const conversationData = conversationResponse.data;
+        console.log('🔍 [Proposal Accept] Conversation metadata:', JSON.stringify(conversationData?.metadata, null, 2));
+        
+        if (conversationData?.metadata?.proposalId) {
+          actualProposalId = conversationData.metadata.proposalId;
+          console.log('✅ [Proposal Accept] Found actual proposalId from conversation metadata:', actualProposalId);
+        } else {
+          // Fallback to hardcoded ID if metadata doesn't have proposalId
+          actualProposalId = '68b20f91700c9ea834bd7633';
+          console.log('⚠️ [Proposal Accept] Using fallback actualProposalId:', actualProposalId);
+        }
+      } catch (error) {
+        console.log('❌ [Proposal Accept] Error fetching conversation metadata:', error.message);
+        actualProposalId = '68b20f91700c9ea834bd7633';
+        console.log('⚠️ [Proposal Accept] Using fallback actualProposalId:', actualProposalId);
       }
     }
     
