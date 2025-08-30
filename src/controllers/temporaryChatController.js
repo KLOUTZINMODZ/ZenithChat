@@ -63,9 +63,6 @@ class TemporaryChatController {
 
         await proposalMessage.save();
         
-        // Notificar via WebSocket sobre a nova mensagem system
-        const { notifySystemMessage } = require('../utils/systemMessageNotifier');
-        notifySystemMessage(req.app.get('io'), [clientId, boosterId], proposalMessage);
 
         conversation.lastMessage = proposalMessage._id;
         conversation.lastMessageAt = new Date();
@@ -143,9 +140,6 @@ class TemporaryChatController {
 
       await initialMessage.save();
 
-      // Notificar via WebSocket sobre a nova mensagem system
-      const { notifySystemMessage } = require('../utils/systemMessageNotifier');
-      notifySystemMessage(req.app.get('io'), [clientId, boosterId], initialMessage);
 
       conversation.lastMessage = initialMessage._id;
       conversation.lastMessageAt = new Date();
