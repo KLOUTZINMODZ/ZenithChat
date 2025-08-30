@@ -127,10 +127,7 @@ class BoostingChatController {
       
       // Notificar via WebSocket
       const { notifySystemMessage } = require('../utils/systemMessageNotifier');
-      const conversation = await Conversation.findById(conversationId);
-      if (conversation) {
-        notifySystemMessage(req.app.get('io'), conversation.participants, renegotiationMessage);
-      }
+      notifySystemMessage(req.app.get('io'), conversation.participants, renegotiationMessage);
 
 
       conversation.lastMessage = renegotiationMessage._id;
