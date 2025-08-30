@@ -63,6 +63,9 @@ class TemporaryChatController {
 
         await proposalMessage.save();
         
+        // Notificar via WebSocket sobre a nova mensagem system
+        const { notifySystemMessage } = require('../utils/systemMessageNotifier');
+        notifySystemMessage(req.app.get('io'), [clientId, boosterId], proposalMessage);
 
         conversation.lastMessage = proposalMessage._id;
         conversation.lastMessageAt = new Date();

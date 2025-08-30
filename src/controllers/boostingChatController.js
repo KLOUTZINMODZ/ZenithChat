@@ -108,7 +108,7 @@ class BoostingChatController {
       }
 
 
-      const systemMessage = new Message({
+      const renegotiationMessage = new Message({
         conversation: conversationId,
         sender: userId,
         content: `🔄 Renegociação de proposta solicitada:\n💰 Novo valor: R$ ${newPrice}\n⏱️ Novo prazo: ${newEstimatedTime}\n📝 Observação: ${message || 'Nenhuma'}`,
@@ -117,14 +117,23 @@ class BoostingChatController {
           type: 'renegotiation',
           newPrice,
           newEstimatedTime,
-          originalMessage: message
+          originalMessage: message,
+          requestedBy: userId,
+          requestedAt: new Date()
         }
       });
 
-      await systemMessage.save();
+      await renegotiationMessage.save();
+      
+      // Notificar via WebSocket
+      const { notifySystemMessage } = require('../utils/systemMessageNotifier');
+      const conversation = await Conversation.findById(conversationId);
+      if (conversation) {
+        notifySystemMessage(req.app.get('io'), conversation.participants, renegotiationMessage);
+      }
 
 
-      conversation.lastMessage = systemMessage._id;
+      conversation.lastMessage = renegotiationMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
