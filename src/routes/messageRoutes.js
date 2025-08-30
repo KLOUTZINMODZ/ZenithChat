@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const Message = require('../models/Message');
-const Conversation = require('../models/Conversation');
+const { auth } = require('../middleware/auth');
+const { routeTrackingMiddleware } = require('../middleware/routeTrackingMiddleware');
+const messageController = require('../controllers/messageController');
+const cache = require('../services/GlobalCache');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
 const logger = require('../utils/logger');
 const cache = require('../services/GlobalCache');
@@ -10,6 +11,7 @@ const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = requi
 
 
 router.use(performanceMiddleware());
+router.use(routeTrackingMiddleware);
 
 
 router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {

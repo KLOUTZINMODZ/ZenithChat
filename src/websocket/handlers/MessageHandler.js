@@ -4,6 +4,7 @@ const User = require('../../models/User');
 const logger = require('../../utils/logger');
 const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
+const routeCache = require('../../services/RouteAwareConversationCache');
 const { v4: uuidv4 } = require('uuid');
 
 
@@ -439,6 +440,16 @@ class MessageHandler {
     } else {
       logger.info(`User ${userId} is offline. Caching message.`);
       cache.cacheOfflineMessage(userId, message);
+      
+      // Também cachear no sistema route-aware se for relacionado a conversa
+      if (message.type && message.type.includes('message') && message.data?.conversationId) {
+        routeCache.cacheConversationUpdate(userId, {
+          type: 'new_message',
+          conversationId: message.data.conversationId,
+          message: message.data,
+          action: 'message_received'
+        });
+      }
     }
   }
 
