@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const routeCache = require('../services/RouteAwareConversationCache');
-const { auth } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 const logger = require('../utils/logger');
 
 /**
