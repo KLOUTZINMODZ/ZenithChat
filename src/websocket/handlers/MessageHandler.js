@@ -4,7 +4,6 @@ const User = require('../../models/User');
 const logger = require('../../utils/logger');
 const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
-const routeCache = require('../../services/RouteAwareConversationCache');
 const { v4: uuidv4 } = require('uuid');
 
 
@@ -120,17 +119,13 @@ class MessageHandler {
         type: 'message:sent'
       });
 
-      const recipientIds = conversation.participants
-        .filter(p => p._id.toString() !== userId)
-        .map(p => p._id.toString());
-      
-      // Usar route-aware cache para usuários fora da rota de chat
-      routeCache.cacheNewMessage(conversationId, messageToSend, recipientIds);
-      
-      // Enviar para usuários online na rota de chat
-      recipientIds.forEach(recipientId => {
-        this.sendToUser(recipientId, broadcastMessage);
+
+      conversation.participants.forEach(participant => {
+        if (participant._id.toString() !== userId) {
+          this.sendToUser(participant._id.toString(), broadcastMessage);
+        }
       });
+
 
       cache.cacheMessage(conversationId, messageToSend);
 
@@ -435,40 +430,15 @@ class MessageHandler {
 
   sendToUser(userId, message) {
     if (this.connectionManager.isUserOnline(userId)) {
-      // Verificar se usuário está na rota de chat
-      if (routeCache.isUserInChatRoute(userId)) {
-        // Usuário online e na rota de chat - enviar diretamente
-        const connections = this.connectionManager.getUserConnections(userId);
-        connections.forEach(ws => {
-          if (ws.readyState === 1) {
-            ws.send(JSON.stringify(message));
-          }
-        });
-      } else {
-        // Usuário online mas fora da rota de chat - cachear
-        logger.info(`User ${userId} is online but outside chat route. Caching message.`);
-        if (message.type && message.type.includes('message') && message.data?.conversationId) {
-          routeCache.cacheConversationUpdate(userId, {
-            type: 'new_message',
-            conversationId: message.data.conversationId,
-            message: message.data,
-            action: 'message_received'
-          });
+      const connections = this.connectionManager.getUserConnections(userId);
+      connections.forEach(ws => {
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify(message));
         }
-      }
+      });
     } else {
       logger.info(`User ${userId} is offline. Caching message.`);
       cache.cacheOfflineMessage(userId, message);
-      
-      // Também cachear no sistema route-aware se for relacionado a conversa
-      if (message.type && message.type.includes('message') && message.data?.conversationId) {
-        routeCache.cacheConversationUpdate(userId, {
-          type: 'new_message',
-          conversationId: message.data.conversationId,
-          message: message.data,
-          action: 'message_received'
-        });
-      }
     }
   }
 

@@ -1,5 +1,4 @@
 const logger = require('../utils/logger');
-const { websocketRouteTracker, trackUserDisconnect } = require('../middleware/routeTrackingMiddleware');
 const cache = require('../services/GlobalCache');
 
 class ConnectionManager {
@@ -15,8 +14,11 @@ class ConnectionManager {
     this.connections.get(userId).add(ws);
     logger.info(`Connection added for user ${userId}. Total connections: ${this.connections.get(userId).size}`);
 
-    // Registrar usuário como conectado via WebSocket
-    websocketRouteTracker(userId, '/ws');
+    // Verificar se usuário estava em modo offline para chat
+    const offlineStatus = cache.get(`offline_status:${userId}`);
+    if (offlineStatus) {
+      logger.info(`User ${userId} was in offline mode since ${offlineStatus.activatedAt}`);
+    }
 
     const offlineMessages = cache.getOfflineMessages(userId);
     if (offlineMessages.length > 0) {
@@ -31,9 +33,6 @@ class ConnectionManager {
       if (this.connections.get(userId).size === 0) {
         this.connections.delete(userId);
         this.activeConversations.delete(userId);
-        
-        // Registrar usuário como desconectado
-        trackUserDisconnect(userId);
       }
       logger.info(`Connection removed for user ${userId}. Remaining connections: ${this.connections.get(userId)?.size || 0}`);
     }
