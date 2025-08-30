@@ -1,7 +1,7 @@
 const express = require('express');
 const BoostingChatController = require('../controllers/boostingChatController');
 const conversationController = require('../controllers/conversationController');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const checkChatStatus = require('../middleware/checkChatStatus');
 const AgreementMigrationMiddleware = require('../middleware/agreementMigrationMiddleware');
 

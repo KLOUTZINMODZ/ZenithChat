@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const temporaryChatController = require('../controllers/temporaryChatController');
-const authMiddleware = require('../middleware/auth');
+const { auth: authMiddleware } = require('../middleware/auth');
 
 
 router.get('/test', (req, res) => {
