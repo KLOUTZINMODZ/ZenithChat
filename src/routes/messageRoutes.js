@@ -411,13 +411,12 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
   }
 });
 
-
 router.post('/conversations', auth, invalidationMiddleware(['conversations:']), async (req, res) => {
   try {
     const { participantIds, type = 'direct', metadata = {} } = req.body;
     const userId = req.user._id || req.userId;
 
-
+    // Ensure current user is in participants
     if (!participantIds.includes(userId.toString())) {
       participantIds.push(userId);
     }
@@ -425,7 +424,7 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
     const conversation = await Conversation.findOrCreate(participantIds, metadata);
     await conversation.populate('participants', 'name email avatar');
 
-
+    // Invalidate cache for all participants
     participantIds.forEach(participantId => {
       cache.invalidateUserCache(participantId);
     });
