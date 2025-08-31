@@ -272,7 +272,7 @@ class SystemMessageService {
 
     return await this.createAndDeliverSystemMessage({
       conversationId,
-      systemType: 'temporary_created',
+      systemType: 'temporary_chat_created',
       content,
       metadata: {
         proposalId: proposalData.proposalId,
@@ -290,7 +290,7 @@ class SystemMessageService {
 
     return await this.createAndDeliverSystemMessage({
       conversationId,
-      systemType: 'temporary_expired',
+      systemType: 'chat_expired',
       content,
       metadata: {
         expiredAt: new Date().toISOString(),
