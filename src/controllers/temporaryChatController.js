@@ -1,7 +1,9 @@
-const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
-const AcceptedProposal = require('../models/AcceptedProposal');
-
+const Conversation = require('../models/Conversation');
+const User = require('../models/User');
+const ProposalRequest = require('../models/ProposalRequest');
+const SystemMessageService = require('../services/SystemMessageService');
+const logger = require('../utils/logger');
 
 function extractValidObjectId(id) {
   if (!id) return null;
@@ -20,6 +22,13 @@ function extractValidObjectId(id) {
 }
 
 class TemporaryChatController {
+  constructor() {
+    this.systemMessageService = new SystemMessageService();
+  }
+
+  setConnectionManager(connectionManager) {
+    this.systemMessageService.setConnectionManager(connectionManager);
+  }
 
   async createTemporaryChat(req, res) {
     console.log('🔥 createTemporaryChat endpoint chamado:', req.body);
@@ -125,23 +134,21 @@ class TemporaryChatController {
 
       await conversation.save();
 
-
-      const initialMessage = new Message({
-        conversation: conversation._id,
-        sender: boosterId,
-        content: `⏳ Chat Temporário criado...\n💰 Proposta: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}\n\n💡 Este chat expira em 3 dias se a proposta não for aceita.`,
-        type: 'message:new',
-        metadata: {
-          type: 'temporary_chat_created',
+      // Criar mensagem do sistema via SystemMessageService
+      const { messageId } = await this.systemMessageService.createTemporaryChatMessage(
+        conversation._id,
+        {
           proposalId,
-          expiresAt
-        }
-      });
+          price: proposalData.price,
+          estimatedTime: proposalData.estimatedTime,
+          message: proposalData.message
+        },
+        [clientId, boosterId]
+      );
 
-      await initialMessage.save();
-
-
-      conversation.lastMessage = initialMessage._id;
+      // Atualizar última mensagem da conversa
+      const savedMessage = await Message.findOne({ messageId });
+      conversation.lastMessage = savedMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
@@ -273,28 +280,29 @@ class TemporaryChatController {
 
       await acceptedProposal.save();
 
-
       conversation.acceptedProposal = acceptedProposal._id;
-      await conversation.save();
+      await conversation.acceptTemporaryChat();
 
+      // Criar mensagem de aceitação via SystemMessageService
+      const { messageId } = await this.systemMessageService.createProposalAcceptedMessage(
+        conversation._id,
+        {
+          proposalId,
+          price: proposalData.price,
+          estimatedTime: proposalData.estimatedTime
+        },
+        {
+          name: conversation.client.name
+        },
+        {
+          name: conversation.booster.name
+        },
+        [conversation.client.userid, conversation.booster.userid]
+      );
 
-      const acceptanceMessage = new Message({
-        conversation: conversation._id,
-        sender: userId,
-        content: `✅ Proposta aceita! Cliente ${clientData.name} e Booster ${boosterData.name} foram conectados.\n💰 Valor acordado: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}`,
-        type: 'message:new',
-        metadata: {
-          type: 'proposal_accepted',
-          proposalId: finalProposalId,
-          acceptedBy: userId,
-          acceptedAt: new Date()
-        }
-      });
-
-      await acceptanceMessage.save();
-
-
-      conversation.lastMessage = acceptanceMessage._id;
+      // Atualizar última mensagem
+      const savedMessage = await Message.findOne({ messageId });
+      conversation.lastMessage = savedMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
@@ -352,22 +360,15 @@ class TemporaryChatController {
       for (const chat of expiredChats) {
         try {
           await chat.expireTemporaryChat();
+          // Criar mensagem de expiração via SystemMessageService
+          const { messageId } = await this.systemMessageService.createTemporaryExpiredMessage(
+            chat._id,
+            [chat.client.userid, chat.booster.userid]
+          );
           
-
-          const expirationMessage = new Message({
-            conversation: chat._id,
-            content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
-            type: 'message:new',
-            metadata: {
-              type: 'chat_expired',
-              expiredAt: new Date()
-            }
-          });
-
-          await expirationMessage.save();
-          
-
-          chat.lastMessage = expirationMessage._id;
+          // Atualizar última mensagem
+          const savedMessage = await Message.findOne({ messageId });
+          chat.lastMessage = savedMessage._id;
           chat.lastMessageAt = new Date();
           await chat.save();
           

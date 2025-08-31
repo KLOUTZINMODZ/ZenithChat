@@ -163,48 +163,32 @@ class WebSocketServer {
       case 'message:send':
         await this.messageHandler.handleSendMessage(ws.userId, payload);
         break;
-
       case 'message:typing':
         await this.messageHandler.handleTypingIndicator(ws.userId, payload);
         break;
-
       case 'message:read':
         await this.messageHandler.handleMarkAsRead(ws.userId, payload);
         break;
-
       case 'conversation:open':
         await this.messageHandler.handleOpenConversation(ws.userId, payload);
         break;
-
       case 'conversation:close':
         await this.messageHandler.handleCloseConversation(ws.userId, payload);
         break;
-
       case 'conversation:list':
         await this.messageHandler.handleListConversations(ws.userId, ws);
         break;
-
       case 'message:history':
         await this.messageHandler.handleGetMessageHistory(ws.userId, payload, ws);
         break;
-
-
       case 'message:delivery_ack':
-        await this.messageHandler.handleDeliveryAck(payload.messageId, ws.userId);
+        await this.whatsAppHandler.handleDeliveryAck(ws.userId, payload);
         break;
-
       case 'message:read_ack':
-        await this.messageHandler.handleReadAck(payload.messageId, ws.userId);
+        await this.whatsAppHandler.handleReadAck(ws.userId, payload);
         break;
-
-
-      case 'message:send_with_delivery':
-        await this.handleSendMessageWithDelivery(ws.userId, payload);
-        break;
-
-
-      case 'notification:subscribe':
-        await this.notificationHandler.handleSubscribe(ws.userId, payload);
+      case 'message:system_delivered':
+        await this.messageHandler.handleSystemMessageDeliveryAck(ws.userId, payload);
         break;
 
       case 'notification:unsubscribe':
