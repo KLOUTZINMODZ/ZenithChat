@@ -34,17 +34,9 @@ class WebSocketServer {
       const token = url.searchParams.get('token') || 
                     info.req.headers.authorization?.replace('Bearer ', '');
 
-      logger.info('🔌 WebSocket connection attempt', {
-        url: info.req.url,
-        origin: info.origin,
-        hasToken: !!token,
-        host: info.req.headers.host,
-        userAgent: info.req.headers['user-agent'],
-        timestamp: new Date().toISOString()
-      });
+
 
       if (!token) {
-        logger.warn('WebSocket connection rejected: No token provided');
         cb(false, 401, 'Unauthorized: No token provided');
         return;
       }
@@ -74,8 +66,7 @@ class WebSocketServer {
       const userId = req.userId;
       const userToken = req.userToken;
 
-      logger.info(`New WebSocket connection from user: ${userId}`);
-
+  
 
       this.connectionManager.addConnection(userId, ws);
 
@@ -101,11 +92,6 @@ class WebSocketServer {
 
 
       ws.on('close', (code, reason) => {
-        logger.info(`WebSocket connection closed for user: ${userId}`, {
-          code,
-          reason: reason?.toString(),
-          wasClean: code === 1000
-        });
         this.connectionManager.removeConnection(userId, ws);
         
 
