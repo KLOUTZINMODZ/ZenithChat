@@ -371,30 +371,113 @@ class TemporaryChatController {
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-      // Emit WebSocket event for proposal accepted
+      // 🚀 EMIT WEBSOCKET EVENTS FOR REAL-TIME UPDATES
       try {
-        const wsServer = require('../websocket/WebSocketServer');
-        if (wsServer && wsServer.sendToUser) {
-          const participants = conversation.participants;
+        const webSocketServer = req.app.get('webSocketServer');
+        if (webSocketServer) {
+          console.log('📡 [Temporary Chat Accept] Emitting WebSocket events for real-time updates...');
           
+          const participants = conversation.participants;
+          const clientId = clientData.userid;
+          const boosterId = boosterData.userid;
+          
+          // 🎯 EMIT EVENTS TO SPECIFIC USER IDS (NOT JUST PARTICIPANTS)
+          console.log('🔍 [Temporary Chat Accept] Participant IDs:', participants);
+          console.log('🔍 [Temporary Chat Accept] Client ID:', clientId);
+          console.log('🔍 [Temporary Chat Accept] Booster ID:', boosterId);
+          
+          // Create comprehensive event data
+          const proposalAcceptedEventData = {
+            conversationId: conversation._id,
+            proposalId: finalProposalId,
+            proposalData,
+            clientData,
+            boosterData,
+            acceptedBy: userId,
+            acceptedAt: new Date().toISOString(),
+            status: 'accepted',
+            isTemporary: false,
+            boostingStatus: 'active',
+            timestamp: new Date().toISOString()
+          };
+          
+          const conversationUpdateEventData = {
+            conversationId: conversation._id,
+            status: 'accepted',
+            isTemporary: false,
+            boostingStatus: 'active',
+            updatedAt: new Date().toISOString(),
+            clientId,
+            boosterId,
+            proposalData,
+            clientData,
+            boosterData
+          };
+          
+          // Send to CLIENT specifically
+          if (clientId) {
+            try {
+              webSocketServer.sendToUser(clientId.toString(), {
+                type: 'proposal:accepted',
+                data: proposalAcceptedEventData
+              });
+              console.log(`✅ [Temporary Chat Accept] proposal:accepted sent to CLIENT: ${clientId}`);
+              
+              webSocketServer.sendToUser(clientId.toString(), {
+                type: 'conversation:updated',
+                data: conversationUpdateEventData
+              });
+              console.log(`✅ [Temporary Chat Accept] conversation:updated sent to CLIENT: ${clientId}`);
+            } catch (clientError) {
+              console.error(`❌ [Temporary Chat Accept] Error sending to CLIENT ${clientId}:`, clientError);
+            }
+          }
+          
+          // Send to BOOSTER specifically
+          if (boosterId) {
+            try {
+              webSocketServer.sendToUser(boosterId.toString(), {
+                type: 'proposal:accepted',
+                data: proposalAcceptedEventData
+              });
+              console.log(`✅ [Temporary Chat Accept] proposal:accepted sent to BOOSTER: ${boosterId}`);
+              
+              webSocketServer.sendToUser(boosterId.toString(), {
+                type: 'conversation:updated',
+                data: conversationUpdateEventData
+              });
+              console.log(`✅ [Temporary Chat Accept] conversation:updated sent to BOOSTER: ${boosterId}`);
+            } catch (boosterError) {
+              console.error(`❌ [Temporary Chat Accept] Error sending to BOOSTER ${boosterId}:`, boosterError);
+            }
+          }
+          
+          // Also send to all participants as fallback
           participants.forEach(participantId => {
-            wsServer.sendToUser(participantId, {
-              type: 'proposal:accepted',
-              data: {
-                conversationId: conversation._id,
-                proposalId: finalProposalId,
-                proposalData,
-                clientData,
-                boosterData,
-                acceptedBy: userId,
-                acceptedAt: new Date().toISOString(),
-                timestamp: new Date().toISOString()
-              }
-            });
+            try {
+              webSocketServer.sendToUser(participantId.toString(), {
+                type: 'proposal:accepted',
+                data: proposalAcceptedEventData
+              });
+              
+              webSocketServer.sendToUser(participantId.toString(), {
+                type: 'conversation:updated',
+                data: conversationUpdateEventData
+              });
+              
+              console.log(`✅ [Temporary Chat Accept] Fallback events sent to participant: ${participantId}`);
+            } catch (participantError) {
+              console.error(`❌ [Temporary Chat Accept] Error sending to participant ${participantId}:`, participantError);
+            }
           });
+          
+          console.log('✅ [Temporary Chat Accept] All WebSocket events emitted successfully');
+        } else {
+          console.warn('⚠️ [Temporary Chat Accept] WebSocket server not available for real-time updates');
         }
       } catch (wsError) {
-        console.error('❌ Erro ao emitir evento WebSocket de aceitação:', wsError);
+        console.error('❌ [Temporary Chat Accept] Error emitting WebSocket events:', wsError);
+        // Don't fail the request if WebSocket fails
       }
 
       res.json({
