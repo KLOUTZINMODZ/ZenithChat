@@ -53,7 +53,7 @@ class TemporaryChatController {
           conversation: conversation._id,
           sender: boosterId,
           content: `⏳ Nova proposta temporária recebida!\n💰 Valor: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}`,
-          type: 'system',
+          type: 'message:new',
           metadata: {
             type: 'temporary_proposal',
             proposalId,
@@ -130,7 +130,7 @@ class TemporaryChatController {
         conversation: conversation._id,
         sender: boosterId,
         content: `⏳ Chat Temporário criado...\n💰 Proposta: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}\n\n💡 Este chat expira em 3 dias se a proposta não for aceita.`,
-        type: 'system',
+        type: 'message:new',
         metadata: {
           type: 'temporary_chat_created',
           proposalId,
@@ -282,7 +282,7 @@ class TemporaryChatController {
         conversation: conversation._id,
         sender: userId,
         content: `✅ Proposta aceita! Cliente ${clientData.name} e Booster ${boosterData.name} foram conectados.\n💰 Valor acordado: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}`,
-        type: 'system',
+        type: 'message:new',
         metadata: {
           type: 'proposal_accepted',
           proposalId: finalProposalId,
@@ -357,7 +357,7 @@ class TemporaryChatController {
           const expirationMessage = new Message({
             conversation: chat._id,
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
-            type: 'system',
+            type: 'message:new',
             metadata: {
               type: 'chat_expired',
               expiredAt: new Date()

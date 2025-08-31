@@ -253,7 +253,7 @@ class AgreementController {
         conversation: agreement.conversationId,
         sender: agreement.parties.booster.userid,
         content: '✅ Entrega confirmada! O serviço foi concluído com sucesso.',
-        type: 'system',
+        type: 'message:new',
         metadata: new Map([
           ['agreementId', agreement.agreementId],
           ['action', 'completed'],
@@ -357,7 +357,7 @@ class AgreementController {
         conversation: agreement.conversationId,
         sender: userId,
         content: `❌ Acordo cancelado. Motivo: ${cancelReason || 'Não especificado'}`,
-        type: 'system',
+        type: 'message:new',
         metadata: new Map([
           ['agreementId', agreement.agreementId],
           ['action', 'cancelled'],
@@ -462,7 +462,7 @@ class AgreementController {
         conversation: agreement.conversationId,
         sender: userId,
         content: `🔄 Proposta renegociada:\n• Preço: R$ ${newPrice}\n• Prazo: ${newEstimatedTime}\n• Motivo: ${reason}`,
-        type: 'system',
+        type: 'message:new',
         metadata: new Map([
           ['agreementId', agreement.agreementId],
           ['action', 'renegotiated'],

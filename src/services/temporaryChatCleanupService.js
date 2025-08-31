@@ -65,7 +65,7 @@ class TemporaryChatCleanupService {
           const expirationMessage = new Message({
             conversation: chat._id,
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
-            type: 'system',
+            type: 'message:new',
             metadata: {
               type: 'chat_expired',
               expiredAt: new Date(),

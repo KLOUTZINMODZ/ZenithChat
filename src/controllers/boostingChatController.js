@@ -112,7 +112,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: `🔄 Renegociação de proposta solicitada:\n💰 Novo valor: R$ ${newPrice}\n⏱️ Novo prazo: ${newEstimatedTime}\n📝 Observação: ${message || 'Nenhuma'}`,
-        type: 'system',
+        type: 'message:new',
         metadata: {
           type: 'renegotiation',
           newPrice,
@@ -179,7 +179,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: `❌ Atendimento cancelado\n📝 Motivo: ${reason || 'Não informado'}`,
-        type: 'system',
+        type: 'message:new',
         metadata: {
           type: 'cancellation',
           reason,
@@ -273,7 +273,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: `✅ Entrega confirmada pelo cliente\n🔒 Chat finalizado`,
-        type: 'system',
+        type: 'message:new',
         metadata: {
           type: 'delivery_confirmed',
           confirmedBy: userId,
@@ -289,7 +289,7 @@ class BoostingChatController {
           conversation: conversationId,
           sender: userId,
           content: `🎉 Parabéns! O cliente confirmou a entrega do seu serviço.\n\n💰 O pagamento será processado em breve.\n🔒 Este chat foi finalizado.\n\nObrigado por usar nossa plataforma!`,
-          type: 'system',
+          type: 'message:new',
           metadata: {
             type: 'booster_notification',
             targetUser: boosterUserId,
@@ -536,7 +536,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: `🚨 Atendimento denunciado\n📝 Motivo: ${reason}\n📄 Descrição: ${description || 'Não informada'}`,
-        type: 'system',
+        type: 'message:new',
         metadata: {
           type: 'report',
           reportId: reportData._id,
@@ -856,7 +856,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: '🔓 Conversa desbloqueada - mensagens reativadas',
-        type: 'system',
+        type: 'message:new',
         metadata: {
           type: 'unreport',
           unblockedBy: userId,
