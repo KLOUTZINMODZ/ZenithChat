@@ -14,7 +14,7 @@ class ConnectionManager {
     this.connections.get(userId).add(ws);
     logger.info(`Connection added for user ${userId}. Total connections: ${this.connections.get(userId).size}`);
 
-    // Verificar se usuário estava em modo offline para chat
+
     const offlineStatus = cache.get(`offline_status:${userId}`);
     if (offlineStatus) {
       logger.info(`User ${userId} was in offline mode since ${offlineStatus.activatedAt}`);

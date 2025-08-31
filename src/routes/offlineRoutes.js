@@ -4,12 +4,12 @@ const { auth } = require('../middleware/auth');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 
-// Ativar modo offline para usuário (quando sai das rotas de chat)
+
 router.post('/activate', auth, async (req, res) => {
   try {
     const userId = req.user.id;
     
-    // Marcar usuário como "offline para chat" mas mantendo WebSocket ativo
+
     const offlineStatus = {
       isOfflineForChat: true,
       activatedAt: new Date().toISOString(),
@@ -17,7 +17,7 @@ router.post('/activate', auth, async (req, res) => {
       lastActiveRoute: req.body.lastRoute || 'unknown'
     };
     
-    // Cache do status offline por 24 horas
+
     cache.set(`offline_status:${userId}`, offlineStatus, 86400);
     
     logger.info(`🔄 [Offline Mode] Activated for user ${userId} from route: ${offlineStatus.lastActiveRoute}`);
@@ -42,19 +42,19 @@ router.post('/activate', auth, async (req, res) => {
   }
 });
 
-// Desativar modo offline (quando volta para rotas de chat)
+
 router.post('/deactivate', auth, async (req, res) => {
   try {
     const userId = req.user.id;
     
-    // Verificar se havia status offline
+
     const offlineStatus = cache.get(`offline_status:${userId}`);
     
     if (offlineStatus) {
-      // Remover status offline
+
       cache.delete(`offline_status:${userId}`);
       
-      // Obter mensagens offline acumuladas
+
       const offlineMessages = cache.getOfflineMessages(userId);
       
       logger.info(`🔄 [Offline Mode] Deactivated for user ${userId}. Found ${offlineMessages.length} cached messages`);
@@ -90,7 +90,7 @@ router.post('/deactivate', auth, async (req, res) => {
   }
 });
 
-// Verificar status offline atual
+
 router.get('/status', auth, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -106,7 +106,7 @@ router.get('/status', auth, async (req, res) => {
         activatedAt: offlineStatus?.activatedAt || null,
         lastActiveRoute: offlineStatus?.lastActiveRoute || null,
         cachedMessagesCount: offlineMessages.length,
-        offlineMessages: offlineMessages.slice(-5) // Últimas 5 mensagens para preview
+        offlineMessages: offlineMessages.slice(-5)
       }
     });
     
@@ -120,7 +120,7 @@ router.get('/status', auth, async (req, res) => {
   }
 });
 
-// Limpar cache de mensagens offline
+
 router.delete('/clear-cache', auth, async (req, res) => {
   try {
     const userId = req.user.id;

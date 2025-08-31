@@ -429,13 +429,29 @@ class MessageHandler {
   }
 
   sendToUser(userId, message) {
-    if (this.connectionManager.isUserOnline(userId)) {
+    const isUserOnline = this.connectionManager.isUserOnline(userId);
+    const isInActiveChat = this.connectionManager.getActiveConversation(userId) === message.data?.conversationId;
+    
+    if (isUserOnline) {
       const connections = this.connectionManager.getUserConnections(userId);
+      let messageSent = false;
+      
       connections.forEach(ws => {
         if (ws.readyState === 1) {
           ws.send(JSON.stringify(message));
+          messageSent = true;
         }
       });
+      
+
+      if (messageSent && !isInActiveChat && message.type === 'message:new') {
+        logger.info(`User ${userId} is online but not in active chat. Caching message for sync.`);
+        cache.cacheOfflineMessage(userId, {
+          ...message,
+          cached_reason: 'user_not_in_active_chat',
+          cached_at: new Date().toISOString()
+        });
+      }
     } else {
       logger.info(`User ${userId} is offline. Caching message.`);
       cache.cacheOfflineMessage(userId, message);

@@ -9,6 +9,55 @@ const cache = require('../services/GlobalCache');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
 
 
+router.get('/sync/:conversationId', auth, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { since } = req.query;
+    const userId = req.user._id || req.user.id;
+    
+    logger.info(`[SYNC] Sincronização solicitada para conversa ${conversationId} por usuário ${userId}`);
+    
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation || !conversation.participants.includes(userId)) {
+      logger.warn(`[SYNC] Acesso negado para conversa ${conversationId} - usuário ${userId}`);
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+
+    const sinceDate = since ? new Date(parseInt(since)) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+    
+    const messages = await Message.find({
+      conversation: conversationId,
+      createdAt: { $gte: sinceDate }
+    })
+    .populate('sender', 'name email avatar')
+    .sort('createdAt')
+    .limit(100);
+    
+
+    const decryptedMessages = messages.map(msg => ({
+      ...msg.toObject(),
+      content: decryptMessage(msg.content)
+    }));
+    
+    logger.info(`[SYNC] Retornando ${decryptedMessages.length} mensagens para conversa ${conversationId}`);
+    
+    res.json({
+      success: true,
+      messages: decryptedMessages,
+      syncedAt: new Date().toISOString(),
+      messageCount: decryptedMessages.length,
+      conversationId
+    });
+    
+  } catch (error) {
+    logger.error('[SYNC] Erro no endpoint de sincronização:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 router.use(performanceMiddleware());
 
 

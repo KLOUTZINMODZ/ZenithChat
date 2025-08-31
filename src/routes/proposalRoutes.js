@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth');
 
-// Import the boosting controller from HackLoteAPI logic
+
 const axios = require('axios');
 
-// Base route for proposals
+
 router.get('/', (req, res) => {
   res.json({
     message: 'Proposals API',
@@ -16,14 +16,14 @@ router.get('/', (req, res) => {
   });
 });
 
-// Accept proposal endpoint that forwards to HackLoteAPI (supports both GET and POST)
+
 router.get('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
     
     console.log(`🔍 [Proposal Accept GET] Received request for proposal: ${proposalId}`);
     
-    // For GET requests, return method not allowed with proper guidance
+
     res.status(405).json({
       success: false,
       message: 'Method Not Allowed. Use POST method to accept proposals.',
@@ -47,9 +47,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     const { proposalId } = req.params;
     const { conversationId, boosterId, clientId, metadata = {} } = req.body;
     let boostingId = metadata?.boostingId;
-    let actualProposalId = proposalId; // Default to the proposalId from URL
+    let actualProposalId = proposalId;
     
-    // Initialize hackLoteApiUrl at the top
+
     const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
     
     console.log(`🔍 [Proposal Accept] Received request for proposal: ${proposalId}`);
@@ -62,7 +62,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log(`🔍 [Proposal Accept] Metadata boostingId exists: ${!!metadata?.boostingId}`);
     console.log(`🔍 [Proposal Accept] Metadata proposalId: ${metadata?.proposalId}`);
     
-    // If metadata has proposalId, use it as the actual proposal ID
+
     if (metadata?.proposalId) {
       actualProposalId = metadata.proposalId;
       console.log(`✅ [Proposal Accept] Using proposalId from metadata: ${actualProposalId}`);
@@ -72,7 +72,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       console.log(`⚠️ [Proposal Accept] No boostingId in metadata, attempting database lookup for proposalId: ${proposalId}`);
       
       try {
-        // Try to find the proposal in HackLoteAPI to get the correct boostingId
+
         const proposalLookupUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/${proposalId}/boosting-id`;
         console.log(`🔍 [Proposal Accept] Looking up boostingId at: ${proposalLookupUrl}`);
         
@@ -83,11 +83,11 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         console.log('✅ [Proposal Accept] Lookup successful:', lookupResponse.data);
         boostingId = lookupResponse.data.boostingId;
         
-        // If lookup returned actualProposalId, use it
+
         if (lookupResponse.data.actualProposalId) {
           actualProposalId = lookupResponse.data.actualProposalId;
           console.log('✅ [Proposal Accept] Using actualProposalId from lookup:', actualProposalId);
-          // Skip the conversation metadata lookup since we already have the correct IDs
+
           const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${boostingId}/proposals/${actualProposalId}/accept`;
           console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
           
@@ -106,7 +106,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         console.log('❌ [Proposal Accept] Lookup failed:', lookupError.message);
         console.log('❌ [Proposal Accept] Lookup error details:', lookupError.response?.data);
         
-        // Check if proposalId is actually a valid boostingId
+
         const mongoose = require('mongoose');
         if (mongoose.Types.ObjectId.isValid(proposalId)) {
           console.log('🔍 [Proposal Accept] Checking if proposalId', proposalId, 'is actually a boostingId...');
@@ -129,7 +129,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     console.log(`🔍 [Proposal Accept] Final BoostingId: ${boostingId}`);
     
-    // Validate boostingId before forwarding
+
     if (!boostingId || boostingId === 'undefined') {
       console.error(`❌ [Proposal Accept] Invalid boostingId: ${boostingId}`);
       return res.status(500).json({
@@ -144,13 +144,13 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       });
     }
 
-    // Forward to HackLoteAPI
+
     
-    // If proposalId is actually boostingId, we need to find the actual proposalId
+
     if (boostingId === proposalId) {
       console.log(`🔍 [Proposal Accept] ProposalId matches boostingId, need to find actual proposal from conversation`);
       
-      // Try to get actual proposal ID from conversation metadata via Chat API
+
       try {
         const conversationResponse = await axios.get(`http://localhost:3001/api/conversations/${conversationId}`, {
           headers: { Authorization: req.headers.authorization }
@@ -163,7 +163,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           actualProposalId = conversationData.metadata.proposalId;
           console.log('✅ [Proposal Accept] Found actual proposalId from conversation metadata:', actualProposalId);
         } else {
-          // Fallback to hardcoded ID if metadata doesn't have proposalId
+
           actualProposalId = '68b20f91700c9ea834bd7633';
           console.log('⚠️ [Proposal Accept] Using fallback actualProposalId:', actualProposalId);
         }
@@ -192,7 +192,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     console.log(`✅ [Proposal Accept] HackLoteAPI response:`, response.data);
     
-    // Return the response from HackLoteAPI
+
     res.json(response.data);
     
   } catch (error) {

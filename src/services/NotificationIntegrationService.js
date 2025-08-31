@@ -37,7 +37,7 @@ class NotificationIntegrationService {
         retryOnFailure = true
       } = options;
 
-      // Verificar se usuário está em modo offline para chat
+
       const offlineStatus = cache.get(`offline_status:${userId}`);
       const isOfflineForChat = !!offlineStatus;
 
@@ -50,7 +50,7 @@ class NotificationIntegrationService {
         cachedForOfflineUser: isOfflineForChat
       };
 
-      // Se usuário está offline para chat, sempre cachear
+
       if (isOfflineForChat || persistent) {
         this.cacheNotification(userId, enrichedNotification);
       }

@@ -3,8 +3,8 @@ const cache = require('./GlobalCache');
 
 class OfflineCacheService {
   constructor() {
-    this.offlineUsers = new Map(); // userId -> offlineData
-    this.messageQueue = new Map(); // userId -> messages[]
+    this.offlineUsers = new Map();
+    this.messageQueue = new Map();
   }
 
   /**
@@ -19,7 +19,7 @@ class OfflineCacheService {
     };
 
     this.offlineUsers.set(userId, offlineData);
-    cache.set(`offline_status:${userId}`, offlineData, 86400); // 24h
+    cache.set(`offline_status:${userId}`, offlineData, 86400);
 
     logger.info(`🔄 [Offline Cache] Activated for user ${userId} from route: ${offlineData.lastRoute}`);
     
@@ -79,7 +79,7 @@ class OfflineCacheService {
         lastRoute: offlineData.lastRoute,
         cacheEnabled: offlineData.cacheEnabled,
         cachedMessagesCount: cachedMessages.length,
-        recentMessages: cachedMessages.slice(-3) // Últimas 3 para preview
+        recentMessages: cachedMessages.slice(-3)
       };
     }
 
@@ -102,7 +102,7 @@ class OfflineCacheService {
 
       cache.cacheOfflineMessage(userId, enrichedMessage);
       
-      // Atualizar contador local
+
       const offlineData = this.offlineUsers.get(userId);
       if (offlineData) {
         offlineData.messageCount = (offlineData.messageCount || 0) + 1;
@@ -165,7 +165,7 @@ class OfflineCacheService {
       const now = new Date();
       const hoursSinceActivation = (now - activatedAt) / (1000 * 60 * 60);
       
-      // Limpar caches com mais de 24 horas
+
       if (hoursSinceActivation > 24) {
         this.deactivateOfflineMode(userId);
         this.clearUserCache(userId);
