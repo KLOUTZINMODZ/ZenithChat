@@ -8,12 +8,16 @@ class ConnectionManager {
   }
 
   addConnection(userId, ws) {
+    logger.info(`🔌 Adding connection for user ${userId} (type: ${typeof userId})`);
+    
     if (!this.connections.has(userId)) {
       this.connections.set(userId, new Set());
+      logger.info(`📝 Created new connection set for user ${userId}`);
     }
+    
     this.connections.get(userId).add(ws);
-    logger.info(`Connection added for user ${userId}. Total connections: ${this.connections.get(userId).size}`);
-
+    logger.info(`✅ Connection added for user ${userId}. Total connections: ${this.connections.get(userId).size}`);
+    logger.info(`📊 All online users: [${Array.from(this.connections.keys()).join(', ')}]`);
 
     const offlineStatus = cache.get(`offline_status:${userId}`);
     if (offlineStatus) {
@@ -39,7 +43,27 @@ class ConnectionManager {
   }
 
   getUserConnections(userId) {
-    return Array.from(this.connections.get(userId) || []);
+    // Try both original userId and string version to handle type mismatches
+    const userIdStr = userId?.toString();
+    const connections = this.connections.get(userId) || this.connections.get(userIdStr) || [];
+    
+    logger.info(`🔍 getUserConnections for ${userId} (${typeof userId}): found ${connections.size || 0} connections`);
+    
+    // Also check if we have the user stored with a different type
+    if (connections.size === 0) {
+      logger.warn(`❌ No connections found for user ${userId}. Checking all stored user IDs...`);
+      const allUserIds = Array.from(this.connections.keys());
+      logger.info(`📊 All stored user IDs: [${allUserIds.join(', ')}]`);
+      
+      // Try to find a match with different type
+      const matchingUserId = allUserIds.find(id => id.toString() === userIdStr);
+      if (matchingUserId) {
+        logger.info(`🔄 Found matching user ID with different type: ${matchingUserId} (${typeof matchingUserId})`);
+        return Array.from(this.connections.get(matchingUserId) || []);
+      }
+    }
+    
+    return Array.from(connections);
   }
 
   isUserOnline(userId) {

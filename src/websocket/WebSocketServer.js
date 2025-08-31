@@ -348,12 +348,35 @@ class WebSocketServer {
   }
 
   sendToUser(userId, message) {
+    logger.info(`🔍 sendToUser called for userId: ${userId}, messageType: ${message.type}`);
+    
     const connections = this.connectionManager.getUserConnections(userId);
-    connections.forEach(ws => {
+    logger.info(`📊 Found ${connections.length} connections for user ${userId}`);
+    
+    if (connections.length === 0) {
+      logger.warn(`❌ No active connections found for user ${userId}`);
+      logger.info(`🔍 All online users: ${this.connectionManager.getOnlineUsers().join(', ')}`);
+      return;
+    }
+    
+    let sentCount = 0;
+    connections.forEach((ws, index) => {
+      logger.info(`🔗 Connection ${index + 1} for user ${userId}: readyState=${ws.readyState}`);
+      
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify(message));
+        try {
+          ws.send(JSON.stringify(message));
+          sentCount++;
+          logger.info(`✅ Message sent to connection ${index + 1} for user ${userId}`);
+        } catch (error) {
+          logger.error(`❌ Error sending message to connection ${index + 1} for user ${userId}:`, error);
+        }
+      } else {
+        logger.warn(`⚠️ Connection ${index + 1} for user ${userId} is not open (state: ${ws.readyState})`);
       }
     });
+    
+    logger.info(`📤 Successfully sent message to ${sentCount}/${connections.length} connections for user ${userId}`);
   }
 
   close() {

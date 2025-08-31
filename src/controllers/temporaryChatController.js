@@ -371,18 +371,39 @@ class TemporaryChatController {
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-      // 🚀 EMIT WEBSOCKET EVENTS FOR REAL-TIME UPDATES
+      // Emit WebSocket events for real-time updates
       try {
         const webSocketServer = req.app.get('webSocketServer');
         if (webSocketServer) {
-          console.log('📡 [Temporary Chat Accept] Emitting WebSocket events for real-time updates...');
+          console.log('🔌 WebSocket server found, emitting events...');
           
           const participants = conversation.participants;
           const clientId = clientData.userid;
           const boosterId = boosterData.userid;
           
-          // 🎯 EMIT EVENTS TO SPECIFIC USER IDS (NOT JUST PARTICIPANTS)
-          console.log('🔍 [Temporary Chat Accept] Participant IDs:', participants);
+          console.log('📊 Event emission details:', {
+            conversationId: conversation._id,
+            clientId: clientId,
+            clientIdType: typeof clientId,
+            boosterId: boosterId,
+            boosterIdType: typeof boosterId,
+            participants: participants.map(p => p.toString()),
+            participantTypes: participants.map(p => typeof p.toString())
+          });
+          
+          // Check if users are currently connected
+          const connectionManager = webSocketServer.connectionManager;
+          const clientConnections = connectionManager.getUserConnections(clientId?.toString());
+          const boosterConnections = connectionManager.getUserConnections(boosterId?.toString());
+          
+          console.log('🔍 Connection status check:', {
+            clientConnected: clientConnections.length > 0,
+            clientConnectionCount: clientConnections.length,
+            boosterConnected: boosterConnections.length > 0,
+            boosterConnectionCount: boosterConnections.length,
+            allOnlineUsers: connectionManager.getOnlineUsers()
+          });  
+          
           console.log('🔍 [Temporary Chat Accept] Client ID:', clientId);
           console.log('🔍 [Temporary Chat Accept] Booster ID:', boosterId);
           
@@ -414,64 +435,69 @@ class TemporaryChatController {
             boosterData
           };
           
-          // Send to CLIENT specifically
-          if (clientId) {
-            try {
-              webSocketServer.sendToUser(clientId.toString(), {
-                type: 'proposal:accepted',
-                data: proposalAcceptedEventData
-              });
-              console.log(`✅ [Temporary Chat Accept] proposal:accepted sent to CLIENT: ${clientId}`);
-              
-              webSocketServer.sendToUser(clientId.toString(), {
-                type: 'conversation:updated',
-                data: conversationUpdateEventData
-              });
-              console.log(`✅ [Temporary Chat Accept] conversation:updated sent to CLIENT: ${clientId}`);
-            } catch (clientError) {
-              console.error(`❌ [Temporary Chat Accept] Error sending to CLIENT ${clientId}:`, clientError);
+          // Enhanced WebSocket event emission with robust user ID handling
+          const sendToUserRobust = (userIds, eventType, eventData, userType) => {
+            let eventSent = false;
+            
+            for (const userId of userIds) {
+              const connections = connectionManager.getUserConnections(userId);
+              if (connections.length > 0) {
+                console.log(`🎯 Sending ${eventType} to ${userType} via ID: ${userId} (${connections.length} connections)`);
+                webSocketServer.sendToUser(userId, { type: eventType, data: eventData });
+                eventSent = true;
+                break;
+              }
             }
+            
+            if (!eventSent) {
+              console.warn(`⚠️ Failed to send ${eventType} to ${userType}. No active connections found for any ID variant.`);
+            }
+            
+            return eventSent;
+          };
+          
+          // Get all possible ID formats for both users
+          const clientIds = [
+            clientId,
+            clientId?.toString(),
+            clientData._id?.toString(),
+            clientData.userid?.toString()
+          ].filter(id => id).map(id => id.toString());
+          
+          const boosterIds = [
+            boosterId,
+            boosterId?.toString(), 
+            boosterData._id?.toString(),
+            boosterData.userid?.toString()
+          ].filter(id => id).map(id => id.toString());
+          
+          console.log('🔍 All possible client IDs:', clientIds);
+          console.log('🔍 All possible booster IDs:', boosterIds);
+          console.log('📊 Currently online users:', connectionManager.getOnlineUsers());
+          
+          // Send events to both users with robust ID handling
+          const clientEventSent = sendToUserRobust(clientIds, 'proposal:accepted', proposalAcceptedEventData, 'CLIENT');
+          sendToUserRobust(clientIds, 'conversation:updated', conversationUpdateEventData, 'CLIENT');
+          
+          const boosterEventSent = sendToUserRobust(boosterIds, 'proposal:accepted', proposalAcceptedEventData, 'BOOSTER');
+          sendToUserRobust(boosterIds, 'conversation:updated', conversationUpdateEventData, 'BOOSTER');
+          
+          // Final fallback to all participants if direct targeting failed
+          if (!clientEventSent || !boosterEventSent) {
+            console.log('🔄 Using participant fallback for missed events...');
+            participants.forEach(participantId => {
+              try {
+                const participantIdStr = participantId.toString();
+                webSocketServer.sendToUser(participantIdStr, { type: 'proposal:accepted', data: proposalAcceptedEventData });
+                webSocketServer.sendToUser(participantIdStr, { type: 'conversation:updated', data: conversationUpdateEventData });
+                console.log(`✅ Fallback events sent to participant: ${participantIdStr}`);
+              } catch (error) {
+                console.error(`❌ Error in participant fallback for ${participantId}:`, error);
+              }
+            });
           }
           
-          // Send to BOOSTER specifically
-          if (boosterId) {
-            try {
-              webSocketServer.sendToUser(boosterId.toString(), {
-                type: 'proposal:accepted',
-                data: proposalAcceptedEventData
-              });
-              console.log(`✅ [Temporary Chat Accept] proposal:accepted sent to BOOSTER: ${boosterId}`);
-              
-              webSocketServer.sendToUser(boosterId.toString(), {
-                type: 'conversation:updated',
-                data: conversationUpdateEventData
-              });
-              console.log(`✅ [Temporary Chat Accept] conversation:updated sent to BOOSTER: ${boosterId}`);
-            } catch (boosterError) {
-              console.error(`❌ [Temporary Chat Accept] Error sending to BOOSTER ${boosterId}:`, boosterError);
-            }
-          }
-          
-          // Also send to all participants as fallback
-          participants.forEach(participantId => {
-            try {
-              webSocketServer.sendToUser(participantId.toString(), {
-                type: 'proposal:accepted',
-                data: proposalAcceptedEventData
-              });
-              
-              webSocketServer.sendToUser(participantId.toString(), {
-                type: 'conversation:updated',
-                data: conversationUpdateEventData
-              });
-              
-              console.log(`✅ [Temporary Chat Accept] Fallback events sent to participant: ${participantId}`);
-            } catch (participantError) {
-              console.error(`❌ [Temporary Chat Accept] Error sending to participant ${participantId}:`, participantError);
-            }
-          });
-          
-          console.log('✅ [Temporary Chat Accept] All WebSocket events emitted successfully');
+          console.log('✅ Enhanced WebSocket event emission completed');
         } else {
           console.warn('⚠️ [Temporary Chat Accept] WebSocket server not available for real-time updates');
         }
