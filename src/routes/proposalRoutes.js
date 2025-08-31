@@ -100,7 +100,80 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           });
           
           console.log('✅ [Proposal Accept] HackLoteAPI response:', response.data);
-          return res.json(response.data);
+          // 🚀 EMIT WEBSOCKET EVENT FOR REAL-TIME UPDATES
+          try {
+            const webSocketServer = req.app.get('webSocketServer');
+            if (webSocketServer) {
+              console.log('📡 [Proposal Accept] Emitting WebSocket events for real-time updates...');
+              
+              // Emit to client
+              if (clientId) {
+                const clientEvent = {
+                  type: 'proposal:accepted',
+                  data: {
+                    conversationId,
+                    proposalId: actualProposalId,
+                    boostingId,
+                    acceptedProposal: response.data.acceptedProposal,
+                    status: 'accepted',
+                    acceptedAt: new Date().toISOString(),
+                    acceptedBy: 'client',
+                    clientId,
+                    boosterId
+                  }
+                };
+                
+                webSocketServer.sendToUser(clientId, clientEvent);
+                console.log(`✅ [Proposal Accept] WebSocket event sent to client: ${clientId}`);
+              }
+              
+              // Emit to booster
+              if (boosterId) {
+                const boosterEvent = {
+                  type: 'proposal:accepted',
+                  data: {
+                    conversationId,
+                    proposalId: actualProposalId,
+                    boostingId,
+                    acceptedProposal: response.data.acceptedProposal,
+                    status: 'accepted',
+                    acceptedAt: new Date().toISOString(),
+                    acceptedBy: 'client',
+                    clientId,
+                    boosterId
+                  }
+                };
+                
+                webSocketServer.sendToUser(boosterId, boosterEvent);
+                console.log(`✅ [Proposal Accept] WebSocket event sent to booster: ${boosterId}`);
+              }
+              
+              // Also emit conversation update event
+              const conversationUpdateEvent = {
+                type: 'conversation:updated',
+                data: {
+                  conversationId,
+                  status: 'accepted',
+                  isTemporary: false,
+                  boostingStatus: 'active',
+                  updatedAt: new Date().toISOString()
+                }
+              };
+              
+              // Send to both participants
+              if (clientId) webSocketServer.sendToUser(clientId, conversationUpdateEvent);
+              if (boosterId) webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
+              
+              console.log('✅ [Proposal Accept] All WebSocket events emitted successfully');
+            } else {
+              console.warn('⚠️ [Proposal Accept] WebSocket server not available for real-time updates');
+            }
+          } catch (wsError) {
+            console.error('❌ [Proposal Accept] Error emitting WebSocket events:', wsError);
+            // Don't fail the request if WebSocket fails
+          }
+          
+          res.json(response.data);
         }
       } catch (lookupError) {
         console.log('❌ [Proposal Accept] Lookup failed:', lookupError.message);
@@ -192,7 +265,79 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     console.log(`✅ [Proposal Accept] HackLoteAPI response:`, response.data);
     
-
+    // 🚀 EMIT WEBSOCKET EVENT FOR REAL-TIME UPDATES
+    try {
+      const webSocketServer = req.app.get('webSocketServer');
+      if (webSocketServer) {
+        console.log('📡 [Proposal Accept] Emitting WebSocket events for real-time updates...');
+        
+        // Emit to client
+        if (clientId) {
+          const clientEvent = {
+            type: 'proposal:accepted',
+            data: {
+              conversationId,
+              proposalId: actualProposalId,
+              boostingId,
+              acceptedProposal: response.data.acceptedProposal,
+              status: 'accepted',
+              acceptedAt: new Date().toISOString(),
+              acceptedBy: 'client',
+              clientId,
+              boosterId
+            }
+          };
+          
+          webSocketServer.sendToUser(clientId, clientEvent);
+          console.log(`✅ [Proposal Accept] WebSocket event sent to client: ${clientId}`);
+        }
+        
+        // Emit to booster
+        if (boosterId) {
+          const boosterEvent = {
+            type: 'proposal:accepted',
+            data: {
+              conversationId,
+              proposalId: actualProposalId,
+              boostingId,
+              acceptedProposal: response.data.acceptedProposal,
+              status: 'accepted',
+              acceptedAt: new Date().toISOString(),
+              acceptedBy: 'client',
+              clientId,
+              boosterId
+            }
+          };
+          
+          webSocketServer.sendToUser(boosterId, boosterEvent);
+          console.log(`✅ [Proposal Accept] WebSocket event sent to booster: ${boosterId}`);
+        }
+        
+        // Also emit conversation update event
+        const conversationUpdateEvent = {
+          type: 'conversation:updated',
+          data: {
+            conversationId,
+            status: 'accepted',
+            isTemporary: false,
+            boostingStatus: 'active',
+            updatedAt: new Date().toISOString()
+          }
+        };
+        
+        // Send to both participants
+        if (clientId) webSocketServer.sendToUser(clientId, conversationUpdateEvent);
+        if (boosterId) webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
+        
+        console.log('✅ [Proposal Accept] All WebSocket events emitted successfully');
+      } else {
+        console.warn('⚠️ [Proposal Accept] WebSocket server not available for real-time updates');
+      }
+    } catch (wsError) {
+      console.error('❌ [Proposal Accept] Error emitting WebSocket events:', wsError);
+      // Don't fail the request if WebSocket fails
+    }
+    
     res.json(response.data);
     
   } catch (error) {

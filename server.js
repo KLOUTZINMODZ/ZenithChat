@@ -204,8 +204,11 @@ app.use((req, res) => {
 
 const wsServer = new WebSocketServer(server);
 
-
+// Set notification service for other modules
 app.locals.notificationService = wsServer.notificationService;
+
+// Set WebSocket server for proposal routes to emit real-time events
+app.set('webSocketServer', wsServer);
 
 
 process.on('SIGTERM', () => {
