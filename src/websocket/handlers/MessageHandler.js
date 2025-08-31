@@ -1,8 +1,6 @@
 const Message = require('../../models/Message');
 const Conversation = require('../../models/Conversation');
 const User = require('../../models/User');
-const WhatsAppMessageHandler = require('./WhatsAppMessageHandler');
-const SystemMessageService = require('../../services/SystemMessageService');
 const logger = require('../../utils/logger');
 const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
@@ -15,14 +13,13 @@ const deliveryTimeouts = new Map();
 class MessageHandler {
   constructor(connectionManager) {
     this.connectionManager = connectionManager;
-    this.systemMessageService = new SystemMessageService(connectionManager);
     
-    // Configurações de retry
+
     this.maxRetryAttempts = 5;
     this.retryInterval = 2000;
     this.maxRetryInterval = 30000;
     
-    // Limpeza automática de mensagens antigas
+
     setInterval(() => this.cleanupOldMessages(), 60000);
   }
 
@@ -223,25 +220,6 @@ class MessageHandler {
 
     } catch (error) {
       logger.error('Error marking messages as read:', error);
-      this.sendError(userId, error.message);
-    }
-  }
-
-  async handleSystemMessageDeliveryAck(userId, payload) {
-    try {
-      const { messageId, conversationId } = payload;
-      
-      if (!messageId) {
-        throw new Error('MessageId is required for system message delivery ack');
-      }
-
-      // Processar confirmação via SystemMessageService
-      await this.systemMessageService.handleDeliveryConfirmation(messageId, userId);
-
-      logger.info(`System message delivery ack received: ${messageId} from user ${userId}`);
-
-    } catch (error) {
-      logger.error('Error handling system message delivery ack:', error);
       this.sendError(userId, error.message);
     }
   }

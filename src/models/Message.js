@@ -4,39 +4,31 @@ const messageSchema = new mongoose.Schema({
   conversation: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Conversation',
-    required: true
+    required: true,
+    index: true
   },
   sender: {
-    type: mongoose.Schema.Types.Mixed, // Allow 'system' string or ObjectId
-    required: true
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
   },
   content: {
     type: String,
-    required: true
+    required: function() {
+      return this.type === 'text';
+    }
   },
   type: {
     type: String,
-    enum: ['text', 'image', 'file', 'system'],
+    enum: ['text', 'image', 'file', 'audio', 'video', 'system'],
     default: 'text'
   },
-  messageId: {
-    type: String,
-    unique: true,
-    sparse: true // Allow null for existing messages
-  },
-  systemType: {
-    type: String,
-    enum: ['temporary_created', 'temporary_expired', 'proposal_accepted', 'proposal_rejected', 'delivery_confirmed', 'cancellation', 'renegotiation', 'report', 'unreport'],
-    required: function() { return this.type === 'system'; }
-  },
   attachments: [{
-    type: {
-      type: String,
-      enum: ['image', 'file']
-    },
     url: String,
-    filename: String,
-    size: Number
+    name: String,
+    size: Number,
+    mimeType: String
   }],
   readBy: [{
     user: {
@@ -48,18 +40,8 @@ const messageSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-  deliveredTo: [{
-    user: {
-      type: mongoose.Schema.Types.Mixed, // Allow ObjectId or string
-    },
-    deliveredAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
   editedAt: Date,
   deletedAt: Date,
-  expiresAt: Date,
   metadata: {
     type: Map,
     of: mongoose.Schema.Types.Mixed
@@ -72,8 +54,6 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
 messageSchema.index({ 'readBy.user': 1 });
-messageSchema.index({ messageId: 1 });
-messageSchema.index({ type: 1, systemType: 1 });
 
 
 messageSchema.virtual('isReadBy').get(function() {

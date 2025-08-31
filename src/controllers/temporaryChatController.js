@@ -1,9 +1,8 @@
-const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
-const User = require('../models/User');
-const ProposalRequest = require('../models/ProposalRequest');
-const SystemMessageService = require('../services/SystemMessageService');
-const logger = require('../utils/logger');
+const Message = require('../models/Message');
+const AcceptedProposal = require('../models/AcceptedProposal');
+const WebSocketServer = require('../websocket/WebSocketServer');
+
 
 function extractValidObjectId(id) {
   if (!id) return null;
@@ -22,13 +21,6 @@ function extractValidObjectId(id) {
 }
 
 class TemporaryChatController {
-  constructor() {
-    this.systemMessageService = new SystemMessageService();
-  }
-
-  setConnectionManager(connectionManager) {
-    this.systemMessageService.setConnectionManager(connectionManager);
-  }
 
   async createTemporaryChat(req, res) {
     console.log('🔥 createTemporaryChat endpoint chamado:', req.body);
@@ -72,10 +64,46 @@ class TemporaryChatController {
 
         await proposalMessage.save();
         
-
+        // Atualizar conversa
         conversation.lastMessage = proposalMessage._id;
         conversation.lastMessageAt = new Date();
         await conversation.save();
+
+        // Emit WebSocket event for proposal received
+        try {
+          const wsServer = require('../websocket/WebSocketServer');
+          if (wsServer && wsServer.sendToUser) {
+            // Send to client
+            wsServer.sendToUser(clientId, {
+              type: 'proposal:received',
+              data: {
+                conversationId: conversation._id,
+                proposalId,
+                proposalData,
+                clientData,
+                boosterData,
+                expiresAt: conversation.expiresAt,
+                timestamp: new Date().toISOString()
+              }
+            });
+            
+            // Send to booster
+            wsServer.sendToUser(boosterId, {
+              type: 'proposal:received',
+              data: {
+                conversationId: conversation._id,
+                proposalId,
+                proposalData,
+                clientData,
+                boosterData,
+                expiresAt: conversation.expiresAt,
+                timestamp: new Date().toISOString()
+              }
+            });
+          }
+        } catch (wsError) {
+          console.error('❌ Erro ao emitir evento WebSocket:', wsError);
+        }
 
         return res.json({
           success: true,
@@ -134,23 +162,61 @@ class TemporaryChatController {
 
       await conversation.save();
 
-      // Criar mensagem do sistema via SystemMessageService
-      const { messageId } = await this.systemMessageService.createTemporaryChatMessage(
-        conversation._id,
-        {
-          proposalId,
-          price: proposalData.price,
-          estimatedTime: proposalData.estimatedTime,
-          message: proposalData.message
-        },
-        [clientId, boosterId]
-      );
 
-      // Atualizar última mensagem da conversa
-      const savedMessage = await Message.findOne({ messageId });
-      conversation.lastMessage = savedMessage._id;
+      const initialMessage = new Message({
+        conversation: conversation._id,
+        sender: boosterId,
+        content: `⏳ Chat Temporário criado...\n💰 Proposta: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}\n\n💡 Este chat expira em 3 dias se a proposta não for aceita.`,
+        type: 'message:new',
+        metadata: {
+          type: 'temporary_chat_created',
+          proposalId,
+          expiresAt
+        }
+      });
+
+      await initialMessage.save();
+
+
+      conversation.lastMessage = initialMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
+
+      // Emit WebSocket event for new temporary chat created
+      try {
+        const wsServer = require('../websocket/WebSocketServer');
+        if (wsServer && wsServer.sendToUser) {
+          // Send to client
+          wsServer.sendToUser(clientId, {
+            type: 'proposal:received',
+            data: {
+              conversationId: conversation._id,
+              proposalId,
+              proposalData,
+              clientData,
+              boosterData,
+              expiresAt: expiresAt,
+              timestamp: new Date().toISOString()
+            }
+          });
+          
+          // Send to booster
+          wsServer.sendToUser(boosterId, {
+            type: 'proposal:received',
+            data: {
+              conversationId: conversation._id,
+              proposalId,
+              proposalData,
+              clientData,
+              boosterData,
+              expiresAt: expiresAt,
+              timestamp: new Date().toISOString()
+            }
+          });
+        }
+      } catch (wsError) {
+        console.error('❌ Erro ao emitir evento WebSocket:', wsError);
+      }
 
       res.json({
         success: true,
@@ -280,31 +346,56 @@ class TemporaryChatController {
 
       await acceptedProposal.save();
 
+
       conversation.acceptedProposal = acceptedProposal._id;
-      await conversation.acceptTemporaryChat();
+      await conversation.save();
 
-      // Criar mensagem de aceitação via SystemMessageService
-      const { messageId } = await this.systemMessageService.createProposalAcceptedMessage(
-        conversation._id,
-        {
-          proposalId,
-          price: proposalData.price,
-          estimatedTime: proposalData.estimatedTime
-        },
-        {
-          name: conversation.client.name
-        },
-        {
-          name: conversation.booster.name
-        },
-        [conversation.client.userid, conversation.booster.userid]
-      );
 
-      // Atualizar última mensagem
-      const savedMessage = await Message.findOne({ messageId });
-      conversation.lastMessage = savedMessage._id;
+      const acceptanceMessage = new Message({
+        conversation: conversation._id,
+        sender: userId,
+        content: `✅ Proposta aceita! Cliente ${clientData.name} e Booster ${boosterData.name} foram conectados.\n💰 Valor acordado: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}`,
+        type: 'message:new',
+        metadata: {
+          type: 'proposal_accepted',
+          proposalId: finalProposalId,
+          acceptedBy: userId,
+          acceptedAt: new Date()
+        }
+      });
+
+      await acceptanceMessage.save();
+
+
+      conversation.lastMessage = acceptanceMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
+
+      // Emit WebSocket event for proposal accepted
+      try {
+        const wsServer = require('../websocket/WebSocketServer');
+        if (wsServer && wsServer.sendToUser) {
+          const participants = conversation.participants;
+          
+          participants.forEach(participantId => {
+            wsServer.sendToUser(participantId, {
+              type: 'proposal:accepted',
+              data: {
+                conversationId: conversation._id,
+                proposalId: finalProposalId,
+                proposalData,
+                clientData,
+                boosterData,
+                acceptedBy: userId,
+                acceptedAt: new Date().toISOString(),
+                timestamp: new Date().toISOString()
+              }
+            });
+          });
+        }
+      } catch (wsError) {
+        console.error('❌ Erro ao emitir evento WebSocket de aceitação:', wsError);
+      }
 
       res.json({
         success: true,
@@ -314,6 +405,114 @@ class TemporaryChatController {
 
     } catch (error) {
       console.error('Erro ao aceitar proposta temporária:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Erro interno do servidor'
+      });
+    }
+  }
+
+  // Reject temporary proposal
+  async rejectTemporaryProposal(req, res) {
+    try {
+      const { conversationId } = req.params;
+      const { proposalId: rawProposalId } = req.body;
+      const userId = req.user?.id || req.user?._id;
+      
+      const proposalId = rawProposalId ? extractValidObjectId(rawProposalId) : null;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Usuário não autenticado'
+        });
+      }
+
+      const conversation = await Conversation.findById(conversationId);
+      if (!conversation) {
+        return res.status(404).json({
+          success: false,
+          message: 'Conversa não encontrada'
+        });
+      }
+
+      if (!conversation.isParticipant(userId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Acesso negado à conversa'
+        });
+      }
+
+      if (!conversation.isTemporary || conversation.status !== 'pending') {
+        return res.status(400).json({
+          success: false,
+          message: 'Esta conversa não é um chat temporário pendente'
+        });
+      }
+
+      // Mark conversation as rejected
+      conversation.status = 'rejected';
+      await conversation.save();
+
+      // Get proposal data for WebSocket event
+      const proposalData = conversation.metadata.get('proposalData');
+      const clientData = conversation.metadata.get('clientData');
+      const boosterData = conversation.metadata.get('boosterData');
+      const finalProposalId = proposalId || extractValidObjectId(conversation.proposal);
+
+      // Create rejection message
+      const rejectionMessage = new Message({
+        conversation: conversation._id,
+        sender: userId,
+        content: `❌ Proposta rejeitada por ${userId === clientData.userid ? clientData.name : boosterData.name}.`,
+        type: 'message:new',
+        metadata: {
+          type: 'proposal_rejected',
+          proposalId: finalProposalId,
+          rejectedBy: userId,
+          rejectedAt: new Date()
+        }
+      });
+
+      await rejectionMessage.save();
+
+      conversation.lastMessage = rejectionMessage._id;
+      conversation.lastMessageAt = new Date();
+      await conversation.save();
+
+      // Emit WebSocket event for proposal rejected
+      try {
+        const wsServer = require('../websocket/WebSocketServer');
+        if (wsServer && wsServer.sendToUser) {
+          const participants = conversation.participants;
+          
+          participants.forEach(participantId => {
+            wsServer.sendToUser(participantId, {
+              type: 'proposal:rejected',
+              data: {
+                conversationId: conversation._id,
+                proposalId: finalProposalId,
+                proposalData,
+                clientData,
+                boosterData,
+                rejectedBy: userId,
+                rejectedAt: new Date().toISOString(),
+                timestamp: new Date().toISOString()
+              }
+            });
+          });
+        }
+      } catch (wsError) {
+        console.error('❌ Erro ao emitir evento WebSocket de rejeição:', wsError);
+      }
+
+      res.json({
+        success: true,
+        message: 'Proposta rejeitada com sucesso'
+      });
+
+    } catch (error) {
+      console.error('Erro ao rejeitar proposta temporária:', error);
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor'
@@ -360,17 +559,52 @@ class TemporaryChatController {
       for (const chat of expiredChats) {
         try {
           await chat.expireTemporaryChat();
-          // Criar mensagem de expiração via SystemMessageService
-          const { messageId } = await this.systemMessageService.createTemporaryExpiredMessage(
-            chat._id,
-            [chat.client.userid, chat.booster.userid]
-          );
           
-          // Atualizar última mensagem
-          const savedMessage = await Message.findOne({ messageId });
-          chat.lastMessage = savedMessage._id;
+
+          const expirationMessage = new Message({
+            conversation: chat._id,
+            content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
+            type: 'message:new',
+            metadata: {
+              type: 'chat_expired',
+              expiredAt: new Date()
+            }
+          });
+
+          await expirationMessage.save();
+          
+
+          chat.lastMessage = expirationMessage._id;
           chat.lastMessageAt = new Date();
           await chat.save();
+          
+          // Emit WebSocket event for proposal expired
+          try {
+            const wsServer = require('../websocket/WebSocketServer');
+            if (wsServer && wsServer.sendToUser) {
+              const participants = chat.participants;
+              const proposalData = chat.metadata.get('proposalData');
+              const clientData = chat.metadata.get('clientData');
+              const boosterData = chat.metadata.get('boosterData');
+              
+              participants.forEach(participantId => {
+                wsServer.sendToUser(participantId, {
+                  type: 'proposal:expired',
+                  data: {
+                    conversationId: chat._id,
+                    proposalId: chat.proposal,
+                    proposalData,
+                    clientData,
+                    boosterData,
+                    expiredAt: new Date().toISOString(),
+                    timestamp: new Date().toISOString()
+                  }
+                });
+              });
+            }
+          } catch (wsError) {
+            console.error('❌ Erro ao emitir evento WebSocket de expiração:', wsError);
+          }
           
           cleanedCount++;
         } catch (error) {

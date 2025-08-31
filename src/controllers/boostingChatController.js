@@ -1,19 +1,11 @@
-const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 const AcceptedProposal = require('../models/AcceptedProposal');
-const User = require('../models/User');
-const SystemMessageService = require('../services/SystemMessageService');
-const logger = require('../utils/logger');
+const Agreement = require('../models/Agreement');
+const Report = require('../models/Report');
 const axios = require('axios');
 
 class BoostingChatController {
-  constructor() {
-    this.systemMessageService = new SystemMessageService();
-  }
-
-  setConnectionManager(connectionManager) {
-    this.systemMessageService.setConnectionManager(connectionManager);
-  }
 
   async getAcceptedProposal(req, res) {
     try {
@@ -268,28 +260,29 @@ class BoostingChatController {
           agreement = await AgreementMigration.migrateProposalToAgreement(acceptedProposal);
         } catch (migrationError) {
           console.warn('Falha na migração durante confirmDelivery:', migrationError);
-          const { messageId } = await this.systemMessageService.createSystemMessage(
-            conversationId,
-            conversation.participants,
-            'Erro na migração da proposta para acordo',
-            'migration_error'
-          );
         }
       }
 
-      // Criar mensagem do sistema via SystemMessageService
-      const { messageId } = await this.systemMessageService.createDeliveryConfirmedMessage(
-        conversationId,
-        conversation.participants
-      );
-
-      // Atualizar conversa
-      const savedMessage = await Message.findOne({ messageId });
-      conversation.lastMessage = savedMessage._id;
 
       const boosterUserId = acceptedProposal?.booster?.userid || 
                            agreement?.boosterUserId || 
-                           conversation.participants.find(p => p._id.toString() !== userId.toString());
+                           conversation.participants.find(p => p.toString() !== userId);
+
+
+      const systemMessage = new Message({
+        conversation: conversationId,
+        sender: userId,
+        content: `✅ Entrega confirmada pelo cliente\n🔒 Chat finalizado`,
+        type: 'message:new',
+        metadata: {
+          type: 'delivery_confirmed',
+          confirmedBy: userId,
+          closedAt: new Date()
+        }
+      });
+
+      await systemMessage.save();
+
 
       if (boosterUserId) {
         const boosterMessage = new Message({
@@ -309,7 +302,7 @@ class BoostingChatController {
       }
 
 
-      conversation.lastMessage = messageId;
+      conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       conversation.boostingStatus = 'completed';
       conversation.metadata.set('status', 'delivery_confirmed');

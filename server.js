@@ -193,6 +193,7 @@ app.use((err, req, res, next) => {
   });
 });
 
+
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -200,15 +201,12 @@ app.use((req, res) => {
   });
 });
 
+
 const wsServer = new WebSocketServer(server);
 
-const temporaryChatController = require('./src/controllers/temporaryChatController');
-const boostingChatController = require('./src/controllers/boostingChatController');
-
-temporaryChatController.setConnectionManager(wsServer.connectionManager);
-boostingChatController.setConnectionManager(wsServer.connectionManager);
 
 app.locals.notificationService = wsServer.notificationService;
+
 
 process.on('SIGTERM', () => {
   logger.info('SIGTERM signal received: closing HTTP server');
