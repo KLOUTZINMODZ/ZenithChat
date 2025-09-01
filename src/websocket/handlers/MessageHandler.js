@@ -27,24 +27,20 @@ class MessageHandler {
     try {
       const { conversationId, content, type = 'text', attachments = [] } = payload;
 
-
       if (content && content.length > 10000) {
         logger.warn(`User ${userId} attempted to send message with ${content.length} characters (limit: 10,000). Banning user for exploit.`);
-        
-
         await this.banUserForExploit(userId);
-        
         throw new Error('Message exceeds character limit. User has been banned for exploit attempt.');
       }
 
-
-      const conversation = await Conversation.findById(conversationId)
-        .populate('participants', 'name email');
+      // Parallel database operations to reduce latency
+      const [conversation] = await Promise.all([
+        Conversation.findById(conversationId).populate('participants', 'name email'),
+      ]);
 
       if (!conversation) {
         throw new Error('Conversation not found');
       }
-
 
       const isParticipant = conversation.participants.some(
         p => p._id.toString() === userId
@@ -54,9 +50,8 @@ class MessageHandler {
         throw new Error('User is not a participant in this conversation');
       }
 
-
       const encryptedContent = encryptMessage(content);
-
+      const now = new Date();
 
       const message = new Message({
         conversation: conversationId,
@@ -64,17 +59,14 @@ class MessageHandler {
         content: encryptedContent,
         type,
         attachments,
-        readBy: [{ user: userId, readAt: new Date() }]
+        readBy: [{ user: userId, readAt: now }]
       });
 
-      await message.save();
-
-
+      // Update conversation data
       conversation.lastMessage = message._id;
-      conversation.lastMessageAt = new Date();
+      conversation.lastMessageAt = now;
       conversation.unreadCount = conversation.unreadCount || {};
       
-
       conversation.participants.forEach(participant => {
         if (participant._id.toString() !== userId) {
           conversation.unreadCount[participant._id] = 
@@ -82,52 +74,49 @@ class MessageHandler {
         }
       });
 
-      await conversation.save();
+      // Parallel save operations
+      await Promise.all([
+        message.save(),
+        conversation.save()
+      ]);
 
-
-      const participantIds = conversation.participants.map(p => p._id.toString());
-      cache.invalidateConversationCache(conversationId, participantIds);
-
-
+      // Populate sender info
       await message.populate('sender', 'name email avatar');
-
-
-      cache.cacheMessage(conversationId, {
-        ...message.toObject(),
-        content: content
-      });
-
 
       const messageToSend = {
         ...message.toObject(),
         content: content
       };
 
-
+      // Send messages immediately without waiting for cache operations
       const broadcastMessage = {
         type: 'message:new',
         data: {
           message: messageToSend,
           conversationId
         },
-        timestamp: new Date().toISOString()
+        timestamp: now.toISOString()
       };
 
-
+      // Send confirmation to sender immediately
       this.sendToUser(userId, {
         ...broadcastMessage,
         type: 'message:sent'
       });
 
-
+      // Send to all participants immediately
       conversation.participants.forEach(participant => {
         if (participant._id.toString() !== userId) {
           this.sendToUser(participant._id.toString(), broadcastMessage);
         }
       });
 
-
-      cache.cacheMessage(conversationId, messageToSend);
+      // Cache operations in background (non-blocking)
+      setImmediate(() => {
+        const participantIds = conversation.participants.map(p => p._id.toString());
+        cache.invalidateConversationCache(conversationId, participantIds);
+        cache.cacheMessage(conversationId, messageToSend);
+      });
 
       logger.info(`Message sent in conversation ${conversationId} by user ${userId}`);
 
@@ -473,7 +462,6 @@ class MessageHandler {
 
   sendToUser(userId, message) {
     const isUserOnline = this.connectionManager.isUserOnline(userId);
-    const isInActiveChat = this.connectionManager.getActiveConversation(userId) === message.data?.conversationId;
     
     if (isUserOnline) {
       const connections = this.connectionManager.getUserConnections(userId);
@@ -486,8 +474,7 @@ class MessageHandler {
         }
       });
       
-      // Only cache if message failed to send OR if it's a critical message type that needs persistence
-      // Don't cache just because user is not in active chat - they're still online and received the message
+      // Only cache if message actually failed to send to online user
       if (!messageSent) {
         logger.info(`User ${userId} is online but message failed to send. Caching for retry.`);
         cache.cacheOfflineMessage(userId, {
@@ -495,13 +482,15 @@ class MessageHandler {
           cached_reason: 'send_failed',
           cached_at: new Date().toISOString()
         });
-      } else if (!isInActiveChat && message.type === 'message:new') {
-        // Log but don't cache - user received the message even if not in active chat
-        logger.info(`User ${userId} received message while not in active chat ${message.data?.conversationId}`);
       }
     } else {
+      // User is truly offline - cache the message
       logger.info(`User ${userId} is offline. Caching message.`);
-      cache.cacheOfflineMessage(userId, message);
+      cache.cacheOfflineMessage(userId, {
+        ...message,
+        cached_reason: 'user_offline',
+        cached_at: new Date().toISOString()
+      });
     }
   }
 
