@@ -429,21 +429,39 @@ class MessageHandler {
   }
 
   sendToUser(userId, message) {
-    const isUserOnline = this.connectionManager.isUserOnline(userId);
+    const connections = this.connectionManager.getUserConnections(userId);
+    const isUserOnline = connections.length > 0;
     const isInActiveChat = this.connectionManager.getActiveConversation(userId) === message.data?.conversationId;
     
+    logger.info(`📤 Sending message to user ${userId}: online=${isUserOnline}, connections=${connections.length}, activeChat=${isInActiveChat}`);
+    
     if (isUserOnline) {
-      const connections = this.connectionManager.getUserConnections(userId);
       let messageSent = false;
       
-      connections.forEach(ws => {
+      connections.forEach((ws, index) => {
         if (ws.readyState === 1) {
-          ws.send(JSON.stringify(message));
-          messageSent = true;
+          try {
+            ws.send(JSON.stringify(message));
+            messageSent = true;
+            logger.info(`✅ Message sent via connection ${index + 1} for user ${userId}`);
+          } catch (error) {
+            logger.error(`❌ Error sending message via connection ${index + 1} for user ${userId}:`, error);
+          }
+        } else {
+          logger.warn(`⚠️ Connection ${index + 1} for user ${userId} is not open (state: ${ws.readyState})`);
         }
       });
       
+      // Se não conseguiu enviar por nenhuma conexão, considerar usuário offline
+      if (!messageSent) {
+        logger.warn(`❌ Failed to send message to user ${userId} via any connection. Treating as offline.`);
+        const OfflineCacheService = require('../services/OfflineCacheService');
+        OfflineCacheService.activateOfflineMode(userId);
+        cache.cacheOfflineMessage(userId, message);
+        return;
+      }
 
+      // Cache para usuários online mas não no chat ativo
       if (messageSent && !isInActiveChat && message.type === 'message:new') {
         logger.info(`User ${userId} is online but not in active chat. Caching message for sync.`);
         cache.cacheOfflineMessage(userId, {
