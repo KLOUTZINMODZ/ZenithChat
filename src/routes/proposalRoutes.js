@@ -225,7 +225,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       
 
       try {
-        const conversationResponse = await axios.get(`http://localhost:3001/api/conversations/${conversationId}`, {
+        const conversationResponse = await axios.get(`https://zenith.enrelyugi.com.br/api/conversations/${conversationId}`, {
           headers: { Authorization: req.headers.authorization }
         });
         
