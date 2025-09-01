@@ -417,7 +417,7 @@ class MessageHandler {
         setTimeout(() => {
           cache.clearOfflineMessages(userId);
           logger.info(`🧹 Cleared offline messages cache for user ${userId}`);
-        }, 2000);
+        }, 1000);
       }
 
       // 2. Send unread messages from database
@@ -486,14 +486,18 @@ class MessageHandler {
         }
       });
       
-
-      if (messageSent && !isInActiveChat && message.type === 'message:new') {
-        logger.info(`User ${userId} is online but not in active chat. Caching message for sync.`);
+      // Only cache if message failed to send OR if it's a critical message type that needs persistence
+      // Don't cache just because user is not in active chat - they're still online and received the message
+      if (!messageSent) {
+        logger.info(`User ${userId} is online but message failed to send. Caching for retry.`);
         cache.cacheOfflineMessage(userId, {
           ...message,
-          cached_reason: 'user_not_in_active_chat',
+          cached_reason: 'send_failed',
           cached_at: new Date().toISOString()
         });
+      } else if (!isInActiveChat && message.type === 'message:new') {
+        // Log but don't cache - user received the message even if not in active chat
+        logger.info(`User ${userId} received message while not in active chat ${message.data?.conversationId}`);
       }
     } else {
       logger.info(`User ${userId} is offline. Caching message.`);
