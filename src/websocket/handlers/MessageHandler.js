@@ -242,7 +242,21 @@ class MessageHandler {
     try {
       const { conversationId, lastSeen } = payload;
       
+      if (!conversationId || !lastSeen) {
+        logger.error(`❌ Invalid sync request from user ${userId}: missing conversationId or lastSeen`);
+        this.sendError(userId, 'Invalid sync request: missing conversationId or lastSeen');
+        return;
+      }
+      
       logger.info(`🔄 Syncing conversation ${conversationId} for user ${userId} since ${lastSeen}`);
+
+      // Verify user has access to conversation
+      const conversation = await Conversation.findById(conversationId);
+      if (!conversation || !conversation.participants.includes(userId)) {
+        logger.error(`❌ User ${userId} denied access to conversation ${conversationId}`);
+        this.sendError(userId, 'Conversation not found or access denied');
+        return;
+      }
 
       // Find messages since lastSeen timestamp
       const messages = await Message.find({
@@ -265,13 +279,26 @@ class MessageHandler {
           data: {
             conversationId,
             messages: decryptedMessages,
-            synced: true
+            synced: true,
+            syncedAt: new Date().toISOString()
           },
           timestamp: new Date().toISOString()
         });
 
         logger.info(`📤 Sent ${messages.length} missed messages to user ${userId} for conversation ${conversationId}`);
       } else {
+        // Send empty sync response to confirm sync completed
+        this.sendToUser(userId, {
+          type: 'message:sync',
+          data: {
+            conversationId,
+            messages: [],
+            synced: true,
+            syncedAt: new Date().toISOString()
+          },
+          timestamp: new Date().toISOString()
+        });
+        
         logger.info(`✅ No missed messages for user ${userId} in conversation ${conversationId}`);
       }
 
