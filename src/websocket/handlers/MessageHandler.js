@@ -217,15 +217,12 @@ class MessageHandler {
     try {
       const { conversationId } = payload;
 
-
       this.connectionManager.setActiveConversation(userId, conversationId);
-
 
       await this.handleMarkAsRead(userId, { 
         conversationId,
         messageIds: await this.getUnreadMessageIds(userId, conversationId)
       });
-
 
       this.sendToUser(userId, {
         type: 'conversation:opened',
@@ -237,6 +234,49 @@ class MessageHandler {
 
     } catch (error) {
       logger.error('Error opening conversation:', error);
+      this.sendError(userId, error.message);
+    }
+  }
+
+  async handleConversationSync(userId, payload) {
+    try {
+      const { conversationId, lastSeen } = payload;
+      
+      logger.info(`🔄 Syncing conversation ${conversationId} for user ${userId} since ${lastSeen}`);
+
+      // Find messages since lastSeen timestamp
+      const messages = await Message.find({
+        conversation: conversationId,
+        createdAt: { $gt: new Date(lastSeen) },
+        sender: { $ne: userId } // Don't send user's own messages back
+      })
+        .populate('sender', 'name email avatar')
+        .sort('createdAt')
+        .limit(50);
+
+      if (messages.length > 0) {
+        const decryptedMessages = messages.map(msg => ({
+          ...msg.toObject(),
+          content: decryptMessage(msg.content)
+        }));
+
+        this.sendToUser(userId, {
+          type: 'message:sync',
+          data: {
+            conversationId,
+            messages: decryptedMessages,
+            synced: true
+          },
+          timestamp: new Date().toISOString()
+        });
+
+        logger.info(`📤 Sent ${messages.length} missed messages to user ${userId} for conversation ${conversationId}`);
+      } else {
+        logger.info(`✅ No missed messages for user ${userId} in conversation ${conversationId}`);
+      }
+
+    } catch (error) {
+      logger.error('Error syncing conversation:', error);
       this.sendError(userId, error.message);
     }
   }

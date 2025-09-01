@@ -163,7 +163,11 @@ class WebSocketServer {
         break;
 
       case 'conversation:close':
-        await this.messageHandler.handleCloseConversation(ws.userId, payload);
+        await this.messageHandler.handleCloseConversation(ws.userId, payload.data);
+        break;
+
+      case 'conversation:sync':
+        await this.messageHandler.handleConversationSync(ws.userId, payload.data);
         break;
 
       case 'conversation:list':
