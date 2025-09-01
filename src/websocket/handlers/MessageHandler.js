@@ -380,7 +380,47 @@ class MessageHandler {
 
   async sendPendingMessages(userId, ws) {
     try {
+      logger.info(`🔄 Sending pending messages for user ${userId}`);
 
+      // 1. Send cached offline messages first
+      const offlineMessages = cache.getOfflineMessages(userId);
+      if (offlineMessages.length > 0) {
+        logger.info(`📤 Found ${offlineMessages.length} cached offline messages for user ${userId}`);
+        
+        // Group messages by conversation
+        const messagesByConversation = new Map();
+        offlineMessages.forEach(msg => {
+          const convId = msg.data?.conversationId || msg.data?.message?.conversation;
+          if (convId) {
+            if (!messagesByConversation.has(convId)) {
+              messagesByConversation.set(convId, []);
+            }
+            messagesByConversation.get(convId).push(msg);
+          }
+        });
+
+        // Send grouped messages
+        for (const [conversationId, messages] of messagesByConversation) {
+          this.sendToUser(userId, {
+            type: 'message:offline_recovery',
+            data: {
+              conversationId,
+              messages: messages,
+              cached: true,
+              recovery: true
+            },
+            timestamp: new Date().toISOString()
+          });
+        }
+
+        // Clear offline messages after successful delivery
+        setTimeout(() => {
+          cache.clearOfflineMessages(userId);
+          logger.info(`🧹 Cleared offline messages cache for user ${userId}`);
+        }, 2000);
+      }
+
+      // 2. Send unread messages from database
       const conversations = await Conversation.find({
         participants: userId,
         [`unreadCount.${userId}`]: { $gt: 0 }
@@ -406,12 +446,15 @@ class MessageHandler {
             type: 'message:pending',
             data: {
               conversationId: conversation._id,
-              messages: decryptedMessages
+              messages: decryptedMessages,
+              requiresAck: true
             },
             timestamp: new Date().toISOString()
           });
         }
       }
+
+      logger.info(`✅ Completed sending pending messages for user ${userId}`);
 
     } catch (error) {
       logger.error('Error sending pending messages:', error);
@@ -429,39 +472,21 @@ class MessageHandler {
   }
 
   sendToUser(userId, message) {
-    const connections = this.connectionManager.getUserConnections(userId);
-    const isUserOnline = connections.length > 0;
+    const isUserOnline = this.connectionManager.isUserOnline(userId);
     const isInActiveChat = this.connectionManager.getActiveConversation(userId) === message.data?.conversationId;
     
-    logger.info(`📤 Sending message to user ${userId}: online=${isUserOnline}, connections=${connections.length}, activeChat=${isInActiveChat}`);
-    
     if (isUserOnline) {
+      const connections = this.connectionManager.getUserConnections(userId);
       let messageSent = false;
       
-      connections.forEach((ws, index) => {
+      connections.forEach(ws => {
         if (ws.readyState === 1) {
-          try {
-            ws.send(JSON.stringify(message));
-            messageSent = true;
-            logger.info(`✅ Message sent via connection ${index + 1} for user ${userId}`);
-          } catch (error) {
-            logger.error(`❌ Error sending message via connection ${index + 1} for user ${userId}:`, error);
-          }
-        } else {
-          logger.warn(`⚠️ Connection ${index + 1} for user ${userId} is not open (state: ${ws.readyState})`);
+          ws.send(JSON.stringify(message));
+          messageSent = true;
         }
       });
       
-      // Se não conseguiu enviar por nenhuma conexão, considerar usuário offline
-      if (!messageSent) {
-        logger.warn(`❌ Failed to send message to user ${userId} via any connection. Treating as offline.`);
-        const OfflineCacheService = require('../services/OfflineCacheService');
-        OfflineCacheService.activateOfflineMode(userId);
-        cache.cacheOfflineMessage(userId, message);
-        return;
-      }
 
-      // Cache para usuários online mas não no chat ativo
       if (messageSent && !isInActiveChat && message.type === 'message:new') {
         logger.info(`User ${userId} is online but not in active chat. Caching message for sync.`);
         cache.cacheOfflineMessage(userId, {

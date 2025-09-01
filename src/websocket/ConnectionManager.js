@@ -19,12 +19,9 @@ class ConnectionManager {
     logger.info(`✅ Connection added for user ${userId}. Total connections: ${this.connections.get(userId).size}`);
     logger.info(`📊 All online users: [${Array.from(this.connections.keys()).join(', ')}]`);
 
-    // Desativar modo offline quando usuário se conecta
-    const OfflineCacheService = require('../services/OfflineCacheService');
     const offlineStatus = cache.get(`offline_status:${userId}`);
     if (offlineStatus) {
-      logger.info(`User ${userId} was in offline mode since ${offlineStatus.activatedAt}. Deactivating offline mode.`);
-      OfflineCacheService.deactivateOfflineMode(userId);
+      logger.info(`User ${userId} was in offline mode since ${offlineStatus.activatedAt}`);
     }
 
     const offlineMessages = cache.getOfflineMessages(userId);
@@ -37,19 +34,11 @@ class ConnectionManager {
   removeConnection(userId, ws) {
     if (this.connections.has(userId)) {
       this.connections.get(userId).delete(ws);
-      const remainingConnections = this.connections.get(userId).size;
-      
-      if (remainingConnections === 0) {
+      if (this.connections.get(userId).size === 0) {
         this.connections.delete(userId);
         this.activeConversations.delete(userId);
-        
-        // Ativar modo offline quando não há mais conexões
-        logger.info(`User ${userId} has no remaining connections. Activating offline mode.`);
-        const OfflineCacheService = require('../services/OfflineCacheService');
-        OfflineCacheService.activateOfflineMode(userId);
       }
-      
-      logger.info(`Connection removed for user ${userId}. Remaining connections: ${remainingConnections}`);
+      logger.info(`Connection removed for user ${userId}. Remaining connections: ${this.connections.get(userId)?.size || 0}`);
     }
   }
 

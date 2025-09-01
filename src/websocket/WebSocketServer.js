@@ -92,18 +92,8 @@ class WebSocketServer {
 
 
       ws.on('close', (code, reason) => {
-        logger.info(`WebSocket connection closed for user ${userId}: code=${code}, reason=${reason}`);
         this.connectionManager.removeConnection(userId, ws);
         
-        // Verificar se usuário ainda tem outras conexões ativas
-        const remainingConnections = this.connectionManager.getUserConnections(userId);
-        if (remainingConnections.length === 0) {
-          logger.info(`User ${userId} has no remaining connections. Activating offline mode.`);
-          
-          // Ativar modo offline quando não há mais conexões
-          const OfflineCacheService = require('../services/OfflineCacheService');
-          OfflineCacheService.activateOfflineMode(userId);
-        }
 
         try {
           this.notificationHandler.handleUserDisconnected(userId);
@@ -306,7 +296,7 @@ class WebSocketServer {
   }
 
   startHeartbeat() {
-    const interval = parseInt(process.env.WS_HEARTBEAT_INTERVAL) || 30000; // Reduzido para 30s
+    const interval = parseInt(process.env.WS_HEARTBEAT_INTERVAL) || 60000;
     
     logger.info(`Starting WebSocket heartbeat with interval: ${interval}ms`);
     
@@ -317,11 +307,6 @@ class WebSocketServer {
         if (ws.isAlive === false) {
           logger.warn(`Terminating inactive connection for user: ${ws.userId}`);
           this.connectionManager.removeConnection(ws.userId, ws);
-          
-          // Ativar modo offline para o usuário
-          const OfflineCacheService = require('../services/OfflineCacheService');
-          OfflineCacheService.activateOfflineMode(ws.userId);
-          
           return ws.terminate();
         }
 
@@ -333,12 +318,6 @@ class WebSocketServer {
             ws.ping();
           } catch (error) {
             logger.error(`Error sending ping to user ${ws.userId}:`, error);
-            
-            // Ativar modo offline antes de terminar conexão
-            const OfflineCacheService = require('../services/OfflineCacheService');
-            OfflineCacheService.activateOfflineMode(ws.userId);
-            
-            this.connectionManager.removeConnection(ws.userId, ws);
             ws.terminate();
           }
         }
