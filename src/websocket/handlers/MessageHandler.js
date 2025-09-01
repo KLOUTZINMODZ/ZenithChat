@@ -105,10 +105,15 @@ class MessageHandler {
       });
 
       // Send to all participants immediately
-      conversation.participants.forEach(participant => {
-        if (participant._id.toString() !== userId) {
-          this.sendToUser(participant._id.toString(), broadcastMessage);
-        }
+      const participantIds = conversation.participants
+        .filter(p => p._id.toString() !== userId)
+        .map(p => p._id.toString());
+      
+      logger.info(`📢 Broadcasting message to ${participantIds.length} participants: [${participantIds.join(', ')}]`);
+      
+      participantIds.forEach(participantId => {
+        logger.info(`📤 Sending message to participant ${participantId}`);
+        this.sendToUser(participantId, broadcastMessage);
       });
 
       // Cache operations in background (non-blocking)
@@ -118,7 +123,7 @@ class MessageHandler {
         cache.cacheMessage(conversationId, messageToSend);
       });
 
-      logger.info(`Message sent in conversation ${conversationId} by user ${userId}`);
+      logger.info(`✅ Message processing completed for conversation ${conversationId} by user ${userId}`);
 
     } catch (error) {
       logger.error('Error handling send message:', error);
@@ -242,50 +247,75 @@ class MessageHandler {
     try {
       const { conversationId, lastSeen } = payload;
       
-      if (!conversationId || !lastSeen) {
-        logger.error(`❌ Invalid sync request from user ${userId}: missing conversationId or lastSeen`);
-        this.sendError(userId, 'Invalid sync request: missing conversationId or lastSeen');
-        return;
-      }
-      
       logger.info(`🔄 Syncing conversation ${conversationId} for user ${userId} since ${lastSeen}`);
 
-      // Verify user has access to conversation
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation || !conversation.participants.includes(userId)) {
-        logger.error(`❌ User ${userId} denied access to conversation ${conversationId}`);
-        this.sendError(userId, 'Conversation not found or access denied');
-        return;
+      // Validate lastSeen timestamp
+      const lastSeenDate = lastSeen ? new Date(lastSeen) : new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24h ago
+      
+      if (isNaN(lastSeenDate.getTime())) {
+        logger.warn(`⚠️ Invalid lastSeen timestamp: ${lastSeen}, using 1 hour ago`);
+        lastSeenDate = new Date(Date.now() - 60 * 60 * 1000);
       }
 
       // Find messages since lastSeen timestamp
       const messages = await Message.find({
         conversation: conversationId,
-        createdAt: { $gt: new Date(lastSeen) },
+        createdAt: { $gt: lastSeenDate },
         sender: { $ne: userId } // Don't send user's own messages back
       })
         .populate('sender', 'name email avatar')
         .sort('createdAt')
         .limit(50);
 
-      if (messages.length > 0) {
+      // Also check for cached messages for this conversation
+      const cachedMessages = cache.getOfflineMessages(userId) || [];
+      const conversationCachedMessages = cachedMessages.filter(msg => {
+        const msgConvId = msg.data?.conversationId || msg.data?.message?.conversation;
+        return msgConvId === conversationId;
+      });
+
+      if (messages.length > 0 || conversationCachedMessages.length > 0) {
         const decryptedMessages = messages.map(msg => ({
           ...msg.toObject(),
           content: decryptMessage(msg.content)
         }));
 
+        // Combine database messages with cached messages
+        const allMessages = [...decryptedMessages];
+        
+        if (conversationCachedMessages.length > 0) {
+          conversationCachedMessages.forEach(cachedMsg => {
+            const msgData = cachedMsg.data?.message || cachedMsg.data;
+            if (msgData && !allMessages.find(m => m._id === msgData._id)) {
+              allMessages.push(msgData);
+            }
+          });
+        }
+
+        // Sort by creation date
+        allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
         this.sendToUser(userId, {
           type: 'message:sync',
           data: {
             conversationId,
-            messages: decryptedMessages,
+            messages: allMessages,
             synced: true,
             syncedAt: new Date().toISOString()
           },
           timestamp: new Date().toISOString()
         });
 
-        logger.info(`📤 Sent ${messages.length} missed messages to user ${userId} for conversation ${conversationId}`);
+        logger.info(`📤 Sent ${allMessages.length} missed messages (${messages.length} from DB, ${conversationCachedMessages.length} cached) to user ${userId} for conversation ${conversationId}`);
+        
+        // Remove cached messages for this conversation after successful sync
+        if (conversationCachedMessages.length > 0) {
+          const remainingCached = cachedMessages.filter(msg => {
+            const msgConvId = msg.data?.conversationId || msg.data?.message?.conversation;
+            return msgConvId !== conversationId;
+          });
+          cache.setOfflineMessages(userId, remainingCached);
+        }
       } else {
         // Send empty sync response to confirm sync completed
         this.sendToUser(userId, {
@@ -303,7 +333,7 @@ class MessageHandler {
       }
 
     } catch (error) {
-      logger.error('Error syncing conversation:', error);
+      logger.error('❌ Error syncing conversation:', error);
       this.sendError(userId, error.message);
     }
   }
@@ -455,25 +485,21 @@ class MessageHandler {
           }
         });
 
-        // Send grouped messages
         for (const [conversationId, messages] of messagesByConversation) {
           this.sendToUser(userId, {
-            type: 'message:offline_recovery',
+            type: 'message:cached',
             data: {
               conversationId,
-              messages: messages,
-              cached: true,
-              recovery: true
+              messages: messages.map(m => m.data?.message || m.data),
+              cached: true
             },
             timestamp: new Date().toISOString()
           });
         }
-
-        // Clear offline messages after successful delivery
-        setTimeout(() => {
-          cache.clearOfflineMessages(userId);
-          logger.info(`🧹 Cleared offline messages cache for user ${userId}`);
-        }, 1000);
+        
+        // Clear cache after sending
+        cache.clearOfflineMessages(userId);
+        logger.info(`🗑️ Cleared cached messages for user ${userId}`);
       }
 
       // 2. Send unread messages from database
@@ -481,6 +507,8 @@ class MessageHandler {
         participants: userId,
         [`unreadCount.${userId}`]: { $gt: 0 }
       });
+
+      logger.info(`📋 Found ${conversations.length} conversations with unread messages for user ${userId}`);
 
       for (const conversation of conversations) {
         const messages = await Message.find({
@@ -507,13 +535,15 @@ class MessageHandler {
             },
             timestamp: new Date().toISOString()
           });
+          
+          logger.info(`📤 Sent ${messages.length} pending messages for conversation ${conversation._id}`);
         }
       }
 
       logger.info(`✅ Completed sending pending messages for user ${userId}`);
 
     } catch (error) {
-      logger.error('Error sending pending messages:', error);
+      logger.error('❌ Error sending pending messages:', error);
     }
   }
 
@@ -529,21 +559,34 @@ class MessageHandler {
 
   sendToUser(userId, message) {
     const isUserOnline = this.connectionManager.isUserOnline(userId);
+    const connections = this.connectionManager.getUserConnections(userId);
     
-    if (isUserOnline) {
-      const connections = this.connectionManager.getUserConnections(userId);
+    logger.info(`📤 Attempting to send ${message.type} to user ${userId}. Online: ${isUserOnline}, Connections: ${connections.length}`);
+    
+    if (isUserOnline && connections.length > 0) {
       let messageSent = false;
+      let activeConnections = 0;
       
-      connections.forEach(ws => {
+      connections.forEach((ws, index) => {
+        logger.info(`🔍 Connection ${index}: readyState=${ws.readyState} (1=OPEN)`);
         if (ws.readyState === 1) {
-          ws.send(JSON.stringify(message));
-          messageSent = true;
+          try {
+            ws.send(JSON.stringify(message));
+            messageSent = true;
+            activeConnections++;
+            logger.info(`✅ Message ${message.type} sent successfully to user ${userId} via connection ${index}`);
+          } catch (error) {
+            logger.error(`❌ Failed to send message to user ${userId} connection ${index}: ${error.message}`);
+          }
+        } else {
+          logger.warn(`⚠️ Connection ${index} for user ${userId} not ready (state: ${ws.readyState})`);
         }
       });
       
-      // Only cache if message actually failed to send to online user
-      if (!messageSent) {
-        logger.info(`User ${userId} is online but message failed to send. Caching for retry.`);
+      if (messageSent) {
+        logger.info(`📨 Message ${message.type} delivered to user ${userId} via ${activeConnections} connection(s)`);
+      } else {
+        logger.error(`❌ User ${userId} is online but message failed to send to any connection. Caching for retry.`);
         cache.cacheOfflineMessage(userId, {
           ...message,
           cached_reason: 'send_failed',
@@ -552,7 +595,7 @@ class MessageHandler {
       }
     } else {
       // User is truly offline - cache the message
-      logger.info(`User ${userId} is offline. Caching message.`);
+      logger.info(`💾 User ${userId} is offline (online: ${isUserOnline}, connections: ${connections.length}). Caching message ${message.type}.`);
       cache.cacheOfflineMessage(userId, {
         ...message,
         cached_reason: 'user_offline',

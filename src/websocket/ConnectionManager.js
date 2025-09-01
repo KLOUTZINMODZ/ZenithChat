@@ -12,22 +12,11 @@ class ConnectionManager {
     
     if (!this.connections.has(userId)) {
       this.connections.set(userId, new Set());
+      logger.info(`📝 Created new connection set for user ${userId}`);
     }
     
-    // Close any existing connections for this user to prevent duplicates
-    const existingConnections = this.connections.get(userId);
-    existingConnections.forEach(existingWs => {
-      if (existingWs !== ws && existingWs.readyState === 1) {
-        logger.info(`🔄 Closing duplicate connection for user ${userId}`);
-        existingWs.close(1000, 'New connection established');
-      }
-    });
-    
-    // Clear closed connections
-    existingConnections.clear();
-    existingConnections.add(ws);
-    
-    logger.info(`Connection added for user ${userId}. Total connections: ${this.connections.get(userId).size}`);
+    this.connections.get(userId).add(ws);
+    logger.info(`✅ Connection added for user ${userId}. Total connections: ${this.connections.get(userId).size}`);
     logger.info(`📊 All online users: [${Array.from(this.connections.keys()).join(', ')}]`);
 
     const offlineStatus = cache.get(`offline_status:${userId}`);
