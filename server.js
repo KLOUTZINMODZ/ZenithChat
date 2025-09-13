@@ -192,13 +192,22 @@ app.use('/api/offline', offlineRoutes);
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
 app.use('/api/wallet', walletRoutes);
+// Purchases logger to debug 404 reports
+app.use('/api/purchases', (req, res, next) => {
+  try {
+    const maskedAuth = (req.headers['authorization'] || '').replace(/(Bearer\s+)[A-Za-z0-9\-\._]+/i, '$1***');
+    console.log('[PURCHASES-LOGGER]', {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      contentType: req.headers['content-type'],
+      hasAuth: !!req.headers['authorization'],
+      authMasked: maskedAuth,
+      ip: req.ip
+    });
+  } catch (_) {}
+  next();
+});
 app.use('/api/purchases', purchasesRoutes);
-
-
-app._router.stack.forEach((middleware) => {
-  if (middleware.route) {
-    console.log(`  ${Object.keys(middleware.route.methods)} ${middleware.route.path}`);
-  } else if (middleware.name === 'router') {
     middleware.handle.stack.forEach((handler) => {
       if (handler.route) {
         console.log(`  ${Object.keys(handler.route.methods)} ${middleware.regexp.source.replace('\\/?', '').replace('(?=\\/|$)', '')}${handler.route.path}`);
