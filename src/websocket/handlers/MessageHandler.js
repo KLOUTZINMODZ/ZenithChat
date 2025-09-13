@@ -448,9 +448,8 @@ class MessageHandler {
 
 
       const conversations = await Conversation.find({
-        participants: userId,
-        [`unreadCount.${userId}`]: { $gt: 0 }
-      });
+        participants: userId
+      }).select('_id');
 
       for (const conversation of conversations) {
         const messages = await Message.find({
@@ -600,6 +599,9 @@ class MessageHandler {
           type: 'message:new',
           data: {
             message,
+            conversationId: (message && message.conversation && message.conversation.toString)
+              ? message.conversation.toString()
+              : (message ? message.conversation : undefined),
             messageId,
             requiresAck: true
           },
