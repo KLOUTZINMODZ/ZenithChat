@@ -115,16 +115,7 @@ class MessageHandler {
       };
 
 
-      const broadcastMessage = {
-        type: 'message:new',
-        data: {
-          message: messageToSend,
-          conversationId
-        },
-        timestamp: now.toISOString()
-      };
-
-
+      // Confirmar ao remetente
       this.sendToUser(userId, {
         type: 'message:sent',
         data: {
@@ -134,12 +125,17 @@ class MessageHandler {
         timestamp: now.toISOString()
       });
 
-
-      conversation.participants.forEach(participant => {
-        if (participant._id.toString() !== userId) {
-          this.sendToUser(participant._id.toString(), broadcastMessage);
+      // Enviar para destinatários com rastreamento de entrega (estrutura idêntica à usada no reenvio)
+      try {
+        const recipients = conversation.participants
+          .map(p => p._id.toString())
+          .filter(id => id !== userId);
+        if (recipients.length > 0) {
+          await this.sendMessageWithDelivery(userId, messageToSend, recipients);
         }
-      });
+      } catch (deliveryErr) {
+        logger.warn(`sendMessageWithDelivery failed for live message ${message._id}: ${deliveryErr.message}`);
+      }
 
 
       setImmediate(() => {
@@ -409,41 +405,44 @@ class MessageHandler {
     try {
       logger.info(`🔄 CACHE: Sending pending messages for user ${userId}`);
 
+      const seen = new Set();
 
       const offlineMessages = cache.getOfflineMessages(userId);
       if (offlineMessages.length > 0) {
         logger.info(`📤 CACHE: Found ${offlineMessages.length} cached offline messages for user ${userId}`);
         
-
-        const messagesByConversation = new Map();
-        offlineMessages.forEach(msg => {
-          const convId = msg.data?.conversationId || msg.data?.message?.conversation;
-          if (convId) {
-            if (!messagesByConversation.has(convId)) {
-              messagesByConversation.set(convId, []);
-            }
-            messagesByConversation.get(convId).push(msg);
-          }
+        // Reenviar cada mensagem como 'message:new' usando o mesmo fluxo de entrega/ACK
+        const sorted = [...offlineMessages].sort((a, b) => {
+          const at = new Date(a.data?.message?.createdAt || a.cached_at || 0).getTime();
+          const bt = new Date(b.data?.message?.createdAt || b.cached_at || 0).getTime();
+          return at - bt;
         });
 
-
-        for (const [conversationId, messages] of messagesByConversation) {
-          this.sendToUser(userId, {
-            type: 'message:offline_recovery',
-            data: {
-              conversationId,
-              messages: messages,
-              cached: true,
-              recovery: true
-            },
-            timestamp: new Date().toISOString()
-          });
+        for (const item of sorted) {
+          try {
+            if (item?.type === 'message:new' && item?.data?.message) {
+              const payload = item.data.message;
+              const mid = (payload && payload._id && payload._id.toString) ? payload._id.toString() : payload?._id;
+              if (mid && seen.has(mid)) continue;
+              const senderObj = payload.sender || {};
+              const senderId = (senderObj._id && senderObj._id.toString) ? senderObj._id.toString() : (senderObj.toString ? senderObj.toString() : senderObj);
+              // Usa o mesmo fluxo de envio com rastreio de entrega
+              await this.sendMessageWithDelivery(senderId, payload, [userId]);
+              if (mid) seen.add(mid);
+            }
+          } catch (err) {
+            logger.warn(`Failed to resend cached offline message for user ${userId}: ${err.message}`);
+          }
         }
-        
 
+        // Limpeza do cache após um período para garantir reprocessamento em caso de falha momentânea
         setTimeout(() => {
-          cache.clearOfflineMessages(userId);
-          logger.info(`🧹 CACHE: Cleared offline messages cache for user ${userId}`);
+          try {
+            cache.clearOfflineMessages(userId);
+            logger.info(`🧹 CACHE: Cleared offline messages cache for user ${userId}`);
+          } catch (e) {
+            logger.warn(`Could not clear offline cache for user ${userId}: ${e.message}`);
+          }
         }, 30000);
       }
 
@@ -457,7 +456,11 @@ class MessageHandler {
         const messages = await Message.find({
           conversation: conversation._id,
           sender: { $ne: userId },
-          'readBy.user': { $ne: userId }
+          'readBy.user': { $ne: userId },
+          $or: [
+            { 'metadata.deliveredTo': { $exists: false } },
+            { 'metadata.deliveredTo': { $nin: [userId] } }
+          ]
         })
           .populate('sender', 'name email avatar')
           .sort('createdAt')
@@ -469,15 +472,18 @@ class MessageHandler {
             content: decryptMessage(msg.content)
           }));
 
-          this.sendToUser(userId, {
-            type: 'message:pending',
-            data: {
-              conversationId: conversation._id,
-              messages: decryptedMessages,
-              requiresAck: true
-            },
-            timestamp: new Date().toISOString()
-          });
+          // Reenviar cada mensagem como 'message:new' com rastreio de entrega
+          for (const dm of decryptedMessages) {
+            try {
+              const mid = (dm && dm._id && dm._id.toString) ? dm._id.toString() : dm?._id;
+              if (mid && seen.has(mid)) continue;
+              const senderId = (dm.sender && dm.sender._id && dm.sender._id.toString) ? dm.sender._id.toString() : dm.sender;
+              await this.sendMessageWithDelivery(senderId, dm, [userId]);
+              if (mid) seen.add(mid);
+            } catch (err) {
+              logger.warn(`Failed to resend pending DB message ${dm._id} to user ${userId}: ${err.message}`);
+            }
+          }
         }
       }
 
@@ -679,6 +685,21 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       }
     });
+
+    // Persistir status de entrega no banco para evitar reenvio futuro
+    try {
+      await Message.findByIdAndUpdate(
+        messageId,
+        {
+          $addToSet: { 'metadata.deliveredTo': recipientId },
+          $set: { 'metadata.lastDeliveredAt': new Date() },
+          $pull: { 'metadata.pendingRecipients': recipientId }
+        },
+        { new: false }
+      );
+    } catch (dbErr) {
+      logger.warn(`Could not persist deliveredTo for message ${messageId} and user ${recipientId}: ${dbErr.message}`);
+    }
 
 
     if (bufferData.recipients.length === 0) {

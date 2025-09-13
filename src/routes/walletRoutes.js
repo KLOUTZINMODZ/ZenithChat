@@ -239,7 +239,6 @@ function onlyDigits(v) {
 
 function normalizePixType(t) {
   const u = String(t || '').toUpperCase().trim();
-  if (['PHONE', 'CELLPHONE', 'MOBILE', 'TELEFONE'].includes(u)) return 'PHONE';
   if (u === 'CPF') return 'CPF';
   if (u === 'CNPJ') return 'CNPJ';
   return null;
@@ -668,9 +667,8 @@ router.post('/pix-key', auth, async (req, res) => {
     }
 
     const t = normalizePixType(pixKeyType);
-    if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize Telefone, CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE' });
+    if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf','cnpj'] });
     const digits = normalizePixKeyByType(t, pixKey);
-    if (t === 'PHONE' && (digits.length < 10 || digits.length > 11)) return res.status(400).json({ success: false, message: 'Chave PIX Telefone inválida. Use DDD+Número (10 a 11 dígitos).', error: 'INVALID_PIX_KEY' });
     if (t === 'CPF' && digits.length !== 11) return res.status(400).json({ success: false, message: 'Chave PIX CPF inválida. Informe 11 dígitos.', error: 'INVALID_PIX_KEY' });
     if (t === 'CNPJ' && digits.length !== 14) return res.status(400).json({ success: false, message: 'Chave PIX CNPJ inválida. Informe 14 dígitos.', error: 'INVALID_PIX_KEY' });
 
@@ -1278,13 +1276,15 @@ router.post('/withdraw', auth, async (req, res) => {
       }
       normalizedPixKeyType = boundType;
       digits = boundDigits;
+      if (normalizedPixKeyType === 'PHONE') {
+        return res.status(400).json({ success: false, message: 'Chave PIX por Telefone não é suportada. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf','cnpj'] });
+      }
     } else {
 
       const t = normalizePixType(pixKeyType);
-      if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize Telefone, CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['phone','cpf','cnpj'] });
+      if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf','cnpj'] });
       normalizedPixKeyType = t;
       digits = normalizePixKeyByType(t, pixKey);
-      if (t === 'PHONE' && (digits.length < 10 || digits.length > 11)) return res.status(400).json({ success: false, message: 'Chave PIX Telefone inválida. Use DDD+Número (10 a 11 dígitos).', error: 'INVALID_PIX_KEY' });
       if (t === 'CPF' && digits.length !== 11) return res.status(400).json({ success: false, message: 'Chave PIX CPF inválida. Informe 11 dígitos.', error: 'INVALID_PIX_KEY' });
       if (t === 'CNPJ' && digits.length !== 14) return res.status(400).json({ success: false, message: 'Chave PIX CNPJ inválida. Informe 14 dígitos.', error: 'INVALID_PIX_KEY' });
       const fp = computePixFingerprint(t, digits);
