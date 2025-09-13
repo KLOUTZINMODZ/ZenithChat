@@ -1,6 +1,15 @@
 const logger = require('../utils/logger');
 const cache = require('../services/GlobalCache');
 
+const WS_VERBOSE = (process.env.WS_VERBOSE_LOGS === '1' || process.env.WS_VERBOSE_LOGS === 'true' || process.env.CHAT_DEBUG === '1');
+function vinfo(label, data = {}) {
+  try {
+    if (WS_VERBOSE) {
+      logger.info(`[WS-VERBOSE] ${label} ${JSON.stringify(data)}`);
+    }
+  } catch (_) {}
+}
+
 class ConnectionManager {
   constructor() {
     this.connections = new Map();
@@ -14,14 +23,18 @@ class ConnectionManager {
     
     this.connections.get(userId).add(ws);
 
+    vinfo('CM:ADD_CONNECTION', { userId: String(userId), totalConnections: this.getUserConnectionCount(userId) });
+
     const offlineStatus = cache.get(`offline_status:${userId}`);
     if (offlineStatus) {
       logger.info(`🔄 CACHE: User ${userId} reconnected - was offline since ${offlineStatus.activatedAt}`);
+      vinfo('CM:OFFLINE_STATUS', { userId: String(userId), since: offlineStatus.activatedAt });
     }
 
     const offlineMessages = cache.getOfflineMessages(userId);
     if (offlineMessages.length > 0) {
       logger.info(`📬 CACHE: User ${userId} reconnected - delivering ${offlineMessages.length} cached offline messages`);
+      vinfo('CM:OFFLINE_COUNT', { userId: String(userId), count: offlineMessages.length });
       this.sendCachedMessagesGradually(ws, userId, offlineMessages);
     }
   }
@@ -33,6 +46,7 @@ class ConnectionManager {
         this.connections.delete(userId);
         this.activeConversations.delete(userId);
       }
+      vinfo('CM:REMOVE_CONNECTION', { userId: String(userId), remaining: this.getUserConnectionCount(userId) });
     }
   }
 
@@ -110,17 +124,31 @@ class ConnectionManager {
     const sortedMessages = messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
     let i = 0;
+    vinfo('CM:SEND_CACHED_BEGIN', { userId: String(userId), total: sortedMessages.length });
     const interval = setInterval(() => {
       if (i >= sortedMessages.length || ws.readyState !== 1) {
         clearInterval(interval);
         if (i >= sortedMessages.length) {
           logger.info(`Finished sending offline messages to user ${userId}.`);
+          vinfo('CM:SEND_CACHED_END', { userId: String(userId), sent: i });
           cache.clearOfflineMessages(userId);
         }
         return;
       }
 
-      ws.send(JSON.stringify(sortedMessages[i]));
+      const msg = sortedMessages[i];
+      const meta = {
+        type: msg?.type,
+        conversationId: msg?.data?.conversationId || msg?.data?.message?.conversation,
+        messageId: msg?.data?.messageId || msg?.messageId,
+        cached_reason: msg?.cached_reason
+      };
+      vinfo('CM:SEND_CACHED_ITEM', { userId: String(userId), idx: i, ...meta });
+      try {
+        ws.send(JSON.stringify(msg));
+      } catch (err) {
+        vinfo('CM:SEND_CACHED_ERROR', { userId: String(userId), idx: i, error: err?.message, ...meta });
+      }
       i++;
     }, 300);
   }

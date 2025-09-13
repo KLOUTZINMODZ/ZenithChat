@@ -9,6 +9,15 @@ const { v4: uuidv4 } = require('uuid');
 const messageBuffer = new Map();
 const deliveryTimeouts = new Map();
 
+const WS_VERBOSE = (process.env.WS_VERBOSE_LOGS === '1' || process.env.WS_VERBOSE_LOGS === 'true' || process.env.CHAT_DEBUG === '1');
+function vinfo(label, data = {}) {
+  try {
+    if (WS_VERBOSE) {
+      logger.info(`[WS-VERBOSE] ${label} ${JSON.stringify(data)}`);
+    }
+  } catch (_) {}
+}
+
 class MessageHandler {
   constructor(connectionManager, conversationHandler = null) {
     this.connectionManager = connectionManager;
@@ -33,6 +42,7 @@ class MessageHandler {
     try {
       const { conversationId, content, type, messageType, attachments = [], tempId } = payload.data;
       const finalType = type || messageType || 'text';
+      vinfo('MSG:SEND:RECEIVED', { userId, conversationId, hasTempId: Boolean(tempId), type: finalType, attachmentsCount: (attachments || []).length });
 
       if (content && content.length > 10000) {
         logger.warn(`User ${userId} attempted to send message with ${content.length} characters (limit: 10,000). Banning user for exploit.`);
@@ -130,11 +140,14 @@ class MessageHandler {
         const recipients = conversation.participants
           .map(p => p._id.toString())
           .filter(id => id !== userId);
+        vinfo('MSG:SEND:DB_SAVED', { messageDbId: message._id?.toString?.() || message._id, conversationId, recipientsCount: recipients.length });
         if (recipients.length > 0) {
-          await this.sendMessageWithDelivery(userId, messageToSend, recipients);
+          const deliveryId = await this.sendMessageWithDelivery(userId, messageToSend, recipients);
+          vinfo('MSG:SEND:DELIVERY_ATTEMPT', { messageDbId: message._id?.toString?.() || message._id, conversationId, deliveryId, recipients });
         }
       } catch (deliveryErr) {
         logger.warn(`sendMessageWithDelivery failed for live message ${message._id}: ${deliveryErr.message}`);
+        vinfo('MSG:SEND:DELIVERY_ERROR', { messageDbId: message._id?.toString?.() || message._id, conversationId, error: deliveryErr?.message });
       }
 
 
@@ -406,6 +419,8 @@ class MessageHandler {
       logger.info(`🔄 CACHE: Sending pending messages for user ${userId}`);
 
       const seen = new Set();
+      const corrId = `replay_${userId}_${Date.now()}`;
+      vinfo('OFFLINE:BEGIN', { corrId, userId });
 
       const offlineMessages = cache.getOfflineMessages(userId);
       if (offlineMessages.length > 0) {
@@ -418,7 +433,8 @@ class MessageHandler {
           return at - bt;
         });
 
-        for (const item of sorted) {
+        for (let idx = 0; idx < sorted.length; idx++) {
+          const item = sorted[idx];
           try {
             if (item?.type === 'message:new' && item?.data?.message) {
               const payload = item.data.message;
@@ -427,11 +443,14 @@ class MessageHandler {
               const senderObj = payload.sender || {};
               const senderId = (senderObj._id && senderObj._id.toString) ? senderObj._id.toString() : (senderObj.toString ? senderObj.toString() : senderObj);
               // Usa o mesmo fluxo de envio com rastreio de entrega
-              await this.sendMessageWithDelivery(senderId, payload, [userId]);
+              vinfo('OFFLINE:CACHE_ITEM', { corrId, idx, userId, messageDbId: mid, conversationId: payload.conversation, senderId });
+              const deliveryId = await this.sendMessageWithDelivery(senderId, payload, [userId]);
+              vinfo('OFFLINE:CACHE_RESEND', { corrId, userId, messageDbId: mid, deliveryId, conversationId: payload.conversation });
               if (mid) seen.add(mid);
             }
           } catch (err) {
             logger.warn(`Failed to resend cached offline message for user ${userId}: ${err.message}`);
+            vinfo('OFFLINE:CACHE_RESEND_ERROR', { corrId, userId, error: err?.message });
           }
         }
 
@@ -466,6 +485,7 @@ class MessageHandler {
           .limit(100);
 
         if (messages.length > 0) {
+          vinfo('OFFLINE:DB_QUERY_RESULT', { corrId, userId, conversationId: conversation._id?.toString?.() || conversation._id, count: messages.length });
           const decryptedMessages = messages.map(msg => ({
             ...msg.toObject(),
             content: decryptMessage(msg.content)
@@ -477,15 +497,18 @@ class MessageHandler {
               const mid = (dm && dm._id && dm._id.toString) ? dm._id.toString() : dm?._id;
               if (mid && seen.has(mid)) continue;
               const senderId = (dm.sender && dm.sender._id && dm.sender._id.toString) ? dm.sender._id.toString() : dm.sender;
-              await this.sendMessageWithDelivery(senderId, dm, [userId]);
+              const deliveryId = await this.sendMessageWithDelivery(senderId, dm, [userId]);
+              vinfo('OFFLINE:DB_RESEND', { corrId, userId, messageDbId: mid, deliveryId, conversationId: dm.conversation });
               if (mid) seen.add(mid);
             } catch (err) {
               logger.warn(`Failed to resend pending DB message ${dm._id} to user ${userId}: ${err.message}`);
+              vinfo('OFFLINE:DB_RESEND_ERROR', { corrId, userId, messageDbId: dm?._id, error: err?.message });
             }
           }
         }
       }
 
+      vinfo('OFFLINE:END', { corrId, userId });
       logger.info(`✅ CACHE: Completed sending pending messages for user ${userId}`);
 
     } catch (error) {
@@ -505,21 +528,30 @@ class MessageHandler {
 
   sendToUser(userId, message) {
     const isUserOnline = this.connectionManager.isUserOnline(userId);
+    const meta = {
+      type: message?.type,
+      conversationId: message?.data?.conversationId || message?.data?.message?.conversation,
+      messageId: message?.data?.messageId || message?.messageId
+    };
+    vinfo('SEND_TO_USER:ENTRY', { userId: String(userId), isUserOnline, connections: this.connectionManager.getUserConnectionCount ? this.connectionManager.getUserConnectionCount(userId) : (this.connectionManager.getUserConnections(userId) || []).length, ...meta });
     
     if (isUserOnline) {
       const connections = this.connectionManager.getUserConnections(userId);
       let messageSent = false;
       
-      connections.forEach(ws => {
+      connections.forEach((ws, idx) => {
         if (ws.readyState === 1) {
+          vinfo('SEND_TO_USER:TRY', { userId: String(userId), idx, readyState: ws.readyState, ...meta });
           ws.send(JSON.stringify(message));
           messageSent = true;
+          vinfo('SEND_TO_USER:SENT', { userId: String(userId), idx, ...meta });
         }
       });
       
 
       if (!messageSent) {
         logger.info(`🔄 CACHE: User ${userId} online but send failed - caching message`);
+        vinfo('SEND_TO_USER:CACHE_ONLINE_FAIL', { userId: String(userId), ...meta });
         cache.cacheOfflineMessage(userId, {
           ...message,
           cached_reason: 'send_failed',
@@ -529,6 +561,7 @@ class MessageHandler {
     } else {
 
       logger.info(`📦 CACHE: User ${userId} is offline - caching message type: ${message.type}`);
+      vinfo('SEND_TO_USER:OFFLINE_CACHE', { userId: String(userId), ...meta });
       cache.cacheOfflineMessage(userId, {
         ...message,
         cached_reason: 'user_offline',
@@ -579,6 +612,7 @@ class MessageHandler {
     const bufferData = messageBuffer.get(messageId);
     if (!bufferData) return;
 
+
     const { message, recipients, attempts, senderId } = bufferData;
     const onlineRecipients = [];
     const offlineRecipients = [];
@@ -592,9 +626,14 @@ class MessageHandler {
       }
     });
 
+    const convId = (message && message.conversation && message.conversation.toString)
+      ? message.conversation.toString()
+      : (message ? message.conversation : undefined);
+    vinfo('DELIVERY:BEGIN', { messageId, senderId, recipientsTotal: recipients.length, online: onlineRecipients.length, offline: offlineRecipients.length, attempts, convId });
 
     const deliveryPromises = onlineRecipients.map(recipientId => {
       return new Promise((resolve) => {
+        vinfo('DELIVERY:SEND_TO', { messageId, recipientId, convId });
         const deliveryMessage = {
           type: 'message:new',
           data: {
@@ -617,6 +656,7 @@ class MessageHandler {
 
 
         deliveryTimeouts.set(`${messageId}_${recipientId}`, ackTimeout);
+        vinfo('DELIVERY:ACK_TIMEOUT_SET', { messageId, recipientId, timeoutMs: 5000 });
         resolve({ recipientId, delivered: true });
       });
     });
@@ -646,6 +686,7 @@ class MessageHandler {
         }, retryDelay);
 
         logger.info(`Scheduled retry ${bufferData.attempts}/${this.maxRetryAttempts} for message ${messageId} in ${retryDelay}ms`);
+        vinfo('DELIVERY:RETRY_SCHEDULED', { messageId, attempts: bufferData.attempts, retryDelay, remainingRecipients: bufferData.recipients });
       } else {
 
         logger.warn(`Message ${messageId} failed to deliver after ${this.maxRetryAttempts} attempts`);
@@ -658,6 +699,7 @@ class MessageHandler {
 
 
     this.sendDeliveryStatus(senderId, messageId, onlineRecipients, offlineRecipients.concat(failedDeliveries.map(f => f.recipientId)));
+    vinfo('DELIVERY:RESULTS', { messageId, onlineDelivered: onlineRecipients, failed: failedDeliveries.map(f => f.recipientId), offline: offlineRecipients });
   }
 
   /**
@@ -699,8 +741,10 @@ class MessageHandler {
         },
         { new: false }
       );
+      vinfo('ACK:DELIVERY:PERSISTED', { messageId, recipientId, remainingRecipients: bufferData.recipients.length });
     } catch (dbErr) {
       logger.warn(`Could not persist deliveredTo for message ${messageId} and user ${recipientId}: ${dbErr.message}`);
+      vinfo('ACK:DELIVERY:PERSIST_ERROR', { messageId, recipientId, error: dbErr?.message });
     }
 
 
