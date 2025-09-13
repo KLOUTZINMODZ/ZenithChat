@@ -12,7 +12,7 @@ const axios = require('axios');
 const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 
-const CHAT_API_URL = process.env.CHAT_API_BASE_URL || 'https://vast-beans-agree.loca.lt/';
+const CHAT_API_URL = process.env.CHAT_API_BASE_URL || 'https://zenith.enrelyugi.com.br/';
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
 

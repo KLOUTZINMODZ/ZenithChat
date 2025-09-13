@@ -134,7 +134,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       console.log(`🔍 [Proposal Accept] ProposalId matches boostingId, need to find actual proposal from conversation`);
       
       try {
-        const conversationResponse = await axios.get(`https://vast-beans-agree.loca.lt/api/conversations/${conversationId}`, {
+        const conversationResponse = await axios.get(`https://zenith.enrelyugi.com.br/api/conversations/${conversationId}`, {
           headers: { Authorization: req.headers.authorization }
         });
         

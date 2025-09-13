@@ -5,7 +5,7 @@
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 
-const CHAT_API_URL = 'https://vast-beans-agree.loca.lt/';
+const CHAT_API_URL = 'https://zenith.enrelyugi.com.br/';
 
 console.log('🧪 Testando notificações com user ID real do frontend...');
 

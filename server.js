@@ -40,7 +40,7 @@ const corsOptions = {
       'http://localhost:3000',
       'https://hacklotesite.vercel.app',
       'https://hacklote-front.vercel.app',
-      'https://vast-beans-agree.loca.lt'
+      'https://zenith.enrelyugi.com.br'
     ];
 
     if (!origin) {
