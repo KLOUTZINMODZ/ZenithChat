@@ -23,6 +23,8 @@ const offlineRoutes = require('./src/routes/offlineRoutes');
 const cache = require('./src/services/GlobalCache');
 const walletRoutes = require('./src/routes/walletRoutes');
 const temporaryChatCleanupService = require('./src/services/temporaryChatCleanupService');
+const purchasesRoutes = require('./src/routes/purchasesRoutes');
+const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseService');
 
 const app = express();
 
@@ -190,6 +192,7 @@ app.use('/api/offline', offlineRoutes);
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/purchases', purchasesRoutes);
 
 
 app._router.stack.forEach((middleware) => {
@@ -286,6 +289,14 @@ connectDB()
         temporaryChatCleanupService.start();
       } catch (e) {
         logger.error('Failed to start TemporaryChatCleanupService:', e);
+      }
+
+      // Start purchase auto-release background job
+      try {
+        purchaseAutoReleaseService.start(app);
+        logger.info('✅ Purchase auto-release service started');
+      } catch (e) {
+        logger.error('Failed to start purchase auto-release service:', e);
       }
     });
   })

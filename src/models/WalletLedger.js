@@ -14,7 +14,10 @@ const walletLedgerSchema = new mongoose.Schema({
     'withdraw_settle',
     'deposit_credit',
     'deposit_revert',
-    'adjustment'
+    'adjustment',
+    'purchase_reserve',
+    'purchase_refund',
+    'purchase_release'
   ], required: true },
 
   amount: { type: Number, required: true },

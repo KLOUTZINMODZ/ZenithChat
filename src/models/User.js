@@ -5,11 +5,20 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  legalName: {
+    type: String,
+    default: null,
+    trim: true
+  },
   email: {
     type: String,
     required: true,
     unique: true,
     trim: true
+  },
+  birthDate: {
+    type: Date,
+    default: null
   },
   cpfCnpj: {
     type: String,
