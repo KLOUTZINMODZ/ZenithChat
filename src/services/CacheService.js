@@ -162,11 +162,13 @@ class CacheService {
       const key = `offline:${userId}`;
       let messages = this.get(key) || [];
       
-      messages.push({
+      const cachedMessage = {
         ...message,
         timestamp: new Date(),
         cached: true
-      });
+      };
+      
+      messages.push(cachedMessage);
       
 
       if (messages.length > 50) {
@@ -174,7 +176,7 @@ class CacheService {
       }
       
       this.set(key, messages, 1296000);
-      logger.debug(`Cached offline message for user ${userId}`);
+      logger.info(`📦 CACHE: Cached offline message for user ${userId} - type: ${message.type}, reason: ${message.cached_reason}, total cached: ${messages.length}`);
     } catch (error) {
       logger.error('Error caching offline message:', error);
     }
@@ -183,7 +185,9 @@ class CacheService {
   getOfflineMessages(userId) {
     try {
       const key = `offline:${userId}`;
-      return this.get(key) || [];
+      const messages = this.get(key) || [];
+      logger.info(`📤 CACHE: Retrieved ${messages.length} offline messages for user ${userId}`);
+      return messages;
     } catch (error) {
       logger.error('Error getting offline messages:', error);
       return [];
@@ -193,8 +197,10 @@ class CacheService {
   clearOfflineMessages(userId) {
     try {
       const key = `offline:${userId}`;
+      const messages = this.get(key) || [];
+      const count = messages.length;
       this.delete(key);
-      logger.debug(`Cleared offline messages for user ${userId}`);
+      logger.info(`🧹 CACHE: Cleared ${count} offline messages for user ${userId}`);
     } catch (error) {
       logger.error('Error clearing offline messages:', error);
     }

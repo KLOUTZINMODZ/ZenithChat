@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
@@ -9,6 +10,7 @@ const WebSocketServer = require('./src/websocket/WebSocketServer');
 const connectDB = require('./src/config/database');
 const logger = require('./src/utils/logger');
 const messageRoutes = require('./src/routes/messageRoutes');
+const uploadRoutes = require('./src/routes/uploadRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
 const marketplaceWebhookRoutes = require('./src/routes/marketplaceWebhookRoutes');
@@ -19,8 +21,8 @@ const temporaryChatRoutes = require('./src/routes/temporaryChatRoutes');
 const proposalRoutes = require('./src/routes/proposalRoutes');
 const offlineRoutes = require('./src/routes/offlineRoutes');
 const cache = require('./src/services/GlobalCache');
+const walletRoutes = require('./src/routes/walletRoutes');
 const temporaryChatCleanupService = require('./src/services/temporaryChatCleanupService');
-
 
 const app = express();
 
@@ -28,12 +30,8 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 
-connectDB();
-
-
 app.use(helmet());
 app.use(compression());
-
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -42,18 +40,16 @@ const corsOptions = {
       'http://localhost:3000',
       'https://hacklotesite.vercel.app',
       'https://hacklote-front.vercel.app',
-      'https://zenith.enrelyugi.com.br'
+      'https://vast-beans-agree.loca.lt'
     ];
-    
 
     if (!origin) {
       callback(null, true);
       return;
     }
-    
 
-    if (allowedOrigins.includes(origin) || 
-        origin.includes('localhost') || 
+    if (allowedOrigins.includes(origin) ||
+        origin.includes('localhost') ||
         origin.includes('127.0.0.1') ||
         origin.includes('ngrok')) {
       callback(null, true);
@@ -78,10 +74,33 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '7d',
+  extensions: ['avif', 'png', 'jpg', 'jpeg'],
+  setHeaders: (res, servedPath) => {
+    try {
+      const ext = path.extname(servedPath || '').toLowerCase();
+      if (ext === '.avif') {
+        res.setHeader('Content-Type', 'image/avif');
+      } else if (ext === '.png') {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (ext === '.jpg' || ext === '.jpeg') {
+        res.setHeader('Content-Type', 'image/jpeg');
+      }
+
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    } catch (_) {}
+  }
+}));
 
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
@@ -139,19 +158,40 @@ app.get('/health', (req, res) => {
 });
 
 
-const cacheRoutes = require('./src/routes/cacheRoutes');
+const cacheRoutes = require('./src/routes/cache');
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
+
+app.use('/api/uploads', (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'] || '';
+    const masked = authHeader.replace(/(Bearer\s+)[A-Za-z0-9\-\._]+/i, '$1***');
+    console.log('[UPLOADS-LOGGER]', {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      contentType: req.headers['content-type'],
+      hasAuth: !!authHeader,
+      authMasked: masked,
+      query: req.query,
+      ip: req.ip
+    });
+  } catch (_) {}
+  next();
+});
+app.use('/api/uploads', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);
+
+app.use('/api/temporary-chat', temporaryChatRoutes);
 app.use('/api/proposals', proposalRoutes);
 app.use('/api/offline', offlineRoutes);
 app.use('/api/agreements', agreementRoutes);
+app.use('/api/cache', cacheRoutes);
+app.use('/api/wallet', walletRoutes);
 
 
-console.log('🔍 Rotas registradas:');
 app._router.stack.forEach((middleware) => {
   if (middleware.route) {
     console.log(`  ${Object.keys(middleware.route.methods)} ${middleware.route.path}`);
@@ -204,10 +244,10 @@ app.use((req, res) => {
 
 const wsServer = new WebSocketServer(server);
 
-// Set notification service for other modules
+
 app.locals.notificationService = wsServer.notificationService;
 
-// Set WebSocket server for proposal routes to emit real-time events
+
 app.set('webSocketServer', wsServer);
 
 
@@ -233,12 +273,23 @@ process.on('SIGINT', () => {
 
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  logger.info(`🚀 Chat API Server running on port ${PORT}`);
-  logger.info(`🔌 WebSocket server ready for connections`);
-  logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
-  logger.info(`🔗 Allowed origins: ${process.env.ALLOWED_ORIGINS}`);
-  
+connectDB()
+  .then(() => {
+    server.listen(PORT, () => {
+      logger.info(`🚀 Chat API Server running on port ${PORT}`);
+      logger.info(`🔌 WebSocket server ready for connections`);
+      logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
+      logger.info(`🔗 Allowed origins: ${process.env.ALLOWED_ORIGINS}`);
 
-  temporaryChatCleanupService.start();
-});
+
+      try {
+        temporaryChatCleanupService.start();
+      } catch (e) {
+        logger.error('Failed to start TemporaryChatCleanupService:', e);
+      }
+    });
+  })
+  .catch((err) => {
+    logger.error('❌ Failed to connect to MongoDB. Server not started.', err);
+    process.exit(1);
+  });

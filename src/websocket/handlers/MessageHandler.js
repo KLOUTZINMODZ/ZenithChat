@@ -6,26 +6,33 @@ const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
 const { v4: uuidv4 } = require('uuid');
 
-
 const messageBuffer = new Map();
 const deliveryTimeouts = new Map();
 
 class MessageHandler {
-  constructor(connectionManager) {
+  constructor(connectionManager, conversationHandler = null) {
     this.connectionManager = connectionManager;
+    this.conversationHandler = conversationHandler;
+    this.activeConversations = new Map();
+    this.typingTimeouts = new Map();
+    this.unreadCounts = new Map();
+    this.messageRetryQueue = new Map();
     
-
     this.maxRetryAttempts = 5;
     this.retryInterval = 2000;
     this.maxRetryInterval = 30000;
     
+    this.setupCleanupInterval();
+  }
 
+  setupCleanupInterval() {
     setInterval(() => this.cleanupOldMessages(), 60000);
   }
 
   async handleSendMessage(userId, payload) {
     try {
-      const { conversationId, content, type = 'text', attachments = [] } = payload;
+      const { conversationId, content, type, messageType, attachments = [], tempId } = payload.data;
+      const finalType = type || messageType || 'text';
 
       if (content && content.length > 10000) {
         logger.warn(`User ${userId} attempted to send message with ${content.length} characters (limit: 10,000). Banning user for exploit.`);
@@ -33,7 +40,7 @@ class MessageHandler {
         throw new Error('Message exceeds character limit. User has been banned for exploit attempt.');
       }
 
-      // Parallel database operations to reduce latency
+
       const [conversation] = await Promise.all([
         Conversation.findById(conversationId).populate('participants', 'name email'),
       ]);
@@ -50,6 +57,20 @@ class MessageHandler {
         throw new Error('User is not a participant in this conversation');
       }
 
+
+      const canReceive = typeof conversation.canReceiveMessages === 'function'
+        ? conversation.canReceiveMessages()
+        : (conversation.isActive && conversation.status !== 'expired');
+      const deletedFor = conversation.metadata && (conversation.metadata.get 
+        ? conversation.metadata.get('deletedFor') 
+        : conversation.metadata?.deletedFor);
+      if (!canReceive) {
+        throw new Error('Conversation is blocked or finalized');
+      }
+      if (Array.isArray(deletedFor) && deletedFor.map(id => id.toString()).includes(userId.toString())) {
+        throw new Error('Conversation not available');
+      }
+
       const encryptedContent = encryptMessage(content);
       const now = new Date();
 
@@ -57,12 +78,12 @@ class MessageHandler {
         conversation: conversationId,
         sender: userId,
         content: encryptedContent,
-        type,
+        type: finalType,
         attachments,
         readBy: [{ user: userId, readAt: now }]
       });
 
-      // Update conversation data
+
       conversation.lastMessage = message._id;
       conversation.lastMessageAt = now;
       conversation.unreadCount = conversation.unreadCount || {};
@@ -74,13 +95,18 @@ class MessageHandler {
         }
       });
 
-      // Parallel save operations
+
       await Promise.all([
         message.save(),
         conversation.save()
       ]);
 
-      // Populate sender info
+
+      if (this.conversationHandler) {
+        await this.conversationHandler.onNewMessage(conversationId);
+      }
+
+
       await message.populate('sender', 'name email avatar');
 
       const messageToSend = {
@@ -88,7 +114,7 @@ class MessageHandler {
         content: content
       };
 
-      // Send messages immediately without waiting for cache operations
+
       const broadcastMessage = {
         type: 'message:new',
         data: {
@@ -98,32 +124,30 @@ class MessageHandler {
         timestamp: now.toISOString()
       };
 
-      // Send confirmation to sender immediately
+
       this.sendToUser(userId, {
-        ...broadcastMessage,
-        type: 'message:sent'
+        type: 'message:sent',
+        data: {
+          message: messageToSend,
+          tempId: tempId,
+        },
+        timestamp: now.toISOString()
       });
 
-      // Send to all participants immediately
-      const participantIds = conversation.participants
-        .filter(p => p._id.toString() !== userId)
-        .map(p => p._id.toString());
-      
-      logger.info(`📢 Broadcasting message to ${participantIds.length} participants: [${participantIds.join(', ')}]`);
-      
-      participantIds.forEach(participantId => {
-        logger.info(`📤 Sending message to participant ${participantId}`);
-        this.sendToUser(participantId, broadcastMessage);
+
+      conversation.participants.forEach(participant => {
+        if (participant._id.toString() !== userId) {
+          this.sendToUser(participant._id.toString(), broadcastMessage);
+        }
       });
 
-      // Cache operations in background (non-blocking)
+
       setImmediate(() => {
         const participantIds = conversation.participants.map(p => p._id.toString());
         cache.invalidateConversationCache(conversationId, participantIds);
         cache.cacheMessage(conversationId, messageToSend);
       });
 
-      logger.info(`✅ Message processing completed for conversation ${conversationId} by user ${userId}`);
 
     } catch (error) {
       logger.error('Error handling send message:', error);
@@ -210,7 +234,6 @@ class MessageHandler {
         });
       }
 
-      logger.info(`Messages marked as read in conversation ${conversationId} by user ${userId}`);
 
     } catch (error) {
       logger.error('Error marking messages as read:', error);
@@ -222,12 +245,15 @@ class MessageHandler {
     try {
       const { conversationId } = payload;
 
+
       this.connectionManager.setActiveConversation(userId, conversationId);
+
 
       await this.handleMarkAsRead(userId, { 
         conversationId,
         messageIds: await this.getUnreadMessageIds(userId, conversationId)
       });
+
 
       this.sendToUser(userId, {
         type: 'conversation:opened',
@@ -235,105 +261,9 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       });
 
-      logger.info(`User ${userId} opened conversation ${conversationId}`);
 
     } catch (error) {
       logger.error('Error opening conversation:', error);
-      this.sendError(userId, error.message);
-    }
-  }
-
-  async handleConversationSync(userId, payload) {
-    try {
-      const { conversationId, lastSeen } = payload;
-      
-      logger.info(`🔄 Syncing conversation ${conversationId} for user ${userId} since ${lastSeen}`);
-
-      // Validate lastSeen timestamp
-      const lastSeenDate = lastSeen ? new Date(lastSeen) : new Date(Date.now() - 24 * 60 * 60 * 1000); // Default to 24h ago
-      
-      if (isNaN(lastSeenDate.getTime())) {
-        logger.warn(`⚠️ Invalid lastSeen timestamp: ${lastSeen}, using 1 hour ago`);
-        lastSeenDate = new Date(Date.now() - 60 * 60 * 1000);
-      }
-
-      // Find messages since lastSeen timestamp
-      const messages = await Message.find({
-        conversation: conversationId,
-        createdAt: { $gt: lastSeenDate },
-        sender: { $ne: userId } // Don't send user's own messages back
-      })
-        .populate('sender', 'name email avatar')
-        .sort('createdAt')
-        .limit(50);
-
-      // Also check for cached messages for this conversation
-      const cachedMessages = cache.getOfflineMessages(userId) || [];
-      const conversationCachedMessages = cachedMessages.filter(msg => {
-        const msgConvId = msg.data?.conversationId || msg.data?.message?.conversation;
-        return msgConvId === conversationId;
-      });
-
-      if (messages.length > 0 || conversationCachedMessages.length > 0) {
-        const decryptedMessages = messages.map(msg => ({
-          ...msg.toObject(),
-          content: decryptMessage(msg.content)
-        }));
-
-        // Combine database messages with cached messages
-        const allMessages = [...decryptedMessages];
-        
-        if (conversationCachedMessages.length > 0) {
-          conversationCachedMessages.forEach(cachedMsg => {
-            const msgData = cachedMsg.data?.message || cachedMsg.data;
-            if (msgData && !allMessages.find(m => m._id === msgData._id)) {
-              allMessages.push(msgData);
-            }
-          });
-        }
-
-        // Sort by creation date
-        allMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-        this.sendToUser(userId, {
-          type: 'message:sync',
-          data: {
-            conversationId,
-            messages: allMessages,
-            synced: true,
-            syncedAt: new Date().toISOString()
-          },
-          timestamp: new Date().toISOString()
-        });
-
-        logger.info(`📤 Sent ${allMessages.length} missed messages (${messages.length} from DB, ${conversationCachedMessages.length} cached) to user ${userId} for conversation ${conversationId}`);
-        
-        // Remove cached messages for this conversation after successful sync
-        if (conversationCachedMessages.length > 0) {
-          const remainingCached = cachedMessages.filter(msg => {
-            const msgConvId = msg.data?.conversationId || msg.data?.message?.conversation;
-            return msgConvId !== conversationId;
-          });
-          cache.setOfflineMessages(userId, remainingCached);
-        }
-      } else {
-        // Send empty sync response to confirm sync completed
-        this.sendToUser(userId, {
-          type: 'message:sync',
-          data: {
-            conversationId,
-            messages: [],
-            synced: true,
-            syncedAt: new Date().toISOString()
-          },
-          timestamp: new Date().toISOString()
-        });
-        
-        logger.info(`✅ No missed messages for user ${userId} in conversation ${conversationId}`);
-      }
-
-    } catch (error) {
-      logger.error('❌ Error syncing conversation:', error);
       this.sendError(userId, error.message);
     }
   }
@@ -352,7 +282,6 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       });
 
-      logger.info(`User ${userId} closed conversation ${conversationId}`);
 
     } catch (error) {
       logger.error('Error closing conversation:', error);
@@ -362,13 +291,27 @@ class MessageHandler {
 
   async handleListConversations(userId, ws) {
     try {
-      const conversations = await Conversation.find({
+      const conversationsAll = await Conversation.find({
         participants: userId
       })
         .populate('participants', 'name email avatar')
         .populate('lastMessage')
         .sort('-lastMessageAt')
         .limit(50);
+
+
+      const conversations = conversationsAll.filter(conv => {
+        try {
+          const deletedFor = conv.metadata && (conv.metadata.get 
+            ? conv.metadata.get('deletedFor') 
+            : conv.metadata?.deletedFor);
+          if (Array.isArray(deletedFor)) {
+            const list = deletedFor.map(id => id.toString());
+            return !list.includes(userId.toString());
+          }
+        } catch (_) {}
+        return true;
+      });
 
       const conversationData = conversations.map(conv => {
         const convObj = conv.toObject();
@@ -409,7 +352,6 @@ class MessageHandler {
 
       let cachedMessages = cache.get(cacheKey);
       if (cachedMessages) {
-        logger.debug(`Cache hit for message history conversation ${conversationId}`);
         this.sendToUser(userId, {
           type: 'message:history',
           data: {
@@ -447,7 +389,6 @@ class MessageHandler {
 
 
       cache.set(cacheKey, decryptedMessages, 600);
-      logger.debug(`Cached message history for conversation ${conversationId}`);
 
       this.sendToUser(userId, {
         type: 'message:history',
@@ -466,14 +407,14 @@ class MessageHandler {
 
   async sendPendingMessages(userId, ws) {
     try {
-      logger.info(`🔄 Sending pending messages for user ${userId}`);
+      logger.info(`🔄 CACHE: Sending pending messages for user ${userId}`);
 
-      // 1. Send cached offline messages first
+
       const offlineMessages = cache.getOfflineMessages(userId);
       if (offlineMessages.length > 0) {
-        logger.info(`📤 Found ${offlineMessages.length} cached offline messages for user ${userId}`);
+        logger.info(`📤 CACHE: Found ${offlineMessages.length} cached offline messages for user ${userId}`);
         
-        // Group messages by conversation
+
         const messagesByConversation = new Map();
         offlineMessages.forEach(msg => {
           const convId = msg.data?.conversationId || msg.data?.message?.conversation;
@@ -485,30 +426,32 @@ class MessageHandler {
           }
         });
 
+
         for (const [conversationId, messages] of messagesByConversation) {
           this.sendToUser(userId, {
-            type: 'message:cached',
+            type: 'message:offline_recovery',
             data: {
               conversationId,
-              messages: messages.map(m => m.data?.message || m.data),
-              cached: true
+              messages: messages,
+              cached: true,
+              recovery: true
             },
             timestamp: new Date().toISOString()
           });
         }
         
-        // Clear cache after sending
-        cache.clearOfflineMessages(userId);
-        logger.info(`🗑️ Cleared cached messages for user ${userId}`);
+
+        setTimeout(() => {
+          cache.clearOfflineMessages(userId);
+          logger.info(`🧹 CACHE: Cleared offline messages cache for user ${userId}`);
+        }, 30000);
       }
 
-      // 2. Send unread messages from database
+
       const conversations = await Conversation.find({
         participants: userId,
         [`unreadCount.${userId}`]: { $gt: 0 }
       });
-
-      logger.info(`📋 Found ${conversations.length} conversations with unread messages for user ${userId}`);
 
       for (const conversation of conversations) {
         const messages = await Message.find({
@@ -535,15 +478,13 @@ class MessageHandler {
             },
             timestamp: new Date().toISOString()
           });
-          
-          logger.info(`📤 Sent ${messages.length} pending messages for conversation ${conversation._id}`);
         }
       }
 
-      logger.info(`✅ Completed sending pending messages for user ${userId}`);
+      logger.info(`✅ CACHE: Completed sending pending messages for user ${userId}`);
 
     } catch (error) {
-      logger.error('❌ Error sending pending messages:', error);
+      logger.error('Error sending pending messages:', error);
     }
   }
 
@@ -559,34 +500,21 @@ class MessageHandler {
 
   sendToUser(userId, message) {
     const isUserOnline = this.connectionManager.isUserOnline(userId);
-    const connections = this.connectionManager.getUserConnections(userId);
     
-    logger.info(`📤 Attempting to send ${message.type} to user ${userId}. Online: ${isUserOnline}, Connections: ${connections.length}`);
-    
-    if (isUserOnline && connections.length > 0) {
+    if (isUserOnline) {
+      const connections = this.connectionManager.getUserConnections(userId);
       let messageSent = false;
-      let activeConnections = 0;
       
-      connections.forEach((ws, index) => {
-        logger.info(`🔍 Connection ${index}: readyState=${ws.readyState} (1=OPEN)`);
+      connections.forEach(ws => {
         if (ws.readyState === 1) {
-          try {
-            ws.send(JSON.stringify(message));
-            messageSent = true;
-            activeConnections++;
-            logger.info(`✅ Message ${message.type} sent successfully to user ${userId} via connection ${index}`);
-          } catch (error) {
-            logger.error(`❌ Failed to send message to user ${userId} connection ${index}: ${error.message}`);
-          }
-        } else {
-          logger.warn(`⚠️ Connection ${index} for user ${userId} not ready (state: ${ws.readyState})`);
+          ws.send(JSON.stringify(message));
+          messageSent = true;
         }
       });
       
-      if (messageSent) {
-        logger.info(`📨 Message ${message.type} delivered to user ${userId} via ${activeConnections} connection(s)`);
-      } else {
-        logger.error(`❌ User ${userId} is online but message failed to send to any connection. Caching for retry.`);
+
+      if (!messageSent) {
+        logger.info(`🔄 CACHE: User ${userId} online but send failed - caching message`);
         cache.cacheOfflineMessage(userId, {
           ...message,
           cached_reason: 'send_failed',
@@ -594,8 +522,8 @@ class MessageHandler {
         });
       }
     } else {
-      // User is truly offline - cache the message
-      logger.info(`💾 User ${userId} is offline (online: ${isUserOnline}, connections: ${connections.length}). Caching message ${message.type}.`);
+
+      logger.info(`📦 CACHE: User ${userId} is offline - caching message type: ${message.type}`);
       cache.cacheOfflineMessage(userId, {
         ...message,
         cached_reason: 'user_offline',
@@ -798,6 +726,105 @@ class MessageHandler {
   }
 
   /**
+   * Send aggregated delivery status to sender
+   */
+  sendDeliveryStatus(senderId, messageId, delivered, pending) {
+    try {
+      const deliveredCount = Array.isArray(delivered) ? delivered.length : (delivered || 0);
+      const pendingCount = Array.isArray(pending) ? pending.length : (pending || 0);
+      this.sendToUser(senderId, {
+        type: 'message:delivery_status',
+        data: {
+          messageId,
+          delivered: deliveredCount,
+          pending: pendingCount,
+          status: pendingCount === 0 ? 'delivered' : 'pending',
+          timestamp: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      logger.error('Error sending delivery status:', error);
+    }
+  }
+
+  /**
+   * Store message as pending for offline recipients
+   */
+  async storePendingMessage(messageId, recipients) {
+    try {
+
+      const bufferData = messageBuffer.get(messageId);
+      let conversationId = null;
+      let messagePayload = null;
+
+      if (bufferData && bufferData.message) {
+        const msgObj = bufferData.message;
+        conversationId = (msgObj.conversation && msgObj.conversation.toString) 
+          ? msgObj.conversation.toString() 
+          : (msgObj.conversation || null);
+        messagePayload = { ...msgObj };
+      } else {
+
+        const dbMsg = await Message.findById(messageId).populate('sender', 'name email avatar');
+        if (dbMsg) {
+          conversationId = dbMsg.conversation?.toString() || null;
+          messagePayload = {
+            ...dbMsg.toObject(),
+            content: decryptMessage(dbMsg.content)
+          };
+        }
+      }
+
+      if (!messagePayload) {
+        logger.warn(`storePendingMessage: unable to resolve message payload for ${messageId}`);
+        return;
+      }
+
+
+      const wsMessage = {
+        type: 'message:new',
+        data: {
+          message: messagePayload,
+          conversationId: conversationId || messagePayload.conversation,
+          requiresAck: true
+        },
+        timestamp: new Date().toISOString(),
+        persistedOffline: true,
+        messageId
+      };
+
+
+      recipients.forEach((recipientId) => {
+        cache.cacheOfflineMessage(recipientId, {
+          ...wsMessage,
+          cached_reason: 'undelivered_after_retries',
+          cached_at: new Date().toISOString()
+        });
+      });
+
+
+      try {
+        await Message.findByIdAndUpdate(
+          messageId,
+          {
+            $set: {
+              'metadata.pendingRecipients': recipients,
+              'metadata.pendingStoredAt': new Date(),
+              'metadata.deliveryAttempts': bufferData?.attempts ?? null
+            }
+          }
+        );
+      } catch (metaErr) {
+        logger.warn(`storePendingMessage: could not persist pending metadata for ${messageId}: ${metaErr.message}`);
+      }
+
+      logger.info(`Storing message ${messageId} as pending for offline recipients (${recipients.length})`);
+    } catch (error) {
+      logger.error('Error storing pending message:', error);
+    }
+  }
+
+  /**
    * Handle delivery failure after max retries
    */
   handleDeliveryFailure(messageId, failedRecipients) {
@@ -816,36 +843,6 @@ class MessageHandler {
 
 
     this.storePendingMessage(messageId, failedRecipients);
-    
-
-    messageBuffer.delete(messageId);
-
-    logger.warn(`Message ${messageId} delivery failed for recipients: ${failedRecipients.join(', ')}`);
-  }
-
-  /**
-   * Store message as pending for offline recipients
-   */
-  async storePendingMessage(messageId, recipients) {
-
-
-    logger.info(`Storing message ${messageId} as pending for offline recipients`);
-  }
-
-  /**
-   * Send delivery status to sender
-   */
-  sendDeliveryStatus(senderId, messageId, delivered, pending) {
-    this.sendToUser(senderId, {
-      type: 'message:delivery_status',
-      data: {
-        messageId,
-        delivered: delivered.length,
-        pending: pending.length,
-        status: pending.length === 0 ? 'delivered' : 'pending',
-        timestamp: new Date().toISOString()
-      }
-    });
   }
 
   /**

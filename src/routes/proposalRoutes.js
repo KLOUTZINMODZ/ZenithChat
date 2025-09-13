@@ -4,6 +4,8 @@ const { auth } = require('../middleware/auth');
 
 
 const axios = require('axios');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
 
 
 router.get('/', (req, res) => {
@@ -46,12 +48,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
     const { conversationId, boosterId, clientId, metadata = {} } = req.body;
-    let boostingId = metadata?.boostingId;
     let actualProposalId = proposalId;
-    
+    let boostingId = metadata?.boostingId;
+    let lookupData = null;
 
-    const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api';
-    
     console.log(`🔍 [Proposal Accept] Received request for proposal: ${proposalId}`);
     console.log(`🔍 [Proposal Accept] ConversationId: ${conversationId}`);
     console.log(`🔍 [Proposal Accept] BoosterId: ${boosterId}`);
@@ -81,105 +81,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         });
         
         console.log('✅ [Proposal Accept] Lookup successful:', lookupResponse.data);
+        lookupData = lookupResponse.data;
         boostingId = lookupResponse.data.boostingId;
         
 
         if (lookupResponse.data.actualProposalId) {
           actualProposalId = lookupResponse.data.actualProposalId;
           console.log('✅ [Proposal Accept] Using actualProposalId from lookup:', actualProposalId);
-
-          const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${boostingId}/proposals/${actualProposalId}/accept`;
-          console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
-          
-          const response = await axios.post(forwardUrl, {
-            conversationId,
-            boosterId,
-            clientId
-          }, {
-            headers: { Authorization: req.headers.authorization }
-          });
-          
-          console.log('✅ [Proposal Accept] HackLoteAPI response:', response.data);
-          // 🚀 EMIT WEBSOCKET EVENT FOR REAL-TIME UPDATES
-          try {
-            const webSocketServer = req.app.get('webSocketServer');
-            if (webSocketServer) {
-              console.log('📡 [Proposal Accept] Emitting WebSocket events for real-time updates...');
-              
-              // Emit to client
-              if (clientId) {
-                const clientEvent = {
-                  type: 'proposal:accepted',
-                  data: {
-                    conversationId,
-                    proposalId: actualProposalId,
-                    boostingId,
-                    acceptedProposal: response.data.acceptedProposal,
-                    status: 'accepted',
-                    acceptedAt: new Date().toISOString(),
-                    acceptedBy: 'client',
-                    clientId,
-                    boosterId
-                  }
-                };
-                
-                webSocketServer.sendToUser(clientId, clientEvent);
-                console.log(`✅ [Proposal Accept] WebSocket event sent to client: ${clientId}`);
-              }
-              
-              // Emit to booster
-              if (boosterId) {
-                const boosterEvent = {
-                  type: 'proposal:accepted',
-                  data: {
-                    conversationId,
-                    proposalId: actualProposalId,
-                    boostingId,
-                    acceptedProposal: response.data.acceptedProposal,
-                    status: 'accepted',
-                    acceptedAt: new Date().toISOString(),
-                    acceptedBy: 'client',
-                    clientId,
-                    boosterId
-                  }
-                };
-                
-                webSocketServer.sendToUser(boosterId, boosterEvent);
-                console.log(`✅ [Proposal Accept] WebSocket event sent to booster: ${boosterId}`);
-              }
-              
-              // Also emit conversation update event
-              const conversationUpdateEvent = {
-                type: 'conversation:updated',
-                data: {
-                  conversationId,
-                  status: 'accepted',
-                  isTemporary: false,
-                  boostingStatus: 'active',
-                  updatedAt: new Date().toISOString()
-                }
-              };
-              
-              // Send to both participants
-              if (clientId) webSocketServer.sendToUser(clientId, conversationUpdateEvent);
-              if (boosterId) webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
-              
-              console.log('✅ [Proposal Accept] All WebSocket events emitted successfully');
-            } else {
-              console.warn('⚠️ [Proposal Accept] WebSocket server not available for real-time updates');
-            }
-          } catch (wsError) {
-            console.error('❌ [Proposal Accept] Error emitting WebSocket events:', wsError);
-            // Don't fail the request if WebSocket fails
-          }
-          
-          res.json(response.data);
         }
       } catch (lookupError) {
         console.log('❌ [Proposal Accept] Lookup failed:', lookupError.message);
         console.log('❌ [Proposal Accept] Lookup error details:', lookupError.response?.data);
         
-
         const mongoose = require('mongoose');
         if (mongoose.Types.ObjectId.isValid(proposalId)) {
           console.log('🔍 [Proposal Accept] Checking if proposalId', proposalId, 'is actually a boostingId...');
@@ -202,7 +115,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     console.log(`🔍 [Proposal Accept] Final BoostingId: ${boostingId}`);
     
-
     if (!boostingId || boostingId === 'undefined') {
       console.error(`❌ [Proposal Accept] Invalid boostingId: ${boostingId}`);
       return res.status(500).json({
@@ -218,14 +130,11 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
 
 
-    
-
-    if (boostingId === proposalId) {
+    if (boostingId === proposalId && !lookupData?.actualProposalId) {
       console.log(`🔍 [Proposal Accept] ProposalId matches boostingId, need to find actual proposal from conversation`);
       
-
       try {
-        const conversationResponse = await axios.get(`https://zenith.enrelyugi.com.br/api/conversations/${conversationId}`, {
+        const conversationResponse = await axios.get(`https://vast-beans-agree.loca.lt/api/conversations/${conversationId}`, {
           headers: { Authorization: req.headers.authorization }
         });
         
@@ -235,19 +144,13 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         if (conversationData?.metadata?.proposalId) {
           actualProposalId = conversationData.metadata.proposalId;
           console.log('✅ [Proposal Accept] Found actual proposalId from conversation metadata:', actualProposalId);
-        } else {
-
-          actualProposalId = '68b20f91700c9ea834bd7633';
-          console.log('⚠️ [Proposal Accept] Using fallback actualProposalId:', actualProposalId);
         }
       } catch (error) {
         console.log('❌ [Proposal Accept] Error fetching conversation metadata:', error.message);
-        actualProposalId = '68b20f91700c9ea834bd7633';
-        console.log('⚠️ [Proposal Accept] Using fallback actualProposalId:', actualProposalId);
       }
     }
     
-    const forwardUrl = `${hackLoteApiUrl}/boosting-requests/${boostingId}/proposals/${actualProposalId}/accept`;
+    const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${actualProposalId}/accept`;
     
     console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
     
@@ -265,13 +168,12 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     console.log(`✅ [Proposal Accept] HackLoteAPI response:`, response.data);
     
-    // 🚀 EMIT WEBSOCKET EVENT FOR REAL-TIME UPDATES
+
     try {
       const webSocketServer = req.app.get('webSocketServer');
       if (webSocketServer) {
         console.log('📡 [Proposal Accept] Emitting WebSocket events for real-time updates...');
         
-        // Emit to client
         if (clientId) {
           const clientEvent = {
             type: 'proposal:accepted',
@@ -292,7 +194,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           console.log(`✅ [Proposal Accept] WebSocket event sent to client: ${clientId}`);
         }
         
-        // Emit to booster
         if (boosterId) {
           const boosterEvent = {
             type: 'proposal:accepted',
@@ -313,7 +214,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           console.log(`✅ [Proposal Accept] WebSocket event sent to booster: ${boosterId}`);
         }
         
-        // Also emit conversation update event
         const conversationUpdateEvent = {
           type: 'conversation:updated',
           data: {
@@ -325,7 +225,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           }
         };
         
-        // Send to both participants
         if (clientId) webSocketServer.sendToUser(clientId, conversationUpdateEvent);
         if (boosterId) webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
         
@@ -335,10 +234,55 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       }
     } catch (wsError) {
       console.error('❌ [Proposal Accept] Error emitting WebSocket events:', wsError);
-      // Don't fail the request if WebSocket fails
+
     }
     
-    res.json(response.data);
+
+
+    try {
+      let acceptedConv = null;
+      if (conversationId) {
+        acceptedConv = await Conversation.findById(conversationId);
+      }
+      if (!acceptedConv) {
+        acceptedConv = await Conversation.findOne({
+          isTemporary: true,
+          $or: [
+            { 'metadata.proposalId': actualProposalId },
+            { proposal: actualProposalId }
+          ]
+        });
+      }
+
+      if (acceptedConv) {
+        acceptedConv.isTemporary = false;
+        acceptedConv.status = 'accepted';
+        acceptedConv.expiresAt = null;
+        acceptedConv.boostingStatus = 'active';
+        await acceptedConv.save();
+
+        const wsServer = req.app.get('webSocketServer');
+        if (wsServer) {
+          const participants = acceptedConv.participants.map(p => p.toString ? p.toString() : p);
+          participants.forEach(pid => {
+            wsServer.sendToUser(pid, {
+              type: 'conversation:updated',
+              data: {
+                conversationId: acceptedConv._id,
+                status: 'accepted',
+                isTemporary: false,
+                boostingStatus: 'active',
+                updatedAt: new Date().toISOString()
+              }
+            });
+          });
+        }
+      }
+    } catch (cleanupError) {
+      console.error('❌ Error updating accepted conversation:', cleanupError);
+    }
+
+    return res.json(response.data);
     
   } catch (error) {
     console.error('❌ [Proposal Accept] Error:', error.message);
@@ -348,7 +292,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       return res.status(error.response.status).json(error.response.data);
     }
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: 'Erro interno do servidor ao aceitar proposta',
       error: error.message

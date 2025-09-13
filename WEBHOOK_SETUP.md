@@ -33,7 +33,7 @@ JWT_SECRET=your_jwt_secret
 
 # Novas variáveis para comunicação interna
 VERCEL_API_SECRET=your_secure_secret_key_here
-CHAT_API_URL=https://zenith.enrelyugi.com.br
+CHAT_API_URL=https://vast-beans-agree.loca.lt
 ```
 
 ## 🚀 Endpoints Criados
@@ -79,21 +79,21 @@ Notification URL: https://your-chat-api-domain.com/api/marketplace-webhook/merca
 
 ### Para desenvolvimento local
 ```
-Notification URL: https://zenith.enrelyugi.com.br/api/marketplace-webhook/mercadopago-webhook
+Notification URL: https://vast-beans-agree.loca.lt/api/marketplace-webhook/mercadopago-webhook
 ```
 
 ## 🧪 Como Testar
 
 ### 1. Teste Local Simples
 ```bash
-curl -X POST https://zenith.enrelyugi.com.br/api/marketplace-webhook/test-webhook \
+curl -X POST https://vast-beans-agree.loca.lt/api/marketplace-webhook/test-webhook \
   -H "Content-Type: application/json" \
   -d '{"userId": "USER_ID_HERE", "paymentId": "test_payment_123"}'
 ```
 
 ### 2. Simulação de Webhook do Mercado Pago
 ```bash
-curl -X POST https://zenith.enrelyugi.com.br/api/marketplace-webhook/mercadopago-webhook \
+curl -X POST https://vast-beans-agree.loca.lt/api/marketplace-webhook/mercadopago-webhook \
   -H "Content-Type: application/json" \
   -d '{
     "type": "payment",
@@ -106,7 +106,7 @@ curl -X POST https://zenith.enrelyugi.com.br/api/marketplace-webhook/mercadopago
 
 ### 3. Health Check
 ```bash
-curl https://zenith.enrelyugi.com.br/api/marketplace-webhook/health
+curl https://vast-beans-agree.loca.lt/api/marketplace-webhook/health
 ```
 
 ## 🔄 Processo de Deploy

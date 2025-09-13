@@ -6,16 +6,6 @@ const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
 const { v4: uuidv4 } = require('uuid');
 
-/**
- * WhatsApp-like Message Handler
- * Implements efficient message delivery system with:
- * - Message buffering for offline users
- * - Delivery confirmations (ACK system)
- * - Exponential backoff retry
- * - Automatic cleanup of delivered messages
- * - Read receipts
- * - Typing indicators
- */
 class WhatsAppMessageHandler {
   constructor(connectionManager) {
     this.connectionManager = connectionManager;
@@ -34,7 +24,6 @@ class WhatsAppMessageHandler {
 
     this.startCleanupIntervals();
     
-    logger.info('WhatsApp-like Message Handler initialized');
   }
 
   startCleanupIntervals() {

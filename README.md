@@ -73,8 +73,8 @@ npm start
 ```
 
 O servidor estará disponível em:
-- HTTP: `http://zenith.enrelyugi.com.br`
-- WebSocket: `ws://zenith.enrelyugi.com.br/ws`
+- HTTP: `http://vast-beans-agree.loca.lt`
+- WebSocket: `ws://vast-beans-agree.loca.lt/ws`
 
 ## 🔌 Integração com o Frontend
 
@@ -83,7 +83,7 @@ O servidor estará disponível em:
 No arquivo `.env` do frontend:
 ```env
 # Desenvolvimento local
-VITE_CHAT_WS_URL=ws://zenith.enrelyugi.com.br/ws
+VITE_CHAT_WS_URL=ws://vast-beans-agree.loca.lt/ws
 
 # Produção (exemplo)
 VITE_CHAT_WS_URL=wss://chat-api.hacklote.com/ws
@@ -157,7 +157,7 @@ function ChatComponent() {
 
 ### Health Check
 ```bash
-curl http://zenith.enrelyugi.com.br/health
+curl http://vast-beans-agree.loca.lt/health
 ```
 
 ### Logs

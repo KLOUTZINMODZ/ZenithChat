@@ -26,9 +26,15 @@ const messageSchema = new mongoose.Schema({
   },
   attachments: [{
     url: String,
+    thumbUrl: String,
+    urlJpeg: String,
+    thumbUrlJpeg: String,
     name: String,
     size: Number,
-    mimeType: String
+    mimeType: String,
+    originalMimeType: String,
+    width: Number,
+    height: Number
   }],
   readBy: [{
     user: {
@@ -54,6 +60,8 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
 messageSchema.index({ 'readBy.user': 1 });
+
+messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 15 });
 
 
 messageSchema.virtual('isReadBy').get(function() {

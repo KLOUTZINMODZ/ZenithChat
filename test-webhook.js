@@ -1,8 +1,8 @@
 const axios = require('axios');
 
 
-const WEBHOOK_URL = 'https://zenith.enrelyugi.com.br/api/marketplace-webhook/mercadopago-webhook';
-const API_BASE_URL = 'https://zenith.enrelyugi.com.br';
+const WEBHOOK_URL = 'https://vast-beans-agree.loca.lt/api/marketplace-webhook/mercadopago-webhook';
+const API_BASE_URL = 'https://vast-beans-agree.loca.lt';
 
 
 async function testWebhookFormats() {

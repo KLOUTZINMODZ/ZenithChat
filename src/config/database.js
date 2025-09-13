@@ -3,8 +3,25 @@ const logger = require('../utils/logger');
 
 const connectDB = async () => {
   try {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) throw new Error('MONGODB_URI is not set');
 
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
+
+    try {
+      const masked = uri.replace(/\/\/([^:@/]+):([^@/]+)@/, '
+      logger.info(`MongoDB connecting to: ${masked}`);
+    } catch {}
+
+    const options = {
+      serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS) || 30000,
+      socketTimeoutMS: Number(process.env.MONGODB_SOCKET_TIMEOUT_MS) || 45000,
+      connectTimeoutMS: Number(process.env.MONGODB_CONNECT_TIMEOUT_MS) || 20000,
+      maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE) || 10,
+
+      ...(process.env.MONGODB_DBNAME ? { dbName: process.env.MONGODB_DBNAME } : {})
+    };
+
+    const conn = await mongoose.connect(uri, options);
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
 
@@ -25,7 +42,7 @@ const connectDB = async () => {
   } catch (error) {
     logger.error('Error connecting to MongoDB:', error);
     logger.error('MongoDB URI format should be: mongodb+srv://username:password@cluster.mongodb.net/database');
-    
+    logger.error('Check MONGODB_URI environment variable and MongoDB server status.');
 
     if (process.env.NODE_ENV === 'production') {
       process.exit(1);

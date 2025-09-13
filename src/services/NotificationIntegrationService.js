@@ -20,7 +20,6 @@ class NotificationIntegrationService {
       deliveryStatus: 3600
     };
     
-    logger.info('🔔 Notification Integration Service initialized with optimized cache');
   }
 
   /**

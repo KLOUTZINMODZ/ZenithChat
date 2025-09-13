@@ -4,7 +4,7 @@
 
 const axios = require('axios');
 
-const CHAT_API_URL = 'https://zenith.enrelyugi.com.br/';
+const CHAT_API_URL = 'https://vast-beans-agree.loca.lt/';
 const USER_ID = '6897d82c8cdd40188e08a224';
 
 async function testRealNewBoosting() {

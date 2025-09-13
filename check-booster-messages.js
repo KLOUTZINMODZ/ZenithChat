@@ -27,7 +27,7 @@ async function checkBoosterMessages() {
 
       const systemMessages = await Message.find({
         conversation: CONVERSATION_ID,
-        type: 'message:new',
+        type: 'system',
         createdAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }
       }).lean();
 

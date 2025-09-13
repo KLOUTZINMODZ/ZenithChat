@@ -57,7 +57,7 @@ const conversationSchema = new mongoose.Schema({
 
   boostingStatus: {
     type: String,
-    enum: ['pending', 'active', 'completed', 'cancelled', 'disputed'],
+    enum: ['pending', 'active', 'in_progress', 'completed', 'cancelled', 'disputed'],
     default: null,
     index: true
   },
@@ -137,6 +137,9 @@ const conversationSchema = new mongoose.Schema({
 conversationSchema.index({ participants: 1 });
 conversationSchema.index({ lastMessageAt: -1 });
 conversationSchema.index({ 'participants': 1, 'lastMessageAt': -1 });
+conversationSchema.index({ 'participants': 1, 'metadata.boostingId': 1, 'type': 1 });
+conversationSchema.index({ 'participants': 1, 'metadata.proposalId': 1, 'type': 1 });
+conversationSchema.index({ 'participants': 1, 'proposal': 1, 'type': 1 });
 
 
 conversationSchema.virtual('participantCount').get(function() {
@@ -238,6 +241,51 @@ conversationSchema.statics.findOrCreate = async function(participantIds, metadat
       participants: sortedIds,
       type: sortedIds.length === 2 ? 'direct' : 'group',
       metadata
+    });
+  }
+
+  return conversation;
+};
+
+
+conversationSchema.statics.findOrCreateByContext = async function(participantIds, metadata = {}) {
+  const sortedIds = participantIds.sort();
+  const isDirect = sortedIds.length === 2;
+
+  const query = {
+    participants: { $all: sortedIds, $size: sortedIds.length },
+    type: isDirect ? 'direct' : 'group'
+  };
+
+  const boostingId = (metadata && (metadata.boostingId || (metadata.get && metadata.get('boostingId')))) || undefined;
+  const proposalId = (metadata && (metadata.proposalId || (metadata.get && metadata.get('proposalId')))) || undefined;
+
+  if (boostingId) {
+    query['metadata.boostingId'] = boostingId;
+  }
+  if (proposalId) {
+    query['metadata.proposalId'] = proposalId;
+  }
+
+  let conversation = await this.findOne(query);
+  if (!conversation) {
+
+    let metaToStore = metadata;
+    if (!(metaToStore instanceof Map)) {
+      try {
+        metaToStore = new Map(Object.entries(metadata || {}));
+      } catch (_) {
+        metaToStore = new Map();
+      }
+    }
+    if (boostingId && !metaToStore.get('boostingId')) metaToStore.set('boostingId', boostingId);
+    if (proposalId && !metaToStore.get('proposalId')) metaToStore.set('proposalId', proposalId);
+
+    conversation = await this.create({
+      participants: sortedIds,
+      type: isDirect ? 'direct' : 'group',
+      metadata: metaToStore,
+      proposal: proposalId || undefined
     });
   }
 

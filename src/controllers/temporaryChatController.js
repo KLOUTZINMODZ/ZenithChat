@@ -43,37 +43,101 @@ class TemporaryChatController {
       }
 
 
-      let conversation = await Conversation.findOne({
-        participants: { $all: [clientId, boosterId] },
-        type: 'direct'
-      });
+
+      let conversation = null;
+      if (boostingId) {
+        conversation = await Conversation.findOne({
+          participants: { $all: [clientId, boosterId], $size: 2 },
+          type: 'direct',
+          'metadata.boostingId': boostingId
+        });
+      }
+
+      if (!conversation && proposalId) {
+        conversation = await Conversation.findOne({
+          participants: { $all: [clientId, boosterId], $size: 2 },
+          type: 'direct',
+          $or: [
+            { 'metadata.proposalId': proposalId },
+            { proposal: proposalId }
+          ]
+        });
+      }
 
       if (conversation) {
+
+        const _priceValue = typeof proposalData.price === 'string'
+          ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
+          : Number(proposalData.price || 0);
+        const _priceFormatted = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+          .format(isNaN(_priceValue) ? 0 : _priceValue);
 
         const proposalMessage = new Message({
           conversation: conversation._id,
           sender: boosterId,
-          content: `⏳ Nova proposta temporária recebida!\n💰 Valor: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}`,
-          type: 'message:new',
+          content: `⏳ Nova proposta temporária recebida!\n💰 Valor: ${_priceFormatted}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}`,
+          type: 'system',
           metadata: {
             type: 'temporary_proposal',
+            systemType: 'temporary_created',
             proposalId,
+            price: isNaN(_priceValue) ? 0 : _priceValue,
+            priceFormatted: _priceFormatted,
+            date: new Date().toISOString(),
             proposalData
           }
         });
 
         await proposalMessage.save();
-        
-        // Atualizar conversa
+
+
+        try {
+          const webSocketServer = req.app.get('webSocketServer');
+          if (webSocketServer) {
+            const messageToSend = { ...proposalMessage.toObject(), content: proposalMessage.content };
+            const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+            participants.forEach(participantId => {
+              webSocketServer.sendToUser(participantId, {
+                type: 'message:new',
+                data: {
+                  message: messageToSend,
+                  conversationId: conversation._id
+                },
+                timestamp: new Date().toISOString()
+              });
+            });
+          }
+        } catch (_) {}
+
+
+        try {
+          const notificationService = req.app.locals?.notificationService;
+          if (notificationService) {
+            const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+            const recipients = participants.filter(id => id.toString() !== boosterId.toString());
+            for (const userId of recipients) {
+              await notificationService.sendNotification(userId, {
+                id: `proposal_${proposalId}`,
+                title: 'Nova proposta recebida',
+                message: `Valor: ${_priceFormatted} • Tempo: ${proposalData.estimatedTime}`,
+                type: 'new_proposal',
+                conversationId: conversation._id,
+                proposalId
+              }, { persistent: true });
+            }
+          }
+        } catch (_) {}
+
+
         conversation.lastMessage = proposalMessage._id;
         conversation.lastMessageAt = new Date();
         await conversation.save();
 
-        // Emit WebSocket event for proposal received
+
         try {
           const wsServer = require('../websocket/WebSocketServer');
           if (wsServer && wsServer.sendToUser) {
-            // Send to client
+
             wsServer.sendToUser(clientId, {
               type: 'proposal:received',
               data: {
@@ -87,7 +151,7 @@ class TemporaryChatController {
               }
             });
             
-            // Send to booster
+
             wsServer.sendToUser(boosterId, {
               type: 'proposal:received',
               data: {
@@ -163,14 +227,24 @@ class TemporaryChatController {
       await conversation.save();
 
 
+      const _priceValue2 = typeof proposalData.price === 'string'
+        ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
+        : Number(proposalData.price || 0);
+      const _priceFormatted2 = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+        .format(isNaN(_priceValue2) ? 0 : _priceValue2);
+
       const initialMessage = new Message({
         conversation: conversation._id,
         sender: boosterId,
-        content: `⏳ Chat Temporário criado...\n💰 Proposta: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}\n\n💡 Este chat expira em 3 dias se a proposta não for aceita.`,
-        type: 'message:new',
+        content: `⏳ Chat Temporário criado...\n💰 Proposta: ${_priceFormatted2}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}\n📝 Mensagem: ${proposalData.message || 'Nenhuma'}\n\n💡 Este chat expira em 3 dias se a proposta não for aceita.`,
+        type: 'system',
         metadata: {
           type: 'temporary_chat_created',
+          systemType: 'temporary_created',
           proposalId,
+          price: isNaN(_priceValue2) ? 0 : _priceValue2,
+          priceFormatted: _priceFormatted2,
+          date: new Date().toISOString(),
           expiresAt
         }
       });
@@ -178,15 +252,53 @@ class TemporaryChatController {
       await initialMessage.save();
 
 
+      try {
+        const webSocketServer = req.app.get('webSocketServer');
+        if (webSocketServer) {
+          const messageToSend = { ...initialMessage.toObject(), content: initialMessage.content };
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+          participants.forEach(participantId => {
+            webSocketServer.sendToUser(participantId, {
+              type: 'message:new',
+              data: {
+                message: messageToSend,
+                conversationId: conversation._id
+              },
+              timestamp: new Date().toISOString()
+            });
+          });
+        }
+      } catch (_) {}
+
+
+      try {
+        const notificationService = req.app.locals?.notificationService;
+        if (notificationService) {
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+          const recipients = participants.filter(id => id.toString() !== boosterId.toString());
+          for (const userId of recipients) {
+            await notificationService.sendNotification(userId, {
+              id: `temporary_chat_${conversation._id}`,
+              title: 'Chat temporário criado',
+              message: `Proposta: ${_priceFormatted2} • Tempo: ${proposalData.estimatedTime}`,
+              type: 'temporary_chat_created',
+              conversationId: conversation._id,
+              proposalId
+            }, { persistent: true });
+          }
+        }
+      } catch (_) {}
+
+
       conversation.lastMessage = initialMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-      // Emit WebSocket event for new temporary chat created
+
       try {
         const wsServer = require('../websocket/WebSocketServer');
         if (wsServer && wsServer.sendToUser) {
-          // Send to client
+
           wsServer.sendToUser(clientId, {
             type: 'proposal:received',
             data: {
@@ -200,7 +312,7 @@ class TemporaryChatController {
             }
           });
           
-          // Send to booster
+
           wsServer.sendToUser(boosterId, {
             type: 'proposal:received',
             data: {
@@ -311,6 +423,11 @@ class TemporaryChatController {
       });
 
 
+
+      const numericAcceptedPrice = typeof proposalData.price === 'string'
+        ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
+        : Number(proposalData.price || 0);
+
       const acceptedProposal = new AcceptedProposal({
         conversationId: conversation._id,
         proposalId: finalProposalId,
@@ -319,8 +436,8 @@ class TemporaryChatController {
         currentRank: proposalData.currentRank,
         desiredRank: proposalData.desiredRank,
         description: proposalData.description,
-        price: proposalData.price,
-        originalPrice: proposalData.price,
+        price: isNaN(numericAcceptedPrice) ? 0 : numericAcceptedPrice,
+        originalPrice: isNaN(numericAcceptedPrice) ? 0 : numericAcceptedPrice,
         estimatedTime: proposalData.estimatedTime,
         client: {
           userid: clientData.userid,
@@ -351,27 +468,74 @@ class TemporaryChatController {
       await conversation.save();
 
 
+      const _priceValue3 = typeof proposalData.price === 'string'
+        ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
+        : Number(proposalData.price || 0);
+      const _priceFormatted3 = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+        .format(isNaN(_priceValue3) ? 0 : _priceValue3);
+
       const acceptanceMessage = new Message({
         conversation: conversation._id,
         sender: userId,
-        content: `✅ Proposta aceita! Cliente ${clientData.name} e Booster ${boosterData.name} foram conectados.\n💰 Valor acordado: R$ ${proposalData.price}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}`,
-        type: 'message:new',
+        content: `✅ Proposta aceita! Cliente ${clientData.name} e Booster ${boosterData.name} foram conectados.\n💰 Valor acordado: ${_priceFormatted3}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}`,
+        type: 'system',
         metadata: {
           type: 'proposal_accepted',
+          systemType: 'proposal_accepted',
           proposalId: finalProposalId,
           acceptedBy: userId,
-          acceptedAt: new Date()
+          acceptedAt: new Date(),
+          price: isNaN(_priceValue3) ? 0 : _priceValue3,
+          priceFormatted: _priceFormatted3,
+          date: new Date().toISOString()
         }
       });
 
       await acceptanceMessage.save();
 
 
+      try {
+        const webSocketServer = req.app.get('webSocketServer');
+        if (webSocketServer) {
+          const messageToSend = { ...acceptanceMessage.toObject(), content: acceptanceMessage.content };
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+          participants.forEach(participantId => {
+            webSocketServer.sendToUser(participantId, {
+              type: 'message:new',
+              data: {
+                message: messageToSend,
+                conversationId: conversation._id
+              },
+              timestamp: new Date().toISOString()
+            });
+          });
+        }
+      } catch (_) {}
+
+
+      try {
+        const notificationService = req.app.locals?.notificationService;
+        if (notificationService) {
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+          for (const userId of participants) {
+            await notificationService.sendNotification(userId, {
+              id: `proposal_accepted_${finalProposalId}`,
+              title: 'Proposta aceita',
+              message: `Valor acordado: ${_priceFormatted3} • Tempo: ${proposalData.estimatedTime}`,
+              type: 'proposal_accepted',
+              conversationId: conversation._id,
+              proposalId: finalProposalId
+            }, { persistent: true });
+          }
+        }
+      } catch (_) {}
+
+
       conversation.lastMessage = acceptanceMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-      // Emit WebSocket events for real-time updates
+
       try {
         const webSocketServer = req.app.get('webSocketServer');
         if (webSocketServer) {
@@ -391,7 +555,7 @@ class TemporaryChatController {
             participantTypes: participants.map(p => typeof p.toString())
           });
           
-          // Check if users are currently connected
+
           const connectionManager = webSocketServer.connectionManager;
           const clientConnections = connectionManager.getUserConnections(clientId?.toString());
           const boosterConnections = connectionManager.getUserConnections(boosterId?.toString());
@@ -407,7 +571,7 @@ class TemporaryChatController {
           console.log('🔍 [Temporary Chat Accept] Client ID:', clientId);
           console.log('🔍 [Temporary Chat Accept] Booster ID:', boosterId);
           
-          // Create comprehensive event data
+
           const proposalAcceptedEventData = {
             conversationId: conversation._id,
             proposalId: finalProposalId,
@@ -435,7 +599,7 @@ class TemporaryChatController {
             boosterData
           };
           
-          // Enhanced WebSocket event emission with robust user ID handling
+
           const sendToUserRobust = (userIds, eventType, eventData, userType) => {
             let eventSent = false;
             
@@ -456,7 +620,7 @@ class TemporaryChatController {
             return eventSent;
           };
           
-          // Get all possible ID formats for both users
+
           const clientIds = [
             clientId,
             clientId?.toString(),
@@ -475,14 +639,14 @@ class TemporaryChatController {
           console.log('🔍 All possible booster IDs:', boosterIds);
           console.log('📊 Currently online users:', connectionManager.getOnlineUsers());
           
-          // Send events to both users with robust ID handling
+
           const clientEventSent = sendToUserRobust(clientIds, 'proposal:accepted', proposalAcceptedEventData, 'CLIENT');
           sendToUserRobust(clientIds, 'conversation:updated', conversationUpdateEventData, 'CLIENT');
           
           const boosterEventSent = sendToUserRobust(boosterIds, 'proposal:accepted', proposalAcceptedEventData, 'BOOSTER');
           sendToUserRobust(boosterIds, 'conversation:updated', conversationUpdateEventData, 'BOOSTER');
           
-          // Final fallback to all participants if direct targeting failed
+
           if (!clientEventSent || !boosterEventSent) {
             console.log('🔄 Using participant fallback for missed events...');
             participants.forEach(participantId => {
@@ -503,7 +667,18 @@ class TemporaryChatController {
         }
       } catch (wsError) {
         console.error('❌ [Temporary Chat Accept] Error emitting WebSocket events:', wsError);
-        // Don't fail the request if WebSocket fails
+
+      }
+
+
+      try {
+        conversation.isTemporary = false;
+        conversation.status = 'accepted';
+        conversation.expiresAt = null;
+        conversation.boostingStatus = 'active';
+        await conversation.save();
+      } catch (cleanupError) {
+        console.error('❌ [Temporary Chat Accept] Finalization error:', cleanupError);
       }
 
       res.json({
@@ -521,7 +696,7 @@ class TemporaryChatController {
     }
   }
 
-  // Reject temporary proposal
+
   async rejectTemporaryProposal(req, res) {
     try {
       const { conversationId } = req.params;
@@ -558,23 +733,24 @@ class TemporaryChatController {
           message: 'Esta conversa não é um chat temporário pendente'
         });
       }
+      
 
-      // Mark conversation as rejected
-      conversation.status = 'rejected';
+      conversation.status = 'expired';
+      conversation.isActive = false;
       await conversation.save();
 
-      // Get proposal data for WebSocket event
+
       const proposalData = conversation.metadata.get('proposalData');
       const clientData = conversation.metadata.get('clientData');
       const boosterData = conversation.metadata.get('boosterData');
       const finalProposalId = proposalId || extractValidObjectId(conversation.proposal);
 
-      // Create rejection message
+
       const rejectionMessage = new Message({
         conversation: conversation._id,
         sender: userId,
         content: `❌ Proposta rejeitada por ${userId === clientData.userid ? clientData.name : boosterData.name}.`,
-        type: 'message:new',
+        type: 'system',
         metadata: {
           type: 'proposal_rejected',
           proposalId: finalProposalId,
@@ -585,18 +761,64 @@ class TemporaryChatController {
 
       await rejectionMessage.save();
 
+
+      try {
+        const webSocketServer = req.app.get('webSocketServer');
+        if (webSocketServer) {
+          const messageToSend = { ...rejectionMessage.toObject(), content: rejectionMessage.content };
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+          participants.forEach(participantId => {
+            webSocketServer.sendToUser(participantId, {
+              type: 'message:new',
+              data: {
+                message: messageToSend,
+                conversationId: conversation._id
+              },
+              timestamp: new Date().toISOString()
+            });
+          });
+        }
+      } catch (_) {}
+
+
+      try {
+        const notificationService = req.app.locals?.notificationService;
+        if (notificationService) {
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+          for (const userId of participants) {
+            await notificationService.sendNotification(userId, {
+              id: `proposal_rejected_${finalProposalId}`,
+              title: 'Proposta rejeitada',
+              message: 'A proposta foi rejeitada.',
+              type: 'proposal_rejected',
+              conversationId: conversation._id,
+              proposalId: finalProposalId
+            }, { persistent: true });
+          }
+        }
+      } catch (_) {}
+
       conversation.lastMessage = rejectionMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-      // Emit WebSocket event for proposal rejected
+
       try {
-        const wsServer = require('../websocket/WebSocketServer');
-        if (wsServer && wsServer.sendToUser) {
-          const participants = conversation.participants;
-          
+        conversation.isActive = false;
+        conversation.status = 'expired';
+        await conversation.save();
+      } catch (stateError) {
+        console.error('❌ Erro ao atualizar estado da conversa para expirada/inativa:', stateError);
+      }
+
+
+      try {
+        const webSocketServer = req.app.get('webSocketServer');
+        if (webSocketServer && typeof webSocketServer.sendToUser === 'function') {
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+
           participants.forEach(participantId => {
-            wsServer.sendToUser(participantId, {
+            webSocketServer.sendToUser(participantId, {
               type: 'proposal:rejected',
               data: {
                 conversationId: conversation._id,
@@ -610,6 +832,19 @@ class TemporaryChatController {
               }
             });
           });
+
+
+          const updatePayload = {
+            type: 'conversation:updated',
+            data: {
+              conversationId: conversation._id,
+              status: 'expired',
+              isTemporary: !!conversation.isTemporary,
+              isActive: false,
+              updatedAt: new Date().toISOString()
+            }
+          };
+          participants.forEach(participantId => webSocketServer.sendToUser(participantId, updatePayload));
         }
       } catch (wsError) {
         console.error('❌ Erro ao emitir evento WebSocket de rejeição:', wsError);
@@ -673,7 +908,7 @@ class TemporaryChatController {
           const expirationMessage = new Message({
             conversation: chat._id,
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
-            type: 'message:new',
+            type: 'system',
             metadata: {
               type: 'chat_expired',
               expiredAt: new Date()
@@ -681,13 +916,49 @@ class TemporaryChatController {
           });
 
           await expirationMessage.save();
+
+
+          try {
+            const webSocketServer = req.app.get('webSocketServer');
+            if (webSocketServer) {
+              const messageToSend = { ...expirationMessage.toObject(), content: expirationMessage.content };
+              const participants = chat.participants.map(p => p.toString ? p.toString() : p);
+              participants.forEach(participantId => {
+                webSocketServer.sendToUser(participantId, {
+                  type: 'message:new',
+                  data: {
+                    message: messageToSend,
+                    conversationId: chat._id
+                  },
+                  timestamp: new Date().toISOString()
+                });
+              });
+            }
+          } catch (_) {}
+
+
+          try {
+            const notificationService = req.app.locals?.notificationService;
+            if (notificationService) {
+              const participants = chat.participants.map(p => p.toString ? p.toString() : p);
+              for (const userId of participants) {
+                await notificationService.sendNotification(userId, {
+                  id: `temporary_chat_expired_${chat._id}`,
+                  title: 'Chat temporário expirou',
+                  message: 'A proposta não foi aceita em até 3 dias.',
+                  type: 'proposal_expired',
+                  conversationId: chat._id
+                }, { persistent: true });
+              }
+            }
+          } catch (_) {}
           
 
           chat.lastMessage = expirationMessage._id;
           chat.lastMessageAt = new Date();
           await chat.save();
           
-          // Emit WebSocket event for proposal expired
+
           try {
             const wsServer = require('../websocket/WebSocketServer');
             if (wsServer && wsServer.sendToUser) {

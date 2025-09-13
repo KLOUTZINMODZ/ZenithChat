@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'http://vast-beans-agree.loca.lt/api';
 const TEST_JWT = 'your_test_jwt_token_here';
 
 class AgreementSystemTest {

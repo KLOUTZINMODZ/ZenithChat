@@ -18,8 +18,12 @@ router.post('/create-temporary-chat', authMiddleware, temporaryChatController.cr
 
 router.post('/conversation/:conversationId/accept-proposal', authMiddleware, temporaryChatController.acceptTemporaryProposal);
 
-// Reject temporary proposal
+
 router.post('/conversation/:conversationId/reject-proposal', authMiddleware, temporaryChatController.rejectTemporaryProposal);
+
+
+router.post('/:conversationId/accept', authMiddleware, temporaryChatController.acceptTemporaryProposal);
+router.post('/:conversationId/reject', authMiddleware, temporaryChatController.rejectTemporaryProposal);
 
 
 router.get('/expired-chats', authMiddleware, temporaryChatController.getExpiredTemporaryChats);

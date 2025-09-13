@@ -6,7 +6,7 @@
 const axios = require('axios');
 
 const HACK_LOTE_API_URL = 'https://zenithapi-steel.vercel.app';
-const CHAT_API_URL = 'https://zenith.enrelyugi.com.br/';
+const CHAT_API_URL = 'https://vast-beans-agree.loca.lt/';
 
 console.log('🧪 Testando notificação real via HackLoteAPI...');
 

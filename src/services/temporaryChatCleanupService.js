@@ -16,9 +16,15 @@ class TemporaryChatCleanupService {
     }
 
 
-    this.cleanupExpiredChats();
-    this.intervalId = setInterval(async () => {
-      await this.cleanupExpiredChats();
+
+    this.cleanupExpiredChats().catch((err) => {
+      logger.error('Erro na execução inicial da limpeza de chats temporários:', err);
+    });
+
+    this.intervalId = setInterval(() => {
+      this.cleanupExpiredChats().catch((err) => {
+        logger.error('Erro na execução agendada da limpeza de chats temporários:', err);
+      });
     }, 3600000);
 
     this.isRunning = true;
@@ -65,7 +71,7 @@ class TemporaryChatCleanupService {
           const expirationMessage = new Message({
             conversation: chat._id,
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
-            type: 'message:new',
+            type: 'system',
             metadata: {
               type: 'chat_expired',
               expiredAt: new Date(),

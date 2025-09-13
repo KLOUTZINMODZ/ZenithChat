@@ -58,6 +58,36 @@ router.get('/sync/:conversationId', auth, async (req, res) => {
 });
 
 
+
+router.get('/conversations/boosting/:boostingId', auth, async (req, res) => {
+  try {
+    const { boostingId } = req.params;
+    const userId = req.user._id || req.userId;
+
+    if (!boostingId) {
+      return res.status(400).json({ success: false, message: 'boostingId is required' });
+    }
+
+    const conversation = await Conversation.findOne({
+      participants: userId,
+      'metadata.boostingId': boostingId,
+      isActive: true
+    })
+    .populate('participants', 'name email avatar')
+    .populate('lastMessage');
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    return res.json({ success: true, conversation });
+  } catch (error) {
+    logger.error('Error fetching conversation by boostingId:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+
 router.use(performanceMiddleware());
 
 
@@ -242,6 +272,7 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
 
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !conversation.isParticipant(userId)) {
+      logger.warn('[MSG:REST] Access denied', { conversationId, userId });
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -302,6 +333,14 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
     const { content, type = 'text', attachments = [] } = req.body;
     const userId = req.user._id || req.userId;
 
+    logger.info('[MSG:REST] Incoming message', {
+      conversationId,
+      userId,
+      type,
+      attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
+      hasContent: !!content
+    });
+
 
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !conversation.isParticipant(userId)) {
@@ -313,6 +352,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
 
     if (conversation.isReported) {
+      logger.warn('[MSG:REST] Conversation reported - blocking send', { conversationId, userId });
       return res.status(423).json({
         success: false,
         message: 'Chat reportado - não é possível enviar mensagens',
@@ -322,6 +362,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
 
     if (!conversation.isActive) {
+      logger.warn('[MSG:REST] Conversation inactive/finalized - blocking send', { conversationId, userId });
       return res.status(423).json({
         success: false,
         message: 'Chat finalizado - envie uma nova proposta para reativar',
@@ -356,6 +397,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
 
       if (!activeAgreement && !activeProposal) {
+        logger.warn('[MSG:REST] Boosting completed without active agreement/proposal - blocking', { conversationId, userId });
         return res.status(423).json({
           success: false,
           message: 'Atendimento finalizado - aguardando nova proposta do booster',
@@ -394,6 +436,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       content: content
     });
 
+    logger.info('[MSG:REST] Message saved', { conversationId, userId, messageId: message._id, type, attachmentsCount: (attachments || []).length });
     res.status(201).json({
       success: true,
       data: {
@@ -402,7 +445,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       }
     });
   } catch (error) {
-    logger.error('Error sending message:', error);
+    logger.error('[MSG:REST] Error sending message:', { message: error.message, stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Error sending message',
@@ -413,25 +456,39 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
 router.post('/conversations', auth, invalidationMiddleware(['conversations:']), async (req, res) => {
   try {
-    const { participantIds, type = 'direct', metadata = {} } = req.body;
+    let { participantIds, participantId, type = 'direct', metadata = {}, boostingRequestId, proposalId: proposalIdBody } = req.body;
     const userId = req.user._id || req.userId;
 
-    // Ensure current user is in participants
-    if (!participantIds.includes(userId.toString())) {
-      participantIds.push(userId);
+
+    let participants = Array.isArray(participantIds) ? [...participantIds] : [];
+    if (participantId && !participants.includes(participantId)) {
+      participants.push(participantId);
+    }
+    if (!participants.includes(userId.toString())) {
+      participants.push(userId.toString());
     }
 
-    const conversation = await Conversation.findOrCreate(participantIds, metadata);
+
+    metadata = metadata || {};
+    if (boostingRequestId && !metadata.boostingId) {
+      metadata.boostingId = boostingRequestId;
+    }
+    if (proposalIdBody && !metadata.proposalId) {
+      metadata.proposalId = proposalIdBody;
+    }
+
+
+    const conversation = await Conversation.findOrCreateByContext(participants, metadata);
     await conversation.populate('participants', 'name email avatar');
 
-    // Invalidate cache for all participants
-    participantIds.forEach(participantId => {
-      cache.invalidateUserCache(participantId);
+    participants.forEach(pid => {
+      cache.invalidateUserCache(pid);
     });
 
     res.status(201).json({
       success: true,
-      data: conversation
+      data: conversation,
+      conversation
     });
   } catch (error) {
     logger.error('Error creating conversation:', error);

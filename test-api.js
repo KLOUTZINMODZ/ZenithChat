@@ -3,7 +3,7 @@
 
 const axios = require('axios');
 
-const API_URL = 'http://zenith.enrelyugi.com.br';
+const API_URL = 'http://vast-beans-agree.loca.lt';
 
 
 const JWT_TOKEN = 'YOUR_JWT_TOKEN_HERE';

@@ -112,7 +112,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: `🔄 Renegociação de proposta solicitada:\n💰 Novo valor: R$ ${newPrice}\n⏱️ Novo prazo: ${newEstimatedTime}\n📝 Observação: ${message || 'Nenhuma'}`,
-        type: 'message:new',
+        type: 'system',
         metadata: {
           type: 'renegotiation',
           newPrice,
@@ -179,7 +179,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: `❌ Atendimento cancelado\n📝 Motivo: ${reason || 'Não informado'}`,
-        type: 'message:new',
+        type: 'system',
         metadata: {
           type: 'cancellation',
           reason,
@@ -190,12 +190,30 @@ class BoostingChatController {
       await systemMessage.save();
 
 
+
       conversation.isActive = false;
+      conversation.boostingStatus = 'cancelled';
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       conversation.metadata.set('status', 'cancelled');
       conversation.metadata.set('cancelledAt', new Date());
       conversation.metadata.set('cancelledBy', userId);
+
+
+      try {
+        const clientId = (conversation.client?.userid && conversation.client.userid.toString)
+          ? conversation.client.userid.toString()
+          : (conversation.client?.userid || null);
+        if (clientId) {
+          let deletedFor = conversation.metadata.get('deletedFor');
+          if (!Array.isArray(deletedFor)) deletedFor = [];
+          if (!deletedFor.map(id => id.toString()).includes(clientId.toString())) {
+            deletedFor.push(clientId.toString());
+          }
+          conversation.metadata.set('deletedFor', deletedFor);
+        }
+      } catch (_) {}
+
       await conversation.save();
 
 
@@ -220,6 +238,77 @@ class BoostingChatController {
         }
       } catch (apiError) {
         console.error('Erro ao notificar cancelamento:', apiError);
+      }
+
+
+      try {
+        let agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
+        if (agreement && ['pending', 'active'].includes(agreement.status)) {
+          const idemKey = `cancel_${conversationId}_${Date.now()}`;
+          await agreement.cancel(userId, reason || '', idemKey);
+        }
+        let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
+        if (acceptedProposal) {
+          try { await acceptedProposal.cancel(); } catch (_) {}
+
+          try { await AcceptedProposal.deleteOne({ _id: acceptedProposal._id }); } catch (_) {}
+        }
+
+        try {
+          conversation.acceptedProposal = undefined;
+          conversation.proposal = undefined;
+          await conversation.save();
+        } catch (_) {}
+      } catch (cleanupErr) {
+        console.warn('⚠️ Erro ao cancelar/remover proposta/termo:', cleanupErr?.message || cleanupErr);
+      }
+
+
+      try {
+        const webSocketServer = req.app.get('webSocketServer');
+        if (webSocketServer && typeof webSocketServer.sendToUser === 'function') {
+          const participants = conversation.participants.map(p => p.toString ? p.toString() : p);
+          const clientId = (conversation.client?.userid && conversation.client.userid.toString)
+            ? conversation.client.userid.toString()
+            : (conversation.client?.userid || null);
+          const cancellationEvent = {
+            type: 'service:cancelled',
+            data: {
+              conversationId,
+              reason,
+              cancelledBy: userId,
+              boostingStatus: 'cancelled',
+              isActive: false,
+              deletedForClient: clientId || null,
+              timestamp: new Date().toISOString()
+            }
+          };
+          const conversationUpdated = {
+            type: 'conversation:updated',
+            data: {
+              conversationId,
+              status: 'cancelled',
+              boostingStatus: 'cancelled',
+              isActive: false,
+              updatedAt: new Date().toISOString()
+            }
+          };
+          participants.forEach(participantId => {
+            webSocketServer.sendToUser(participantId, cancellationEvent);
+            webSocketServer.sendToUser(participantId, conversationUpdated);
+
+            try {
+              const messageToSend = { ...systemMessage.toObject(), content: systemMessage.content };
+              webSocketServer.sendToUser(participantId, {
+                type: 'message:new',
+                data: { message: messageToSend, conversationId },
+                timestamp: new Date().toISOString()
+              });
+            } catch (_) {}
+          });
+        }
+      } catch (wsErr) {
+        console.error('❌ Erro ao emitir eventos de cancelamento:', wsErr);
       }
 
       res.json({
@@ -269,15 +358,28 @@ class BoostingChatController {
                            conversation.participants.find(p => p.toString() !== userId);
 
 
+      const rawPriceForFinalization = agreement?.proposalSnapshot?.price ?? acceptedProposal?.price ?? null;
+      const numericPriceFinal = typeof rawPriceForFinalization === 'string'
+        ? parseFloat(rawPriceForFinalization.replace(/\./g, '').replace(',', '.'))
+        : (rawPriceForFinalization != null ? Number(rawPriceForFinalization) : null);
+      const formattedPriceFinal = (numericPriceFinal != null && !isNaN(numericPriceFinal))
+        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numericPriceFinal)
+        : null;
+
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
-        content: `✅ Entrega confirmada pelo cliente\n🔒 Chat finalizado`,
-        type: 'message:new',
+        content: formattedPriceFinal
+          ? `✅ Entrega confirmada pelo cliente\n💰 Valor: ${formattedPriceFinal}\n🔒 Chat finalizado`
+          : `✅ Entrega confirmada pelo cliente\n🔒 Chat finalizado`,
+        type: 'system',
         metadata: {
           type: 'delivery_confirmed',
+          systemType: 'order_finalized',
           confirmedBy: userId,
-          closedAt: new Date()
+          closedAt: new Date(),
+          price: (numericPriceFinal != null && !isNaN(numericPriceFinal)) ? numericPriceFinal : undefined,
+          priceFormatted: formattedPriceFinal || undefined
         }
       });
 
@@ -289,7 +391,7 @@ class BoostingChatController {
           conversation: conversationId,
           sender: userId,
           content: `🎉 Parabéns! O cliente confirmou a entrega do seu serviço.\n\n💰 O pagamento será processado em breve.\n🔒 Este chat foi finalizado.\n\nObrigado por usar nossa plataforma!`,
-          type: 'message:new',
+          type: 'system',
           metadata: {
             type: 'booster_notification',
             targetUser: boosterUserId,
@@ -349,7 +451,7 @@ class BoostingChatController {
         const itemId = conversation.marketplaceItem || conversation.proposal;
         
         if (itemId) {
-          await axios.post(`${apiUrl}/api/boosting-requests/${itemId}/confirm-delivery`, {
+          await axios.post(`${apiUrl}/api/boosting-proposals/${itemId}/confirm-delivery`, {
             conversationId,
             confirmedBy: userId
           }, {
@@ -362,6 +464,59 @@ class BoostingChatController {
         }
       } catch (apiError) {
         console.error('Erro ao notificar confirmação de entrega:', apiError);
+
+        if (apiError.response?.status >= 400) {
+          console.error('❌ Main API failed - rolling back conversation status');
+          conversation.boostingStatus = 'active';
+          conversation.isBlocked = false;
+          conversation.blockedReason = null;
+          conversation.blockedAt = null;
+          conversation.blockedBy = null;
+          await conversation.save();
+          
+          return res.status(500).json({
+            success: false,
+            message: 'Erro ao processar confirmação no sistema principal',
+            details: apiError.message
+          });
+        }
+      }
+
+
+      const webSocketServer = req.app.get('webSocketServer');
+      if (webSocketServer) {
+        const participants = savedConversation.participants?.map?.(p => p.toString ? p.toString() : p) || [];
+        participants.forEach(participantId => {
+          webSocketServer.sendToUser(participantId, {
+            type: 'delivery_confirmed',
+            data: {
+              conversationId,
+              boostingStatus: 'completed',
+              confirmedBy: userId,
+              confirmedAt: new Date(),
+              blocked: true,
+
+              orderId: (savedConversation.marketplaceItem || savedConversation.proposal) || null,
+              price: (numericPriceFinal != null && !isNaN(numericPriceFinal)) ? numericPriceFinal : null,
+              priceFormatted: formattedPriceFinal || null
+            },
+            timestamp: new Date().toISOString()
+          });
+        });
+
+        try {
+          const messageToSend = { ...systemMessage.toObject(), content: systemMessage.content };
+          participants.forEach(participantId => {
+            webSocketServer.sendToUser(participantId, {
+              type: 'message:new',
+              data: {
+                message: messageToSend,
+                conversationId
+              },
+              timestamp: new Date().toISOString()
+            });
+          });
+        } catch (_) {}
       }
 
       res.json({
@@ -536,7 +691,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: `🚨 Atendimento denunciado\n📝 Motivo: ${reason}\n📄 Descrição: ${description || 'Não informada'}`,
-        type: 'message:new',
+        type: 'system',
         metadata: {
           type: 'report',
           reportId: reportData._id,
@@ -856,7 +1011,7 @@ class BoostingChatController {
         conversation: conversationId,
         sender: userId,
         content: '🔓 Conversa desbloqueada - mensagens reativadas',
-        type: 'message:new',
+        type: 'system',
         metadata: {
           type: 'unreport',
           unblockedBy: userId,

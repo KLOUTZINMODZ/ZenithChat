@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'http://vast-beans-agree.loca.lt/api';
 const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OTdkODJjOGNkZDQwMTg4ZTA4YTIyNCIsImlhdCI6MTc1NjE3NDExNywiZXhwIjoxNzU2Nzc4OTE3fQ.ePaG5v7D1J4Vz3ml_cnVBYlk517fs96z4I95BUhI0nI';
 const CONVERSATION_ID = '68accd4f015ee7dc20e09fbf';
 

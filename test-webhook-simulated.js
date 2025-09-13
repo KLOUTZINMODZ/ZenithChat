@@ -18,7 +18,7 @@ async function testSimulatedPayment() {
   try {
     console.log('1️⃣ Testing with /test-webhook endpoint...');
     const testResponse = await axios.post(
-      'https://zenith.enrelyugi.com.br/api/marketplace-webhook/test-webhook',
+      'https://vast-beans-agree.loca.lt/api/marketplace-webhook/test-webhook',
       {
         userId: userId,
         paymentId: `test_payment_${timestamp}`,
@@ -40,7 +40,7 @@ async function testSimulatedPayment() {
     console.log('   Simulating Mercado Pago notification format');
     
 
-    const webhookUrl = `https://zenith.enrelyugi.com.br/api/marketplace-webhook/mercadopago-webhook`;
+    const webhookUrl = `https://vast-beans-agree.loca.lt/api/marketplace-webhook/mercadopago-webhook`;
     const paymentId = '122930854647';
     
     const response = await axios.post(

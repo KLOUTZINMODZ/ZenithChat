@@ -4,6 +4,8 @@ const logger = require('../utils/logger');
 const MessageHandler = require('./handlers/MessageHandler');
 const NotificationHandler = require('./handlers/NotificationHandler');
 const WhatsAppMessageHandler = require('./handlers/WhatsAppMessageHandler');
+const ConversationHandler = require('./handlers/ConversationHandler');
+const ProposalHandler = require('./handlers/ProposalHandler');
 const ConnectionManager = require('./ConnectionManager');
 const NotificationIntegrationService = require('../services/NotificationIntegrationService');
 const { authenticateWebSocket } = require('../middleware/wsAuth');
@@ -16,9 +18,10 @@ class WebSocketServer {
     });
     
     this.connectionManager = new ConnectionManager();
-    this.messageHandler = new MessageHandler(this.connectionManager);
+    this.conversationHandler = new ConversationHandler(this.connectionManager);
+    this.proposalHandler = new ProposalHandler(this.connectionManager);
+    this.messageHandler = new MessageHandler(this.connectionManager, this.conversationHandler);
     this.whatsAppHandler = new WhatsAppMessageHandler(this.connectionManager);
-    
 
     this.notificationService = new NotificationIntegrationService(this.connectionManager);
     this.notificationHandler = new NotificationHandler(this.connectionManager, this.notificationService);
@@ -46,10 +49,6 @@ class WebSocketServer {
       info.req.userId = decoded.id || decoded._id;
       info.req.userToken = token;
       
-      logger.info('WebSocket authentication successful', {
-        userId: info.req.userId,
-        tokenValid: true
-      });
       
       cb(true);
     } catch (error) {
@@ -66,15 +65,9 @@ class WebSocketServer {
       const userId = req.userId;
       const userToken = req.userToken;
 
-      const totalConnections = this.connectionManager.addConnection(userId, ws);
-      logger.info(`🔗 New WebSocket connection from user: ${userId}. Total connections: ${totalConnections}`);
-        
-        // Send connection confirmation
-        this.sendMessage(ws, {
-          type: 'connection:confirmed',
-          data: { userId: userId, connectionId: ws.id },
-          timestamp: new Date().toISOString()
-        });
+  
+
+      this.connectionManager.addConnection(userId, ws);
 
       ws.isAlive = true;
       ws.userId = userId;
@@ -85,24 +78,53 @@ class WebSocketServer {
       });
 
 
-      ws.on('message', async (message) => {
+      this.conversationHandler.registerEvents(ws);
+      
+
+      this.proposalHandler.registerEvents(ws);
+
+
+      ws.on('message', async (data) => {
         try {
-          const data = JSON.parse(message);
-          logger.info(`📨 Received ${data.type} from user ${ws.userId}`);
-          await this.handleMessage(ws, data);
+          const message = JSON.parse(data.toString());
+          await this.handleMessage(ws, message);
         } catch (error) {
-          logger.error('Error parsing WebSocket message:', error);
+          logger.error('Error processing message:', error);
           this.sendError(ws, 'Invalid message format');
         }
       });
 
 
-      ws.on('close', () => {
-        if (ws.userId) {
-          const remainingConnections = this.connectionManager.removeConnection(ws.userId, ws);
-          logger.info(`🔌 WebSocket connection closed for user: ${ws.userId}. Remaining connections: ${remainingConnections}`);
+      ws.on('close', (code, reason) => {
+        this.connectionManager.removeConnection(userId, ws);
+        
+
+        try {
+          this.notificationHandler.handleUserDisconnected(userId);
+          this.conversationHandler.onUserDisconnect(userId);
+        } catch (error) {
+          logger.error('Error handling user disconnection:', error);
         }
       });
+
+
+      ws.on('error', (error) => {
+        logger.error(`WebSocket error for user ${userId}:`, {
+          error: error.message,
+          code: error.code,
+          stack: error.stack
+        });
+        
+
+        try {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(1011, 'Server error');
+          }
+        } catch (closeError) {
+          logger.error('Error closing WebSocket after error:', closeError);
+        }
+      });
+
 
       this.sendMessage(ws, {
         type: 'connection',
@@ -126,7 +148,6 @@ class WebSocketServer {
   async handleMessage(ws, message) {
     const { type, ...payload } = message;
 
-    logger.debug(`Handling message type: ${type} from user: ${ws.userId}`);
 
     switch (type) {
       case 'message:send':
@@ -146,11 +167,7 @@ class WebSocketServer {
         break;
 
       case 'conversation:close':
-        await this.messageHandler.handleCloseConversation(ws.userId, payload.data);
-        break;
-
-      case 'conversation:sync':
-        await this.messageHandler.handleConversationSync(ws.userId, payload.data);
+        await this.messageHandler.handleCloseConversation(ws.userId, payload);
         break;
 
       case 'conversation:list':
@@ -161,6 +178,27 @@ class WebSocketServer {
         await this.messageHandler.handleGetMessageHistory(ws.userId, payload, ws);
         break;
 
+
+      case 'conversations:start_polling':
+        await this.conversationHandler.handleStartPolling(ws, payload);
+        break;
+
+      case 'conversations:stop_polling':
+        await this.conversationHandler.handleStopPolling(ws);
+        break;
+
+      case 'conversations:get_list':
+        await this.conversationHandler.handleGetConversations(ws, payload);
+        break;
+
+
+      case 'proposal:accepted':
+        await this.proposalHandler.handleProposalAccepted(ws, payload);
+        break;
+
+      case 'proposal:update_status':
+        await this.proposalHandler.handleProposalStatusUpdate(ws, payload);
+        break;
 
       case 'message:delivery_ack':
         await this.messageHandler.handleDeliveryAck(payload.messageId, ws.userId);
@@ -219,7 +257,8 @@ class WebSocketServer {
    */
   async handleSendMessageWithDelivery(userId, payload) {
     try {
-      const { conversationId, content, type = 'text', attachments = [] } = payload;
+      const { conversationId, content, type, messageType, attachments = [] } = payload;
+      const finalType = type || messageType || 'text';
 
 
       const Conversation = require('../models/Conversation');
@@ -242,7 +281,7 @@ class WebSocketServer {
         conversation: conversationId,
         sender: userId,
         content: encryptMessage(content),
-        type,
+        type: finalType,
         attachments,
         readBy: [{ user: userId, readAt: new Date() }]
       });
@@ -269,15 +308,8 @@ class WebSocketServer {
   }
 
   sendMessage(ws, message) {
-    if (ws.readyState === 1) {
-      try {
-        ws.send(JSON.stringify(message));
-        logger.info(`📤 Sent ${message.type} to user ${ws.userId}`);
-      } catch (error) {
-        logger.error(`❌ Failed to send ${message.type} to user ${ws.userId}: ${error.message}`);
-      }
-    } else {
-      logger.warn(`⚠️ Cannot send ${message.type} to user ${ws.userId}: connection not ready (state: ${ws.readyState})`);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
     }
   }
 
@@ -291,19 +323,17 @@ class WebSocketServer {
 
   startHeartbeat() {
     const interval = parseInt(process.env.WS_HEARTBEAT_INTERVAL) || 60000;
-    
-    logger.info(`Starting WebSocket heartbeat with interval: ${interval}ms`);
-    
-    this.heartbeatInterval = setInterval(() => {
-      logger.debug(`Heartbeat check - Active connections: ${this.wss.clients.size}`);
+        this.heartbeatInterval = setInterval(() => {
       
       this.wss.clients.forEach((ws) => {
         if (ws.isAlive === false) {
-          return ws.terminate();
+          logger.warn(`Terminating inactive connection for user: ${ws.userId}`);
+          this.connectionManager.removeConnection(ws.userId, ws);
         }
 
         ws.isAlive = false;
         
+
         if (ws.readyState === WebSocket.OPEN) {
           try {
             ws.ping();
@@ -325,35 +355,23 @@ class WebSocketServer {
   }
 
   sendToUser(userId, message) {
-    logger.info(`🔍 sendToUser called for userId: ${userId}, messageType: ${message.type}`);
-    
     const connections = this.connectionManager.getUserConnections(userId);
-    logger.info(`📊 Found ${connections.length} connections for user ${userId}`);
     
     if (connections.length === 0) {
-      logger.warn(`❌ No active connections found for user ${userId}`);
-      logger.info(`🔍 All online users: ${this.connectionManager.getOnlineUsers().join(', ')}`);
       return;
     }
     
     let sentCount = 0;
-    connections.forEach((ws, index) => {
-      logger.info(`🔗 Connection ${index + 1} for user ${userId}: readyState=${ws.readyState}`);
-      
+    connections.forEach((ws) => {
       if (ws.readyState === WebSocket.OPEN) {
         try {
           ws.send(JSON.stringify(message));
           sentCount++;
-          logger.info(`✅ Message sent to connection ${index + 1} for user ${userId}`);
         } catch (error) {
-          logger.error(`❌ Error sending message to connection ${index + 1} for user ${userId}:`, error);
+          logger.error(`Error sending message to user ${userId}:`, error);
         }
-      } else {
-        logger.warn(`⚠️ Connection ${index + 1} for user ${userId} is not open (state: ${ws.readyState})`);
       }
     });
-    
-    logger.info(`📤 Successfully sent message to ${sentCount}/${connections.length} connections for user ${userId}`);
   }
 
   close() {
