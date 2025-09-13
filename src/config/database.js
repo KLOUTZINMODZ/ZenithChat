@@ -8,7 +8,7 @@ const connectDB = async () => {
 
 
     try {
-      const masked = uri.replace(/\/\/([^:@/]+):([^@/]+)@/, '
+      const masked = uri.replace(/\/\/([^:@/]+):([^@/]+)@/, '//$1:****@');
       logger.info(`MongoDB connecting to: ${masked}`);
     } catch {}
 
