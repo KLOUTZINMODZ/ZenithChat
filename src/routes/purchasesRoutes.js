@@ -332,4 +332,43 @@ router.post('/auto-release/run', auth, async (req, res) => {
   } catch (error) { return res.status(500).json({ success: false, message: 'Erro no auto-release', error: error.message }); }
 });
 
+// GET /api/purchases/:purchaseId - summary for frontend (marketplace chat context)
+router.get('/:purchaseId', auth, async (req, res) => {
+  try {
+    const { purchaseId } = req.params;
+    const purchase = await Purchase.findById(purchaseId);
+    if (!purchase) {
+      return res.status(404).json({ success: false, message: 'Compra não encontrada' });
+    }
+
+    // Only participants can view
+    const userId = req.user?._id || req.user?.id;
+    const isParticipant = [purchase.buyerId?.toString(), purchase.sellerId?.toString()].includes(userId?.toString());
+    if (!isParticipant) {
+      return res.status(403).json({ success: false, message: 'Acesso negado' });
+    }
+
+    const data = {
+      purchaseId: purchase._id?.toString(),
+      buyerId: purchase.buyerId?.toString(),
+      sellerId: purchase.sellerId?.toString(),
+      itemId: purchase.itemId?.toString?.() || purchase.itemId,
+      price: Number(purchase.price) || 0,
+      status: purchase.status,
+      feePercent: purchase.feePercent,
+      feeAmount: purchase.feeAmount,
+      sellerReceives: purchase.sellerReceives,
+      conversationId: purchase.conversationId?.toString?.() || purchase.conversationId,
+      escrowReservedAt: purchase.escrowReservedAt,
+      shippedAt: purchase.shippedAt,
+      deliveredAt: purchase.deliveredAt,
+      autoReleaseAt: purchase.autoReleaseAt
+    };
+
+    return res.json({ success: true, data });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erro ao buscar compra', error: error.message });
+  }
+});
+
 module.exports = router;

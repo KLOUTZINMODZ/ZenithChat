@@ -209,7 +209,6 @@ app.use('/api/purchases', (req, res, next) => {
 });
 app.use('/api/purchases', purchasesRoutes);
 
-// Debug endpoint to list registered routes (GET only)
 app.get('/api/routes', (req, res) => {
   try {
     const routes = [];
