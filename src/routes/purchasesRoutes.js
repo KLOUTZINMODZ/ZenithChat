@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Purchase = require('../models/Purchase');
 const WalletLedger = require('../models/WalletLedger');
+const MarketItem = require('../models/MarketItem');
 const cache = require('../services/GlobalCache');
 
 function round2(v) { return Math.round(Number(v) * 100) / 100; }
@@ -93,8 +94,8 @@ router.post('/initiate', auth, async (req, res) => {
     const buyerId = req.user._id;
     const { itemId, price, sellerUserId, itemTitle, itemImage, buyerInfo } = req.body || {};
 
-    if (!itemId || !sellerUserId || !price) {
-      return res.status(400).json({ success: false, message: 'Parâmetros obrigatórios ausentes (itemId, sellerUserId, price)' });
+    if (!itemId) {
+      return res.status(400).json({ success: false, message: 'Parâmetros obrigatórios ausentes (itemId)' });
     }
     if (!buyerInfo || !buyerInfo.fullName || !buyerInfo.cpf || !buyerInfo.birthDate || !buyerInfo.email) {
       return res.status(400).json({ success: false, message: 'Dados do comprador incompletos' });
@@ -110,12 +111,18 @@ router.post('/initiate', auth, async (req, res) => {
     if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'E-mail inválido' });
     if (getAge(birthDate) < 18) return res.status(400).json({ success: false, message: 'Idade mínima para compra é 18 anos' });
 
+    // Fetch item to derive true seller and price
+    const itemDoc = await MarketItem.findById(itemId);
+    if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
+    const sellerUserIdFromItem = itemDoc.userId?.toString?.() || String(itemDoc.userId);
+    const priceUsed = Number(itemDoc.price) || Number(price);
+
     const buyer = await User.findById(buyerId);
     if (!buyer) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
-    if (buyer.walletBalance < Number(price)) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
+    if (buyer.walletBalance < Number(priceUsed)) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
 
     // Validate seller
-    const seller = await User.findById(sellerUserId);
+    const seller = await User.findById(sellerUserIdFromItem);
     if (!seller) return res.status(404).json({ success: false, message: 'Vendedor não encontrado' });
     if (buyerId.toString() === seller._id.toString()) {
       return res.status(400).json({ success: false, message: 'Você não pode comprar seu próprio item.' });
@@ -139,12 +146,12 @@ router.post('/initiate', auth, async (req, res) => {
     }
 
     const feePercent = 5;
-    const platformFee = round2((Number(price) * feePercent) / 100);
-    const sellerReceives = round2(Number(price) - platformFee);
+    const platformFee = round2((Number(priceUsed) * feePercent) / 100);
+    const sellerReceives = round2(Number(priceUsed) - platformFee);
 
     const purchase = await runTx(async (session) => {
       let p = await Purchase.create([{
-        buyerId, sellerId: sellerUserId, itemId, price: Number(price), feePercent, feeAmount: platformFee, sellerReceives,
+        buyerId, sellerId: sellerUserIdFromItem, itemId, price: Number(priceUsed), feePercent, feeAmount: platformFee, sellerReceives,
         status: 'initiated',
         buyerInfo: { fullName, cpf, birthDate, email },
         logs: [{ level: 'info', message: 'Purchase initiated' }]
@@ -152,7 +159,7 @@ router.post('/initiate', auth, async (req, res) => {
       p = p[0];
 
       const before = round2(buyer.walletBalance || 0);
-      const after = round2(before - Number(price));
+      const after = round2(before - Number(priceUsed));
       buyer.walletBalance = after;
       if (!buyer.cpfCnpj) buyer.cpfCnpj = cpf;
       if (!buyer.legalName) buyer.legalName = fullName;
@@ -164,7 +171,7 @@ router.post('/initiate', auth, async (req, res) => {
         txId: null,
         direction: 'debit',
         reason: 'purchase_reserve',
-        amount: Number(price),
+        amount: Number(priceUsed),
         operationId: `purchase_reserve:${p._id.toString()}`,
         balanceBefore: before,
         balanceAfter: after,
@@ -181,13 +188,17 @@ router.post('/initiate', auth, async (req, res) => {
     });
 
     // create or fetch conversation
-    const conv = await getOrCreateConversation(buyerId, sellerUserId, { purchaseId: purchase._id.toString(), marketplaceItemId: itemId, context: 'marketplace_purchase' });
+    const conv = await getOrCreateConversation(buyerId, sellerUserIdFromItem, { purchaseId: purchase._id.toString(), marketplaceItemId: itemId, context: 'marketplace_purchase' });
     purchase.conversationId = conv._id;
     await purchase.save();
 
     // Atualiza conversa para modo marketplace e preenche subdocumento marketplace
     try {
-      const seller = await User.findById(sellerUserId);
+      const seller = await User.findById(sellerUserIdFromItem);
+      // Derive item summary safely
+      const itemTitleUsed = itemTitle || (typeof itemDoc?.title === 'string' ? itemDoc.title : undefined) || '';
+      const itemImageUsed = itemImage || (typeof itemDoc?.image === 'string' ? itemDoc.image : undefined) || '';
+
       conv.type = 'marketplace';
       conv.marketplace = {
         buyer: {
@@ -197,7 +208,7 @@ router.post('/initiate', auth, async (req, res) => {
           avatar: buyer.avatar || buyer.profileImage || null
         },
         seller: {
-          userid: seller?._id || sellerUserId,
+          userid: seller?._id || sellerUserIdFromItem,
           name: seller?.name || seller?.legalName || seller?.username || null,
           email: seller?.email || null,
           avatar: seller?.avatar || seller?.profileImage || null
@@ -205,7 +216,12 @@ router.post('/initiate', auth, async (req, res) => {
         nomeRegistrado: String(fullName || buyer.legalName || buyer.name || ''),
         purchaseId: purchase._id,
         marketplaceItemId: itemId,
-        statusCompra: purchase.status
+        statusCompra: purchase.status,
+        price: Number(priceUsed),
+        currency: 'BRL',
+        itemTitle: itemTitleUsed,
+        itemImage: itemImageUsed,
+        purchaseDate: purchase.escrowReservedAt || new Date()
       };
 
       // Compatibilidade: client=buyer, booster=seller
@@ -233,6 +249,12 @@ router.post('/initiate', auth, async (req, res) => {
       conv.metadata.set('purchaseId', purchase._id.toString());
       conv.metadata.set('marketplaceItemId', String(itemId));
       conv.metadata.set('context', 'marketplace_purchase');
+      conv.metadata.set('statusCompra', purchase.status);
+      conv.metadata.set('price', Number(priceUsed));
+      conv.metadata.set('currency', 'BRL');
+      if (itemTitleUsed) conv.metadata.set('itemTitle', itemTitleUsed);
+      if (itemImageUsed) conv.metadata.set('itemImage', itemImageUsed);
+      conv.metadata.set('purchaseDate', (purchase.escrowReservedAt || new Date()).toISOString());
 
       await conv.save();
     } catch (convErr) {
@@ -250,7 +272,7 @@ router.post('/initiate', auth, async (req, res) => {
           message: `Você iniciou a compra de ${itemTitle || 'um item'}.`,
           data: { purchaseId: purchase._id, conversationId: conv._id, itemId }
         });
-        await ns.sendNotification(String(sellerUserId), {
+        await ns.sendNotification(String(sellerUserIdFromItem), {
           type: 'purchase:new',
           title: 'Novo pedido',
           message: `Um comprador iniciou a compra de ${itemTitle || 'seu item'}.`,

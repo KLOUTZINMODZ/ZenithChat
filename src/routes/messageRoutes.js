@@ -174,25 +174,33 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         }
 
         let buyerId = null, sellerId = null;
+        let purchasePrice = null, purchaseStatus = null, purchaseDateVal = null, itemTitleUsed = null, itemImageUsed = null;
         if (meta.purchaseId) {
-          const p = await Purchase.findById(meta.purchaseId).select('buyerId sellerId');
+          const p = await Purchase.findById(meta.purchaseId).select('buyerId sellerId price status escrowReservedAt createdAt itemId');
           if (p) {
             buyerId = p.buyerId?.toString() || null;
             sellerId = p.sellerId?.toString() || null;
+            purchasePrice = Number(p.price) || null;
+            purchaseStatus = p.status || null;
+            purchaseDateVal = p.escrowReservedAt || p.createdAt || null;
           }
         }
         if (!buyerId || !sellerId) {
-          const p2 = await Purchase.findOne({ conversationId: plain._id }).select('buyerId sellerId');
+          const p2 = await Purchase.findOne({ conversationId: plain._id }).select('buyerId sellerId price status escrowReservedAt createdAt itemId');
           if (p2) {
             buyerId = buyerId || (p2.buyerId?.toString() || null);
             sellerId = sellerId || (p2.sellerId?.toString() || null);
+            if (purchasePrice == null) purchasePrice = Number(p2.price) || null;
+            if (!purchaseStatus) purchaseStatus = p2.status || null;
+            if (!purchaseDateVal) purchaseDateVal = p2.escrowReservedAt || p2.createdAt || null;
+            if (!meta.marketplaceItemId && p2.itemId) meta.marketplaceItemId = p2.itemId?.toString?.() || p2.itemId;
           }
         }
 
         // Fallback: deduz seller a partir do marketplaceItemId
         try {
-          if ((!sellerId || !buyerId) && meta.marketplaceItemId) {
-            const item = await MarketItem.findById(meta.marketplaceItemId).select('userId');
+          if (meta.marketplaceItemId) {
+            const item = await MarketItem.findById(meta.marketplaceItemId).select('userId title image');
             if (item?.userId) {
               const sellerFromItem = item.userId.toString();
               sellerId = sellerId || sellerFromItem;
@@ -203,6 +211,8 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
                 if (maybeBuyer) buyerId = maybeBuyer;
               }
             }
+            if (!itemTitleUsed && item?.title) itemTitleUsed = String(item.title);
+            if (!itemImageUsed && item?.image) itemImageUsed = String(item.image);
           }
         } catch (_) {}
 
@@ -249,6 +259,43 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
               avatar: plain.booster?.avatar || boosterData.avatar
             };
           }
+
+          // Sempre forneça um bloco marketplace no payload quando for contexto marketplace (para front exibir info ricas)
+          try {
+            if (!plain.marketplace) plain.marketplace = {};
+            // Buyer/Seller
+            if (clientData) {
+              plain.marketplace.buyer = {
+                userid: clientData.userid,
+                name: clientData.name,
+                email: buyer?.email || null,
+                avatar: clientData.avatar || null
+              };
+            }
+            if (boosterData) {
+              plain.marketplace.seller = {
+                userid: boosterData.userid,
+                name: boosterData.name,
+                email: seller?.email || null,
+                avatar: boosterData.avatar || null
+              };
+            }
+            // Campos de resumo (com fallback a metadata)
+            const getMeta = (k, dflt=null) => (meta && Object.prototype.hasOwnProperty.call(meta, k)) ? meta[k] : dflt;
+            plain.marketplace.nomeRegistrado = plain.marketplace.nomeRegistrado || getMeta('nomeRegistrado', plain.client?.name || null);
+            plain.marketplace.purchaseId = plain.marketplace.purchaseId || getMeta('purchaseId', null);
+            plain.marketplace.marketplaceItemId = plain.marketplace.marketplaceItemId || getMeta('marketplaceItemId', null);
+            plain.marketplace.statusCompra = plain.marketplace.statusCompra || getMeta('statusCompra', plain.statusCompra || null);
+            // price/currency/title/image/date
+            plain.marketplace.price = plain.marketplace.price || purchasePrice || Number(getMeta('price', NaN));
+            if (Number.isNaN(plain.marketplace.price)) delete plain.marketplace.price;
+            plain.marketplace.currency = plain.marketplace.currency || getMeta('currency', 'BRL');
+            plain.marketplace.itemTitle = plain.marketplace.itemTitle || itemTitleUsed || getMeta('itemTitle', null);
+            plain.marketplace.itemImage = plain.marketplace.itemImage || itemImageUsed || getMeta('itemImage', null);
+            const pd = plain.marketplace.purchaseDate || purchaseDateVal || getMeta('purchaseDate', null);
+            if (pd) plain.marketplace.purchaseDate = typeof pd === 'string' ? new Date(pd) : pd;
+            if (!plain.marketplace.statusCompra && purchaseStatus) plain.marketplace.statusCompra = purchaseStatus;
+          } catch (_) {}
 
           // Dedup participants (caso backend tenha IDs duplicados)
           try {

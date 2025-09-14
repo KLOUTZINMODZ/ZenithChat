@@ -43,18 +43,27 @@ class ConversationHandler {
       }
 
       let buyerId = null, sellerId = null;
+      let purchasePrice = null, purchaseStatus = null, purchaseDateVal = null, itemTitleUsed = null, itemImageUsed = null;
       if (meta.purchaseId) {
-        const purchase = await Purchase.findById(meta.purchaseId).select('buyerId sellerId conversationId');
+        const purchase = await Purchase.findById(meta.purchaseId).select('buyerId sellerId conversationId price status escrowReservedAt createdAt itemId');
         if (purchase) {
           buyerId = purchase.buyerId?.toString() || null;
           sellerId = purchase.sellerId?.toString() || null;
+          purchasePrice = Number(purchase.price) || null;
+          purchaseStatus = purchase.status || null;
+          purchaseDateVal = purchase.escrowReservedAt || purchase.createdAt || null;
+          if (!meta.marketplaceItemId && purchase.itemId) meta.marketplaceItemId = purchase.itemId?.toString?.() || purchase.itemId;
         }
       }
       if (!buyerId || !sellerId) {
-        const purchaseByConv = await Purchase.findOne({ conversationId: conv._id }).select('buyerId sellerId');
+        const purchaseByConv = await Purchase.findOne({ conversationId: conv._id }).select('buyerId sellerId price status escrowReservedAt createdAt itemId');
         if (purchaseByConv) {
           buyerId = buyerId || (purchaseByConv.buyerId?.toString() || null);
           sellerId = sellerId || (purchaseByConv.sellerId?.toString() || null);
+          if (purchasePrice == null) purchasePrice = Number(purchaseByConv.price) || null;
+          if (!purchaseStatus) purchaseStatus = purchaseByConv.status || null;
+          if (!purchaseDateVal) purchaseDateVal = purchaseByConv.escrowReservedAt || purchaseByConv.createdAt || null;
+          if (!meta.marketplaceItemId && purchaseByConv.itemId) meta.marketplaceItemId = purchaseByConv.itemId?.toString?.() || purchaseByConv.itemId;
         }
       }
 
@@ -106,6 +115,47 @@ class ConversationHandler {
             return true;
           });
         }
+      } catch (_) {}
+
+      // Fornece bloco marketplace com resumo (para documentos legados sem subdocumento)
+      try {
+        // Item resumo
+        try {
+          if (meta.marketplaceItemId) {
+            const item = await require('../../models/MarketItem').findById(meta.marketplaceItemId).select('title image');
+            if (!itemTitleUsed && item?.title) itemTitleUsed = String(item.title);
+            if (!itemImageUsed && item?.image) itemImageUsed = String(item.image);
+          }
+        } catch (_) {}
+        if (!conv.marketplace) conv.marketplace = {};
+        if (clientData) {
+          conv.marketplace.buyer = {
+            userid: clientData.userid,
+            name: clientData.name,
+            email: buyer?.email || null,
+            avatar: clientData.avatar || null
+          };
+        }
+        if (boosterData) {
+          conv.marketplace.seller = {
+            userid: boosterData.userid,
+            name: boosterData.name,
+            email: seller?.email || null,
+            avatar: boosterData.avatar || null
+          };
+        }
+        const getMeta = (k, dflt=null) => (meta && Object.prototype.hasOwnProperty.call(meta, k)) ? meta[k] : dflt;
+        conv.marketplace.nomeRegistrado = conv.marketplace.nomeRegistrado || getMeta('nomeRegistrado', conv.client?.name || null);
+        conv.marketplace.purchaseId = conv.marketplace.purchaseId || getMeta('purchaseId', null);
+        conv.marketplace.marketplaceItemId = conv.marketplace.marketplaceItemId || getMeta('marketplaceItemId', null);
+        conv.marketplace.statusCompra = conv.marketplace.statusCompra || purchaseStatus || getMeta('statusCompra', conv.statusCompra || null);
+        const priceVal = purchasePrice != null ? purchasePrice : Number(getMeta('price', NaN));
+        if (!conv.marketplace.price && !Number.isNaN(priceVal)) conv.marketplace.price = priceVal;
+        conv.marketplace.currency = conv.marketplace.currency || getMeta('currency', 'BRL');
+        conv.marketplace.itemTitle = conv.marketplace.itemTitle || itemTitleUsed || getMeta('itemTitle', null);
+        conv.marketplace.itemImage = conv.marketplace.itemImage || itemImageUsed || getMeta('itemImage', null);
+        const pd = conv.marketplace.purchaseDate || purchaseDateVal || getMeta('purchaseDate', null);
+        if (pd) conv.marketplace.purchaseDate = typeof pd === 'string' ? new Date(pd) : pd;
       } catch (_) {}
 
     } catch (err) {

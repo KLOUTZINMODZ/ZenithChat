@@ -142,7 +142,13 @@ const conversationSchema = new mongoose.Schema({
     nomeRegistrado: String,
     purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Purchase' },
     marketplaceItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MarketItem' },
-    statusCompra: { type: String, enum: ['initiated','escrow_reserved','shipped','delivered','completed','cancelled'], default: 'initiated' }
+    statusCompra: { type: String, enum: ['initiated','escrow_reserved','shipped','delivered','completed','cancelled'], default: 'initiated' },
+    // Campos de resumo para exibição rápida no front e para evitar múltiplos GETs
+    price: { type: Number },
+    currency: { type: String, default: 'BRL' },
+    itemTitle: { type: String },
+    itemImage: { type: String },
+    purchaseDate: { type: Date }
   },
   metadata: {
     type: Map,
