@@ -140,16 +140,8 @@ router.post('/initiate', auth, async (req, res) => {
       || safeId(itemDoc.user)
       || safeId(itemDoc.createdBy);
     if (!sellerUserIdFromItem) {
-      // DEV-ONLY fallback: allow client body sellerUserId when explicitly enabled
-      const devFallbackEnabled = String(process.env.ALLOW_CLIENT_SELLER_FALLBACK || '').trim() === '1';
-      const fallbackBodySeller = safeId(req.body?.sellerUserId);
-      if (devFallbackEnabled && fallbackBodySeller) {
-        sellerUserIdFromItem = fallbackBodySeller;
-        try { logger.warn('[PURCHASES] DEV FALLBACK: using client-provided sellerUserId because item has no seller', { itemId, fallback: sellerUserIdFromItem }); } catch (_) {}
-      } else {
-        try { logger.warn('[PURCHASES] Invalid item seller id for initiate', { itemId, userIdField: itemDoc?.userId, ownerId: itemDoc?.ownerId, sellerId: itemDoc?.sellerId }); } catch (_) {}
-        return res.status(400).json({ success: false, message: 'Item inválido: vendedor não configurado ou inválido' });
-      }
+      try { logger.warn('[PURCHASES] Invalid item seller id for initiate', { itemId, userIdField: itemDoc?.userId, ownerId: itemDoc?.ownerId, sellerId: itemDoc?.sellerId }); } catch (_) {}
+      return res.status(400).json({ success: false, message: 'Item inválido: vendedor não configurado ou inválido' });
     }
     // Validate price
     const priceUsed = Number(itemDoc.price ?? price);
