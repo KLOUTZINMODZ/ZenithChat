@@ -391,6 +391,203 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
 });
 
 
+// GET /api/conversations/:conversationId - retorna uma conversa única enriquecida
+router.get('/conversations/:conversationId', auth, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id || req.userId;
+
+    const conv = await Conversation.findById(conversationId)
+      .populate('participants', 'name email avatar profileImage')
+      .populate('lastMessage')
+      .populate('client.userid', 'name email avatar profileImage')
+      .populate('booster.userid', 'name email avatar profileImage')
+      .populate('marketplace.buyer.userid', 'name email avatar profileImage')
+      .populate('marketplace.seller.userid', 'name email avatar profileImage');
+
+    if (!conv) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    // Verifica participação do usuário
+    try {
+      if (typeof conv.isParticipant === 'function') {
+        if (!conv.isParticipant(userId)) {
+          return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+      } else {
+        const isPart = (conv.participants || []).some(p => {
+          const id = p && (p._id?.toString?.() || p.toString?.() || String(p));
+          return id === userId.toString();
+        });
+        if (!isPart) return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    } catch (_) {}
+
+    // Conta não lidas para o usuário
+    let unreadCount = 0;
+    try {
+      unreadCount = await Message.countDocuments({
+        conversation: conv._id,
+        sender: { $ne: userId },
+        'readBy.user': { $ne: userId }
+      });
+    } catch (_) {}
+
+    // Converte e decripta preview
+    const plain = conv.toObject();
+    try {
+      if (plain.lastMessage && plain.lastMessage.content) {
+        plain.lastMessage.content = decryptMessage(plain.lastMessage.content);
+      }
+    } catch (_) {}
+
+    // Normaliza metadata
+    const rawMeta = plain.metadata;
+    let meta = {};
+    try {
+      if (rawMeta && typeof rawMeta.get === 'function') {
+        meta = Object.fromEntries(rawMeta);
+      } else if (rawMeta && typeof rawMeta === 'object') {
+        meta = { ...rawMeta };
+      }
+    } catch (_) {}
+
+    // Enriquecimento específico para Marketplace (não tocar boosting)
+    try {
+      const isBoosting = meta?.boostingId || plain.boostingStatus;
+      const isMarketplace = meta?.purchaseId || meta?.context === 'marketplace_purchase' || plain.type === 'marketplace';
+      if (isMarketplace && !isBoosting) {
+        let buyerId = null, sellerId = null;
+        if (meta.purchaseId) {
+          const p = await Purchase.findById(meta.purchaseId).select('buyerId sellerId');
+          if (p) {
+            buyerId = p.buyerId?.toString() || null;
+            sellerId = p.sellerId?.toString() || null;
+          }
+        }
+        if (!buyerId || !sellerId) {
+          const p2 = await Purchase.findOne({ conversationId: conv._id }).select('buyerId sellerId');
+          if (p2) {
+            buyerId = buyerId || (p2.buyerId?.toString() || null);
+            sellerId = sellerId || (p2.sellerId?.toString() || null);
+          }
+        }
+        // Fallback via marketplaceItemId
+        if ((!sellerId || !buyerId) && meta.marketplaceItemId) {
+          const item = await MarketItem.findById(meta.marketplaceItemId).select('userId');
+          if (item?.userId) {
+            sellerId = sellerId || item.userId.toString();
+          }
+          // buyerId pode ser o outro participante
+          if (!buyerId && Array.isArray(plain.participants)) {
+            const ids = plain.participants.map(p => p && (p._id?.toString?.() || String(p))).filter(Boolean);
+            const current = userId.toString();
+            const other = ids.find(id => id !== sellerId && id !== current);
+            if (other) buyerId = other;
+          }
+        }
+
+        const lookupIds = [buyerId, sellerId].filter(Boolean);
+        const users = lookupIds.length ? await User.find({ _id: { $in: lookupIds } }).select('name email avatar profileImage') : [];
+        const map = new Map(users.map(u => [u._id.toString(), u]));
+
+        const buyer = buyerId ? map.get(buyerId) : null;
+        const seller = sellerId ? map.get(sellerId) : null;
+
+        const clientData = buyer ? {
+          userid: buyer._id.toString(),
+          _id: buyer._id.toString(),
+          name: buyer.name || 'Cliente',
+          avatar: buyer.avatar || buyer.profileImage || null
+        } : undefined;
+
+        const boosterData = seller ? {
+          userid: seller._id.toString(),
+          _id: seller._id.toString(),
+          name: seller.name || 'Vendedor',
+          avatar: seller.avatar || seller.profileImage || null
+        } : undefined;
+
+        // Atualiza metadata e compat client/booster
+        plain.metadata = { ...meta };
+        if (clientData) plain.metadata.clientData = { ...(plain.metadata.clientData || {}), ...clientData };
+        if (boosterData) plain.metadata.boosterData = { ...(plain.metadata.boosterData || {}), ...boosterData };
+        if (!plain.client && clientData) plain.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
+        if (!plain.booster && boosterData) plain.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
+
+        // Rebuild participants deduplicados
+        try {
+          const rebuilt = [];
+          if (buyer) rebuilt.push({ _id: buyer._id, name: buyer.name, email: buyer.email, avatar: buyer.avatar, profileImage: buyer.avatar || buyer.profileImage || null });
+          if (seller) rebuilt.push({ _id: seller._id, name: seller.name, email: seller.email, avatar: seller.avatar, profileImage: seller.avatar || seller.profileImage || null });
+          if (rebuilt.length >= 1) {
+            const seen = new Set();
+            plain.participants = rebuilt.filter(p => {
+              const id = p && p._id?.toString?.();
+              if (!id || seen.has(id)) return false;
+              seen.add(id);
+              return true;
+            });
+          }
+        } catch (_) {}
+      } else {
+        plain.metadata = meta;
+      }
+    } catch (e) {
+      logger.warn('Marketplace enrichment (REST single) failed', { id: conv?._id?.toString?.(), error: e?.message });
+      plain.metadata = meta;
+    }
+
+    // Formatação compatível
+    let otherParticipant = null;
+    const isGroupChat = Array.isArray(plain.participants) ? (plain.type === 'group' || plain.participants.length > 2) : false;
+    if (!isGroupChat && Array.isArray(plain.participants) && plain.participants.length >= 2) {
+      otherParticipant = plain.participants.find(
+        p => p && p._id && p._id.toString() !== userId.toString()
+      );
+    }
+
+    const formatted = {
+      _id: plain._id,
+      isGroupChat,
+      name: isGroupChat ? (plain.name || plain.groupName || 'Group Chat') : (otherParticipant?.name || 'Unknown User'),
+      image: isGroupChat ? (plain.groupImage || null) : (otherParticipant?.avatar || otherParticipant?.profileImage || null),
+      lastMessage: (plain.lastMessage && plain.lastMessage.content) ? plain.lastMessage.content : '',
+      lastMessageDate: plain.lastMessageAt || plain.updatedAt,
+      unreadCount,
+      participants: (plain.participants || []).map(p => ({
+        _id: p._id,
+        name: p.name,
+        email: p.email,
+        profileImage: p.avatar || p.profileImage
+      })),
+      relatedItem: plain.marketplaceItem || null,
+      relatedOrder: plain.proposal || null,
+      updatedAt: plain.updatedAt,
+
+      boostingStatus: plain.boostingStatus || null,
+      type: plain.type,
+
+      isTemporary: plain.isTemporary || false,
+      expiresAt: plain.expiresAt || null,
+      status: plain.status || null,
+      client: plain.client || null,
+      booster: plain.booster || null,
+      metadata: plain.metadata || null,
+      marketplace: plain.marketplace || null
+    };
+
+    // Para compatibilidade com código que espera o objeto direto
+    return res.json(formatted);
+
+  } catch (error) {
+    logger.error('Error fetching single conversation:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching conversation', error: error.message });
+  }
+});
+
+
 router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300), async (req, res) => {
   try {
     const { conversationId } = req.params;
