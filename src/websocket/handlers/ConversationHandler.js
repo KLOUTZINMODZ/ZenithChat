@@ -5,6 +5,8 @@
 
 const Conversation = require('../../models/Conversation');
 const Message = require('../../models/Message');
+const User = require('../../models/User');
+const Purchase = require('../../models/Purchase');
 const logger = require('../../utils/logger');
 
 class ConversationHandler {
@@ -12,6 +14,87 @@ class ConversationHandler {
     this.connectionManager = connectionManager;
     this.userLastCheck = new Map();
     this.activePolling = new Map();
+  }
+
+  /**
+   * Enriquecimento para conversas de Marketplace:
+   * - Detecta context por metadata.purchaseId ou metadata.context === 'marketplace_purchase'
+   * - Preenche metadata.clientData / metadata.boosterData
+   * - Preenche client / booster (userid, name, avatar)
+   * Não altera conversas de boosting.
+   */
+  async enrichMarketplaceConversation(conv) {
+    try {
+      // Padroniza metadata para objeto simples
+      const rawMeta = conv.metadata;
+      let meta = {};
+      if (rawMeta && typeof rawMeta.get === 'function') {
+        meta = Object.fromEntries(rawMeta);
+      } else if (rawMeta && typeof rawMeta === 'object') {
+        meta = { ...rawMeta };
+      }
+
+      const isMarketplace = meta?.purchaseId || meta?.context === 'marketplace_purchase' || conv.type === 'marketplace';
+      const isBoosting = meta?.boostingId || conv.boostingStatus; // não mexer se for boosting
+      if (!isMarketplace || isBoosting) {
+        conv.metadata = meta; // ainda normalize metadata
+        return;
+      }
+
+      let buyerId = null, sellerId = null;
+      if (meta.purchaseId) {
+        const purchase = await Purchase.findById(meta.purchaseId).select('buyerId sellerId conversationId');
+        if (purchase) {
+          buyerId = purchase.buyerId?.toString() || null;
+          sellerId = purchase.sellerId?.toString() || null;
+        }
+      }
+      if (!buyerId || !sellerId) {
+        const purchaseByConv = await Purchase.findOne({ conversationId: conv._id }).select('buyerId sellerId');
+        if (purchaseByConv) {
+          buyerId = buyerId || (purchaseByConv.buyerId?.toString() || null);
+          sellerId = sellerId || (purchaseByConv.sellerId?.toString() || null);
+        }
+      }
+
+      if (!buyerId && !sellerId) {
+        conv.metadata = meta;
+        return;
+      }
+
+      const ids = [buyerId, sellerId].filter(Boolean);
+      const users = await User.find({ _id: { $in: ids } }).select('name avatar');
+      const map = new Map(users.map(u => [u._id.toString(), u]));
+
+      const buyer = buyerId ? map.get(buyerId) : null;
+      const seller = sellerId ? map.get(sellerId) : null;
+
+      const clientData = buyer ? {
+        userid: buyer._id.toString(),
+        _id: buyer._id.toString(),
+        name: buyer.name || 'Cliente',
+        avatar: buyer.avatar || null
+      } : undefined;
+
+      const boosterData = seller ? {
+        userid: seller._id.toString(),
+        _id: seller._id.toString(),
+        name: seller.name || 'Vendedor',
+        avatar: seller.avatar || null
+      } : undefined;
+
+      conv.metadata = { ...meta };
+      if (clientData) conv.metadata.clientData = { ...(conv.metadata.clientData || {}), ...clientData };
+      if (boosterData) conv.metadata.boosterData = { ...(conv.metadata.boosterData || {}), ...boosterData };
+
+      // Compatibilidade com front que usa client/booster
+      if (!conv.client && clientData) conv.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
+      if (!conv.booster && boosterData) conv.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
+
+    } catch (err) {
+      // Loga mas não quebra fluxo
+      try { logger.warn('Marketplace enrichment failed for conversation', { id: conv?._id?.toString?.(), error: err?.message }); } catch (_) {}
+    }
   }
 
   /**
@@ -111,15 +194,18 @@ class ConversationHandler {
   async getConversationsData(userId, lastCheck = null) {
     try {
 
+      // Corrige query/populate para o schema real (participants é ObjectId de User)
       const conversations = await Conversation.find({
-        'participants.user': userId
+        participants: userId
       })
-      .populate('participants.user', 'name profileImage')
+      .populate('participants', 'name avatar profileImage email')
+      .populate('client.userid', 'name avatar profileImage email')
+      .populate('booster.userid', 'name avatar profileImage email')
       .populate({
         path: 'lastMessage',
         populate: {
           path: 'sender',
-          select: 'name'
+          select: 'name avatar profileImage'
         }
       })
       .sort({ updatedAt: -1 });
@@ -135,7 +221,6 @@ class ConversationHandler {
 
           const plainConv = conv.toObject();
           plainConv.unreadCount = unreadCount;
-          
 
           if (lastCheck) {
             const lastCheckDate = new Date(parseInt(lastCheck));
@@ -143,6 +228,24 @@ class ConversationHandler {
           } else {
             plainConv.hasUpdate = true;
           }
+
+          // Enriquecimento específico para Marketplace (não afeta boosting)
+          await this.enrichMarketplaceConversation(plainConv);
+
+          // Normaliza participants no formato compacto esperado pelo front
+          try {
+            if (Array.isArray(plainConv.participants)) {
+              const seen = new Set();
+              plainConv.participants = plainConv.participants
+                .map(p => p && p._id ? { _id: p._id, name: p.name, email: p.email, profileImage: p.avatar || p.profileImage || null } : p)
+                .filter(p => {
+                  const id = p && (p._id?.toString ? p._id.toString() : String(p));
+                  if (!id || seen.has(id)) return false;
+                  seen.add(id);
+                  return true;
+                });
+            }
+          } catch (_) {}
 
           return plainConv;
         })

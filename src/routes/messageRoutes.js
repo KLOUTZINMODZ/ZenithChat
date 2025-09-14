@@ -3,6 +3,8 @@ const router = express.Router();
 const { auth } = require('../middleware/auth');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const Purchase = require('../models/Purchase');
+const User = require('../models/User');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
 const logger = require('../utils/logger');
 const cache = require('../services/GlobalCache');
@@ -147,7 +149,95 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
     });
 
 
-    const formattedConversations = conversations.map(conv => {
+    // Enriquecimento apenas para marketplace
+    const enriched = await Promise.all(conversations.map(async conv => {
+      try {
+        const plain = conv.toObject();
+        // Normaliza metadata (Map -> Object)
+        const rawMeta = plain.metadata;
+        let meta = {};
+        if (rawMeta && typeof rawMeta.get === 'function') {
+          meta = Object.fromEntries(rawMeta);
+        } else if (rawMeta && typeof rawMeta === 'object') {
+          meta = { ...rawMeta };
+        }
+
+        const isBoosting = meta?.boostingId || plain.boostingStatus;
+        const isMarketplace = meta?.purchaseId || meta?.context === 'marketplace_purchase' || plain.type === 'marketplace';
+        if (!isMarketplace || isBoosting) {
+          plain.metadata = meta;
+          return plain;
+        }
+
+        let buyerId = null, sellerId = null;
+        if (meta.purchaseId) {
+          const p = await Purchase.findById(meta.purchaseId).select('buyerId sellerId');
+          if (p) {
+            buyerId = p.buyerId?.toString() || null;
+            sellerId = p.sellerId?.toString() || null;
+          }
+        }
+        if (!buyerId || !sellerId) {
+          const p2 = await Purchase.findOne({ conversationId: conv._id }).select('buyerId sellerId');
+          if (p2) {
+            buyerId = buyerId || (p2.buyerId?.toString() || null);
+            sellerId = sellerId || (p2.sellerId?.toString() || null);
+          }
+        }
+
+        if (buyerId || sellerId) {
+          const ids = [buyerId, sellerId].filter(Boolean);
+          const users = await User.find({ _id: { $in: ids } }).select('name avatar');
+          const map = new Map(users.map(u => [u._id.toString(), u]));
+
+          const buyer = buyerId ? map.get(buyerId) : null;
+          const seller = sellerId ? map.get(sellerId) : null;
+
+          const clientData = buyer ? {
+            userid: buyer._id.toString(),
+            _id: buyer._id.toString(),
+            name: buyer.name || 'Cliente',
+            avatar: buyer.avatar || null
+          } : undefined;
+
+          const boosterData = seller ? {
+            userid: seller._id.toString(),
+            _id: seller._id.toString(),
+            name: seller.name || 'Vendedor',
+            avatar: seller.avatar || null
+          } : undefined;
+
+          plain.metadata = { ...meta };
+          if (clientData) plain.metadata.clientData = { ...(plain.metadata.clientData || {}), ...clientData };
+          if (boosterData) plain.metadata.boosterData = { ...(plain.metadata.boosterData || {}), ...boosterData };
+
+          if (!plain.client && clientData) plain.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
+          if (!plain.booster && boosterData) plain.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
+
+          // Dedup participants (caso backend tenha IDs duplicados)
+          try {
+            if (Array.isArray(plain.participants)) {
+              const seen = new Set();
+              plain.participants = plain.participants.filter(p => {
+                const id = p && p._id ? p._id.toString() : String(p);
+                if (!id || seen.has(id)) return false;
+                seen.add(id);
+                return true;
+              });
+            }
+          } catch {}
+        } else {
+          plain.metadata = meta;
+        }
+
+        return plain;
+      } catch (e) {
+        logger.warn('Marketplace enrichment (REST) failed for conversation', { id: conv?._id?.toString?.(), error: e?.message });
+        return conv.toObject();
+      }
+    }));
+
+    const formattedConversations = enriched.map(conv => {
       try {
 
         let otherParticipant = null;
@@ -160,7 +250,9 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         }
 
 
-        const userUnreadCount = conv.unreadCount?.get(userId.toString()) || 0;
+        const userUnreadCount = (conv.unreadCount && typeof conv.unreadCount.get === 'function')
+          ? (conv.unreadCount.get(userId.toString()) || 0)
+          : (typeof conv.unreadCount === 'number' ? conv.unreadCount : 0);
 
 
         return {
@@ -175,7 +267,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           lastMessage: conv.lastMessage?.content || '',
           lastMessageDate: conv.lastMessageAt || conv.updatedAt,
           unreadCount: userUnreadCount,
-          participants: conv.participants.map(p => ({
+          participants: (conv.participants || []).map(p => ({
             _id: p._id,
             name: p.name,
             email: p.email,
