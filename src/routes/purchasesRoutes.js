@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Purchase = require('../models/Purchase');
 const WalletLedger = require('../models/WalletLedger');
+const cache = require('../services/GlobalCache');
 
 function round2(v) { return Math.round(Number(v) * 100) / 100; }
 function onlyDigits(v) { return String(v || '').replace(/\D/g, ''); }
@@ -62,7 +63,16 @@ async function getOrCreateConversation(buyerId, sellerId, metadata) {
   });
   if (!conv) {
     let meta = metadata instanceof Map ? metadata : new Map(Object.entries(metadata || {}));
-    conv = await Conversation.create({ participants: unique, type: 'direct', metadata: meta });
+    try {
+      conv = await Conversation.create({ participants: unique, type: 'marketplace', metadata: meta });
+    } catch (err) {
+      // Idempotency guard: if another request created it, refetch
+      if (err && err.code === 11000) {
+        conv = await Conversation.findOne({ 'metadata.purchaseId': metadata.purchaseId });
+      } else {
+        throw err;
+      }
+    }
   }
   return conv;
 }
@@ -273,7 +283,24 @@ router.post('/:purchaseId/ship', auth, async (req, res) => {
     await purchase.save();
 
     // Atualiza statusCompra do chat
-    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'shipped' } }); } catch (_) {}
+    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'shipped', updatedAt: new Date() } }); } catch (_) {}
+
+    // WS: notifica mudança de status e atualiza listas
+    try {
+      const ws = req.app.get('webSocketServer');
+      const participants = [purchase.buyerId?.toString(), purchase.sellerId?.toString()].filter(Boolean);
+      if (ws) {
+        for (const uid of participants) {
+          ws.sendToUser(uid, { type: 'marketplace:status_changed', data: { conversationId: purchase.conversationId?.toString?.() || purchase.conversationId, purchaseId: purchase._id.toString(), status: 'shipped' } });
+        }
+        if (ws.conversationHandler) {
+          for (const uid of participants) {
+            await ws.conversationHandler.sendConversationsUpdate(uid);
+          }
+        }
+      }
+      participants.forEach(pid => cache.invalidateUserCache(pid));
+    } catch (_) {}
 
     try { const ns = req.app?.locals?.notificationService; if (ns) ns.sendNotification(String(purchase.buyerId), { type: 'purchase:shipped', title: 'Pedido enviado', message: 'O vendedor confirmou o envio do item.', data: { purchaseId } }); } catch (_) {}
 
@@ -316,7 +343,24 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
     });
 
     // Atualiza statusCompra do chat
-    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'completed' } }); } catch (_) {}
+    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'completed', updatedAt: new Date() } }); } catch (_) {}
+
+    // WS: notifica mudança de status e atualiza listas
+    try {
+      const ws = req.app.get('webSocketServer');
+      const participants = [purchase.buyerId?.toString(), purchase.sellerId?.toString()].filter(Boolean);
+      if (ws) {
+        for (const uid of participants) {
+          ws.sendToUser(uid, { type: 'marketplace:status_changed', data: { conversationId: purchase.conversationId?.toString?.() || purchase.conversationId, purchaseId: purchase._id.toString(), status: 'completed' } });
+        }
+        if (ws.conversationHandler) {
+          for (const uid of participants) {
+            await ws.conversationHandler.sendConversationsUpdate(uid);
+          }
+        }
+      }
+      participants.forEach(pid => cache.invalidateUserCache(pid));
+    } catch (_) {}
 
     await sendBalanceUpdate(req.app, purchase.sellerId);
 
@@ -360,7 +404,24 @@ router.post('/:purchaseId/cancel', auth, async (req, res) => {
     });
 
     // Atualiza statusCompra do chat
-    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'cancelled' } }); } catch (_) {}
+    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'cancelled', updatedAt: new Date() } }); } catch (_) {}
+
+    // WS: notifica mudança de status e atualiza listas
+    try {
+      const ws = req.app.get('webSocketServer');
+      const participants = [purchase.buyerId?.toString(), purchase.sellerId?.toString()].filter(Boolean);
+      if (ws) {
+        for (const uid of participants) {
+          ws.sendToUser(uid, { type: 'marketplace:status_changed', data: { conversationId: purchase.conversationId?.toString?.() || purchase.conversationId, purchaseId: purchase._id.toString(), status: 'cancelled' } });
+        }
+        if (ws.conversationHandler) {
+          for (const uid of participants) {
+            await ws.conversationHandler.sendConversationsUpdate(uid);
+          }
+        }
+      }
+      participants.forEach(pid => cache.invalidateUserCache(pid));
+    } catch (_) {}
 
     await sendBalanceUpdate(req.app, purchase.buyerId);
 

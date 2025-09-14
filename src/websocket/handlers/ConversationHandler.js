@@ -227,7 +227,8 @@ class ConversationHandler {
           select: 'name avatar profileImage'
         }
       })
-      .sort({ updatedAt: -1 });
+      .sort({ updatedAt: -1 })
+      .lean();
 
 
       const conversationsWithUnread = await Promise.all(
@@ -238,7 +239,7 @@ class ConversationHandler {
             'readBy.user': { $ne: userId }
           });
 
-          const plainConv = conv.toObject();
+          const plainConv = { ...conv };
           // Decrypt lastMessage preview if available
           try {
             if (plainConv.lastMessage && plainConv.lastMessage.content) {

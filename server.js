@@ -164,17 +164,6 @@ const cacheRoutes = require('./src/routes/cache');
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messageRoutes);
 
-// Compatibility: Some consumers request /api/conversations/:conversationId
-// Redirect to new path under /api/messages to avoid 404s in legacy callers
-app.get('/api/conversations/:conversationId', (req, res) => {
-  try {
-    const { conversationId } = req.params;
-    return res.redirect(307, `/api/messages/conversations/${conversationId}`);
-  } catch (e) {
-    return res.status(500).json({ success: false, message: 'Redirect failed', error: e.message });
-  }
-});
-
 app.use('/api/uploads', (req, res, next) => {
   try {
     const authHeader = req.headers['authorization'] || '';

@@ -159,6 +159,16 @@ conversationSchema.index({ 'participants': 1, 'lastMessageAt': -1 });
 conversationSchema.index({ 'participants': 1, 'metadata.boostingId': 1, 'type': 1 });
 conversationSchema.index({ 'participants': 1, 'metadata.proposalId': 1, 'type': 1 });
 conversationSchema.index({ 'participants': 1, 'proposal': 1, 'type': 1 });
+// Optimize marketplace and ordering
+conversationSchema.index({ 'participants': 1, 'updatedAt': -1 });
+conversationSchema.index({ 'marketplace.purchaseId': 1 }, { sparse: true });
+conversationSchema.index(
+  { type: 1, 'metadata.purchaseId': 1 },
+  {
+    unique: true,
+    partialFilterExpression: { type: 'marketplace', 'metadata.purchaseId': { $exists: true } }
+  }
+);
 
 
 conversationSchema.virtual('participantCount').get(function() {
