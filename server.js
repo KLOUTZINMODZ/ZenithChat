@@ -208,14 +208,28 @@ app.use('/api/purchases', (req, res, next) => {
   next();
 });
 app.use('/api/purchases', purchasesRoutes);
-    middleware.handle.stack.forEach((handler) => {
-      if (handler.route) {
-        console.log(`  ${Object.keys(handler.route.methods)} ${middleware.regexp.source.replace('\\/?', '').replace('(?=\\/|$)', '')}${handler.route.path}`);
+
+// Debug endpoint to list registered routes (GET only)
+app.get('/api/routes', (req, res) => {
+  try {
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+      if (middleware.route) {
+        routes.push({ base: '', path: middleware.route.path, methods: Object.keys(middleware.route.methods) });
+      } else if (middleware.name === 'router' && middleware.handle?.stack) {
+        const base = (middleware.regexp && middleware.regexp.toString()) || '';
+        middleware.handle.stack.forEach((h) => {
+          if (h.route) {
+            routes.push({ base, path: h.route.path, methods: Object.keys(h.route.methods) });
+          }
+        });
       }
     });
+    res.json({ success: true, routes });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Failed to list routes', error: e.message });
   }
 });
-app.use('/api/cache', cacheRoutes);
 
 app.use('/api', compatibilityRoutes);
 
