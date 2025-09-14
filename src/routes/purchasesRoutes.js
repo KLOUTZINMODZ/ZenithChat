@@ -114,8 +114,17 @@ router.post('/initiate', auth, async (req, res) => {
     // Fetch item to derive true seller and price
     const itemDoc = await MarketItem.findById(itemId);
     if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
-    const sellerUserIdFromItem = itemDoc.userId?.toString?.() || String(itemDoc.userId);
-    const priceUsed = Number(itemDoc.price) || Number(price);
+    // Validate seller id on the item
+    const sellerRaw = (itemDoc && (itemDoc.userId?._id || itemDoc.userId)) || null;
+    const sellerUserIdFromItem = sellerRaw ? (sellerRaw.toString ? sellerRaw.toString() : String(sellerRaw)) : '';
+    if (!sellerUserIdFromItem || !mongoose.Types.ObjectId.isValid(sellerUserIdFromItem)) {
+      return res.status(400).json({ success: false, message: 'Item inválido: vendedor não configurado ou inválido' });
+    }
+    // Validate price
+    const priceUsed = Number(itemDoc.price ?? price);
+    if (!Number.isFinite(priceUsed) || priceUsed <= 0) {
+      return res.status(400).json({ success: false, message: 'Preço inválido para a compra' });
+    }
 
     const buyer = await User.findById(buyerId);
     if (!buyer) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
