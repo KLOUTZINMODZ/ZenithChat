@@ -91,6 +91,21 @@ class ConversationHandler {
       if (!conv.client && clientData) conv.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
       if (!conv.booster && boosterData) conv.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
 
+      // Garante que participants contenha buyer e seller (se estiver faltando ou duplicado)
+      try {
+        if (Array.isArray(conv.participants)) {
+          const ids = new Set(conv.participants.map(p => p && p._id ? p._id.toString() : (p?.toString?.() || String(p))));
+          const list = [...conv.participants];
+          if (clientData && !ids.has(clientData._id)) {
+            list.push({ _id: clientData._id, name: clientData.name, avatar: clientData.avatar });
+          }
+          if (boosterData && !ids.has(boosterData._id)) {
+            list.push({ _id: boosterData._id, name: boosterData.name, avatar: boosterData.avatar });
+          }
+          conv.participants = list;
+        }
+      } catch (_) {}
+
     } catch (err) {
       // Loga mas não quebra fluxo
       try { logger.warn('Marketplace enrichment failed for conversation', { id: conv?._id?.toString?.(), error: err?.message }); } catch (_) {}
