@@ -52,14 +52,17 @@ async function sendBalanceUpdate(app, userId) {
 }
 
 async function getOrCreateConversation(buyerId, sellerId, metadata) {
-  const p = [buyerId.toString(), sellerId.toString()].sort();
+  const unique = Array.from(new Set([buyerId.toString(), sellerId.toString()])).sort();
+  if (unique.length < 2) {
+    throw new Error('Participants must be distinct');
+  }
   let conv = await Conversation.findOne({
-    participants: { $all: p, $size: 2 },
+    participants: { $all: unique, $size: unique.length },
     'metadata.purchaseId': metadata.purchaseId
   });
   if (!conv) {
     let meta = metadata instanceof Map ? metadata : new Map(Object.entries(metadata || {}));
-    conv = await Conversation.create({ participants: p, type: 'direct', metadata: meta });
+    conv = await Conversation.create({ participants: unique, type: 'direct', metadata: meta });
   }
   return conv;
 }
@@ -100,6 +103,13 @@ router.post('/initiate', auth, async (req, res) => {
     const buyer = await User.findById(buyerId);
     if (!buyer) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
     if (buyer.walletBalance < Number(price)) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
+
+    // Validate seller
+    const seller = await User.findById(sellerUserId);
+    if (!seller) return res.status(404).json({ success: false, message: 'Vendedor não encontrado' });
+    if (buyerId.toString() === seller._id.toString()) {
+      return res.status(400).json({ success: false, message: 'Você não pode comprar seu próprio item.' });
+    }
 
     if (buyer.cpfCnpj && buyer.cpfCnpj !== cpf) {
       return res.status(409).json({ success: false, message: 'CPF em conflito com o já vinculado à conta.' });

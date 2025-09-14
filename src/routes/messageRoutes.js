@@ -4,6 +4,7 @@ const { auth } = require('../middleware/auth');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const Purchase = require('../models/Purchase');
+const MarketItem = require('../models/MarketItem');
 const User = require('../models/User');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
 const logger = require('../utils/logger');
@@ -185,9 +186,26 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           }
         }
 
+        // Fallback: deduz seller a partir do marketplaceItemId
+        try {
+          if ((!sellerId || !buyerId) && meta.marketplaceItemId) {
+            const item = await MarketItem.findById(meta.marketplaceItemId).select('userId');
+            if (item?.userId) {
+              const sellerFromItem = item.userId.toString();
+              sellerId = sellerId || sellerFromItem;
+              // buyerId é o outro participante (se possível deduzir)
+              if (!buyerId && Array.isArray(plain.participants)) {
+                const participantIds = plain.participants.map(p => p && (p._id?.toString?.() || String(p))).filter(Boolean);
+                const maybeBuyer = participantIds.find(pid => pid !== sellerFromItem);
+                if (maybeBuyer) buyerId = maybeBuyer;
+              }
+            }
+          }
+        } catch (_) {}
+
         if (buyerId || sellerId) {
           const ids = [buyerId, sellerId].filter(Boolean);
-          const users = await User.find({ _id: { $in: ids } }).select('name avatar');
+          const users = await User.find({ _id: { $in: ids } }).select('name email avatar profileImage');
           const map = new Map(users.map(u => [u._id.toString(), u]));
 
           const buyer = buyerId ? map.get(buyerId) : null;
@@ -211,12 +229,39 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           if (clientData) plain.metadata.clientData = { ...(plain.metadata.clientData || {}), ...clientData };
           if (boosterData) plain.metadata.boosterData = { ...(plain.metadata.boosterData || {}), ...boosterData };
 
-          if (!plain.client && clientData) plain.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
-          if (!plain.booster && boosterData) plain.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
+          // Merge/ensure client & booster fields even if object já existe
+          if (clientData) {
+            plain.client = {
+              ...(plain.client || {}),
+              userid: clientData.userid,
+              name: plain.client?.name || clientData.name,
+              avatar: plain.client?.avatar || clientData.avatar
+            };
+          }
+          if (boosterData) {
+            plain.booster = {
+              ...(plain.booster || {}),
+              userid: boosterData.userid,
+              name: plain.booster?.name || boosterData.name,
+              avatar: plain.booster?.avatar || boosterData.avatar
+            };
+          }
 
           // Dedup participants (caso backend tenha IDs duplicados)
           try {
-            if (Array.isArray(plain.participants)) {
+            const rebuilt = [];
+            if (buyer) rebuilt.push({ _id: buyer._id, name: buyer.name, email: buyer.email, avatar: buyer.avatar, profileImage: buyer.avatar || buyer.profileImage || null });
+            if (seller) rebuilt.push({ _id: seller._id, name: seller.name, email: seller.email, avatar: seller.avatar, profileImage: seller.avatar || seller.profileImage || null });
+            if (rebuilt.length >= 1) {
+              // dedup por _id
+              const seen = new Set();
+              plain.participants = rebuilt.filter(p => {
+                const id = p && p._id?.toString?.();
+                if (!id || seen.has(id)) return false;
+                seen.add(id);
+                return true;
+              });
+            } else if (Array.isArray(plain.participants)) {
               const seen = new Set();
               plain.participants = plain.participants.filter(p => {
                 const id = p && p._id ? p._id.toString() : String(p);

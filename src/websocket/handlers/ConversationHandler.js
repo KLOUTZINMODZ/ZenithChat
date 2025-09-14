@@ -63,8 +63,8 @@ class ConversationHandler {
         return;
       }
 
-      const ids = [buyerId, sellerId].filter(Boolean);
-      const users = await User.find({ _id: { $in: ids } }).select('name avatar');
+      const buyersellerIds = [buyerId, sellerId].filter(Boolean);
+      const users = await User.find({ _id: { $in: buyersellerIds } }).select('name email avatar profileImage');
       const map = new Map(users.map(u => [u._id.toString(), u]));
 
       const buyer = buyerId ? map.get(buyerId) : null;
@@ -91,6 +91,22 @@ class ConversationHandler {
       // Compatibilidade com front que usa client/booster
       if (!conv.client && clientData) conv.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
       if (!conv.booster && boosterData) conv.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
+
+      // Rebuild participants for direct chat to ensure two distinct entries
+      try {
+        const rebuilt = [];
+        if (buyer) rebuilt.push({ _id: buyer._id, name: buyer.name, email: buyer.email, avatar: buyer.avatar, profileImage: buyer.avatar || buyer.profileImage || null });
+        if (seller) rebuilt.push({ _id: seller._id, name: seller.name, email: seller.email, avatar: seller.avatar, profileImage: seller.avatar || seller.profileImage || null });
+        if (rebuilt.length >= 1) {
+          const seen = new Set();
+          conv.participants = rebuilt.filter(p => {
+            const id = p && p._id?.toString?.();
+            if (!id || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          });
+        }
+      } catch (_) {}
 
     } catch (err) {
       // Loga mas não quebra fluxo
