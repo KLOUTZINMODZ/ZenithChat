@@ -25,6 +25,7 @@ const walletRoutes = require('./src/routes/walletRoutes');
 const temporaryChatCleanupService = require('./src/services/temporaryChatCleanupService');
 const purchasesRoutes = require('./src/routes/purchasesRoutes');
 const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseService');
+const mongoose = require('mongoose');
 
 const app = express();
 
@@ -276,25 +277,38 @@ app.locals.notificationService = wsServer.notificationService;
 app.set('webSocketServer', wsServer);
 
 
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  server.close(() => {
-    logger.info('HTTP server closed');
-    wsServer.close();
-    cache.close();
-    process.exit(0);
-  });
-});
+function gracefulShutdown(signal = 'SIGTERM') {
+  const start = Date.now();
+  logger.info(`${signal} signal received: initiating graceful shutdown`);
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT signal received: closing HTTP server');
+  // Stop background services (clear intervals/timeouts)
+  try { temporaryChatCleanupService.stop(); } catch (e) { logger.warn('Error stopping TemporaryChatCleanupService', e); }
+  try { purchaseAutoReleaseService.stop(); } catch (e) { logger.warn('Error stopping PurchaseAutoReleaseService', e); }
+
+  // Close WebSocket server first so HTTP can close cleanly
+  try { wsServer.close(); } catch (e) { logger.warn('Error closing WebSocket server', e); }
+
+  // Graceful HTTP close with fallback force-exit
+  const FORCE_EXIT_AFTER_MS = parseInt(process.env.FORCE_EXIT_AFTER_MS || '8000');
+  const forceTimer = setTimeout(() => {
+    logger.warn(`Force exiting process after ${FORCE_EXIT_AFTER_MS}ms grace period`);
+    try { cache.close(); } catch (_) {}
+    try { mongoose.connection?.close?.(); } catch (_) {}
+    process.exit(0);
+  }, FORCE_EXIT_AFTER_MS);
+  forceTimer.unref?.();
+
   server.close(() => {
-    logger.info('HTTP server closed');
-    wsServer.close();
-    cache.close();
+    logger.info(`HTTP server closed in ${Date.now() - start}ms`);
+    try { cache.close(); } catch (_) {}
+    try { mongoose.connection?.close?.(); } catch (_) {}
+    clearTimeout(forceTimer);
     process.exit(0);
   });
-});
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 
 const PORT = process.env.PORT || 5000;
