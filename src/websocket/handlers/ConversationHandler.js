@@ -72,8 +72,8 @@ class ConversationHandler {
         if (buyerId && sellerId && buyerId === sellerId) {
           // Try re-derive seller from item
           if (meta.marketplaceItemId) {
-            const item = await require('../../models/MarketItem').findById(meta.marketplaceItemId).select('userId');
-            const sellerFromItem = item?.userId?.toString?.();
+            const item = await require('../../models/MarketItem').findById(meta.marketplaceItemId).select('sellerId userId');
+            const sellerFromItem = item?.sellerId?.toString?.() || item?.userId?.toString?.();
             if (sellerFromItem && sellerFromItem !== buyerId) {
               sellerId = sellerFromItem;
             }
@@ -144,9 +144,12 @@ class ConversationHandler {
         // Item resumo
         try {
           if (meta.marketplaceItemId) {
-            const item = await require('../../models/MarketItem').findById(meta.marketplaceItemId).select('title image');
+            const item = await require('../../models/MarketItem').findById(meta.marketplaceItemId).select('sellerId userId title image images');
             if (!itemTitleUsed && item?.title) itemTitleUsed = String(item.title);
-            if (!itemImageUsed && item?.image) itemImageUsed = String(item.image);
+            if (!itemImageUsed) {
+              if (item?.image) itemImageUsed = String(item.image);
+              else if (Array.isArray(item?.images) && item.images.length > 0) itemImageUsed = String(item.images[0]);
+            }
           }
         } catch (_) {}
         if (!conv.marketplace) conv.marketplace = {};

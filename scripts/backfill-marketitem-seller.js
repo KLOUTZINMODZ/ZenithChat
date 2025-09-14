@@ -24,7 +24,7 @@ function safeId(v) {
   console.log('[BACKFILL] Connecting to MongoDB...');
   await connectDB();
 
-  const queryMissing = { $or: [ { userId: { $exists: false } }, { userId: null } ] };
+  const queryMissing = { $or: [ { userId: { $exists: false } }, { userId: null }, { sellerId: { $exists: false } }, { sellerId: null } ] };
   const totalMissing = await MarketItem.countDocuments(queryMissing);
   console.log(`[BACKFILL] Items missing seller userId: ${totalMissing}`);
 
@@ -69,6 +69,7 @@ function safeId(v) {
         continue;
       }
       item.userId = user._id;
+      try { item.sellerId = user._id; } catch (_) {}
       await item.save();
       resolved++;
       console.log(`[BACKFILL] Set seller for item ${item._id} -> ${user._id}`);

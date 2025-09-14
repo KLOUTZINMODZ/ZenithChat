@@ -222,9 +222,9 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         // Fallback: deduz seller a partir do marketplaceItemId
         try {
           if (meta.marketplaceItemId) {
-            const item = await MarketItem.findById(meta.marketplaceItemId).select('userId title image');
-            if (item?.userId) {
-              const sellerFromItem = item.userId.toString();
+            const item = await MarketItem.findById(meta.marketplaceItemId).select('sellerId userId title image');
+            const sellerFromItem = item?.sellerId?.toString?.() || item?.userId?.toString?.();
+            if (sellerFromItem) {
               sellerId = sellerId || sellerFromItem;
               // buyerId é o outro participante (se possível deduzir)
               if (!buyerId && Array.isArray(plain.participants)) {

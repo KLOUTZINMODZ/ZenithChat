@@ -129,19 +129,23 @@ router.post('/initiate', auth, async (req, res) => {
     if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'E-mail inválido' });
     if (getAge(birthDate) < 18) return res.status(400).json({ success: false, message: 'Idade mínima para compra é 18 anos' });
 
-    // Fetch item to derive true seller and price
-    const itemDoc = await MarketItem.findById(itemId);
+    // Fetch item to derive true seller and price (lean to preserve all fields like sellerId from main API)
+    const itemDoc = await MarketItem.findById(itemId).lean();
     if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
-    // Validate seller id on the item (support legacy shapes)
-    // Try common legacy field names if needed
-    let sellerUserIdFromItem = safeId(itemDoc.userId) 
+    // Validate seller id on the item (support legacy shapes). Prefer sellerId (main API canonical), then userId, then others
+    let sellerUserIdFromItem = safeId(itemDoc.sellerId)
+      || safeId(itemDoc.userId)
       || safeId(itemDoc.ownerId)
-      || safeId(itemDoc.sellerId)
       || safeId(itemDoc.user)
       || safeId(itemDoc.createdBy);
     if (!sellerUserIdFromItem) {
-      try { logger.warn('[PURCHASES] Invalid item seller id for initiate', { itemId, userIdField: itemDoc?.userId, ownerId: itemDoc?.ownerId, sellerId: itemDoc?.sellerId }); } catch (_) {}
+      try { logger.warn('[PURCHASES] Invalid item seller id for initiate', { itemId, sellerId: itemDoc?.sellerId, userIdField: itemDoc?.userId, ownerId: itemDoc?.ownerId }); } catch (_) {}
       return res.status(400).json({ success: false, message: 'Item inválido: vendedor não configurado ou inválido' });
+    }
+
+    // Optional status guard: if main API provided status and it's not active, block purchase
+    if (typeof itemDoc.status === 'string' && itemDoc.status !== 'active') {
+      return res.status(400).json({ success: false, message: 'Item indisponível para compra' });
     }
     // Validate price
     const priceUsed = Number(itemDoc.price ?? price);
@@ -229,7 +233,10 @@ router.post('/initiate', auth, async (req, res) => {
       const seller = await User.findById(sellerUserIdFromItem);
       // Derive item summary safely
       const itemTitleUsed = itemTitle || (typeof itemDoc?.title === 'string' ? itemDoc.title : undefined) || '';
-      const itemImageUsed = itemImage || (typeof itemDoc?.image === 'string' ? itemDoc.image : undefined) || '';
+      let itemImageUsed = itemImage || (typeof itemDoc?.image === 'string' ? itemDoc.image : undefined) || '';
+      if (!itemImageUsed && Array.isArray(itemDoc?.images) && itemDoc.images.length > 0) {
+        itemImageUsed = String(itemDoc.images[0]);
+      }
 
       conv.type = 'marketplace';
       conv.marketplace = {

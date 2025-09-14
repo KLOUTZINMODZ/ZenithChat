@@ -48,6 +48,7 @@ router.patch('/market-items/:itemId/seller', requireAdminKey, async (req, res) =
     if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado' });
 
     item.userId = seller._id;
+    try { item.sellerId = seller._id; } catch (_) {}
     await item.save();
 
     try { logger.info('[ADMIN] MarketItem seller set', { itemId, sellerUserId }); } catch (_) {}
@@ -61,7 +62,7 @@ router.patch('/market-items/:itemId/seller', requireAdminKey, async (req, res) =
 // GET /api/admin/market-items/without-seller - list items missing seller
 router.get('/market-items/without-seller', requireAdminKey, async (req, res) => {
   try {
-    const items = await MarketItem.find({ $or: [ { userId: { $exists: false } }, { userId: null } ] }).select('_id title userId ownerId sellerId user createdBy');
+    const items = await MarketItem.find({ $or: [ { userId: { $exists: false } }, { userId: null }, { sellerId: { $exists: false } }, { sellerId: null } ] }).select('_id title userId sellerId ownerId user createdBy');
     return res.json({ success: true, count: items.length, items });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Erro ao buscar itens sem vendedor', error: error.message });
