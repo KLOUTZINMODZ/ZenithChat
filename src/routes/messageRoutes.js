@@ -119,10 +119,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       isActive: true
     })
       .populate('participants', 'name email avatar profileImage')
-      .populate({
-        path: 'lastMessage',
-        populate: { path: 'sender', select: 'name email avatar profileImage' }
-      })
+      .populate('lastMessage')
       .populate('client.userid', 'name email avatar profileImage')
       .populate('booster.userid', 'name email avatar profileImage')
       .sort('-lastMessageAt')
@@ -258,10 +255,6 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           : (typeof conv.unreadCount === 'number' ? conv.unreadCount : 0);
 
 
-        // Decrypt preview content if available
-        let lastMessageContent = '';
-        try { lastMessageContent = conv.lastMessage?.content ? decryptMessage(conv.lastMessage.content) : ''; } catch (_) {}
-
         return {
           _id: conv._id,
           isGroupChat: isGroupChat,
@@ -271,7 +264,9 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           image: isGroupChat 
             ? (conv.groupImage || null) 
             : (otherParticipant?.avatar || otherParticipant?.profileImage || null),
-          lastMessage: lastMessageContent,
+          lastMessage: (conv.lastMessage && conv.lastMessage.content)
+            ? decryptMessage(conv.lastMessage.content)
+            : '',
           lastMessageDate: conv.lastMessageAt || conv.updatedAt,
           unreadCount: userUnreadCount,
           participants: (conv.participants || []).map(p => ({
