@@ -218,6 +218,8 @@ class ConversationHandler {
       .populate('participants', 'name avatar profileImage email')
       .populate('client.userid', 'name avatar profileImage email')
       .populate('booster.userid', 'name avatar profileImage email')
+      .populate('marketplace.buyer.userid', 'name avatar profileImage email')
+      .populate('marketplace.seller.userid', 'name avatar profileImage email')
       .populate({
         path: 'lastMessage',
         populate: {

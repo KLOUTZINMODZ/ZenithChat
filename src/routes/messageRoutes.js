@@ -123,6 +123,8 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       .populate('lastMessage')
       .populate('client.userid', 'name email avatar profileImage')
       .populate('booster.userid', 'name email avatar profileImage')
+      .populate('marketplace.buyer.userid', 'name email avatar profileImage')
+      .populate('marketplace.seller.userid', 'name email avatar profileImage')
       .sort('-lastMessageAt')
       .skip(skip)
       .limit(parseInt(limit));
@@ -332,7 +334,8 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           status: conv.status || null,
           client: conv.client || null,
           booster: conv.booster || null,
-          metadata: conv.metadata || null
+          metadata: conv.metadata || null,
+          marketplace: conv.marketplace || null
         };
       } catch (convError) {
         logger.error('Error formatting conversation:', { 

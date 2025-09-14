@@ -175,6 +175,60 @@ router.post('/initiate', auth, async (req, res) => {
     purchase.conversationId = conv._id;
     await purchase.save();
 
+    // Atualiza conversa para modo marketplace e preenche subdocumento marketplace
+    try {
+      const seller = await User.findById(sellerUserId);
+      conv.type = 'marketplace';
+      conv.marketplace = {
+        buyer: {
+          userid: buyerId,
+          name: buyer.name || buyer.legalName || buyer.username || null,
+          email: buyer.email || null,
+          avatar: buyer.avatar || buyer.profileImage || null
+        },
+        seller: {
+          userid: seller?._id || sellerUserId,
+          name: seller?.name || seller?.legalName || seller?.username || null,
+          email: seller?.email || null,
+          avatar: seller?.avatar || seller?.profileImage || null
+        },
+        nomeRegistrado: String(fullName || buyer.legalName || buyer.name || ''),
+        purchaseId: purchase._id,
+        marketplaceItemId: itemId,
+        statusCompra: purchase.status
+      };
+
+      // Compatibilidade: client=buyer, booster=seller
+      conv.client = {
+        userid: buyerId,
+        name: conv.client?.name || buyer.name || buyer.legalName || buyer.username || 'Cliente',
+        avatar: conv.client?.avatar || buyer.avatar || buyer.profileImage || null
+      };
+      if (seller) {
+        conv.booster = {
+          userid: seller._id,
+          name: conv.booster?.name || seller.name || seller.legalName || seller.username || 'Vendedor',
+          avatar: conv.booster?.avatar || seller.avatar || seller.profileImage || null
+        };
+      }
+
+      // Garante metadados
+      try {
+        if (!(conv.metadata instanceof Map)) {
+          conv.metadata = new Map(Object.entries(conv.metadata || {}));
+        }
+      } catch (_) {
+        conv.metadata = new Map();
+      }
+      conv.metadata.set('purchaseId', purchase._id.toString());
+      conv.metadata.set('marketplaceItemId', String(itemId));
+      conv.metadata.set('context', 'marketplace_purchase');
+
+      await conv.save();
+    } catch (convErr) {
+      console.error('[PURCHASES] Failed to update conversation as marketplace:', convErr);
+    }
+
     await sendBalanceUpdate(req.app, buyerId);
 
     try {
@@ -218,6 +272,9 @@ router.post('/:purchaseId/ship', auth, async (req, res) => {
     purchase.logs.push({ level: 'info', message: 'Seller marked as shipped', data: { autoReleaseAt: auto } });
     await purchase.save();
 
+    // Atualiza statusCompra do chat
+    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'shipped' } }); } catch (_) {}
+
     try { const ns = req.app?.locals?.notificationService; if (ns) ns.sendNotification(String(purchase.buyerId), { type: 'purchase:shipped', title: 'Pedido enviado', message: 'O vendedor confirmou o envio do item.', data: { purchaseId } }); } catch (_) {}
 
     return res.json({ success: true, message: 'Envio confirmado. Escrow será liberado automaticamente em 7 dias se o comprador não confirmar.', data: { autoReleaseAt: purchase.autoReleaseAt } });
@@ -257,6 +314,9 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
       purchase.logs.push({ level: 'info', message: 'Buyer confirmed delivery. Funds released to seller.' });
       await purchase.save({ session });
     });
+
+    // Atualiza statusCompra do chat
+    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'completed' } }); } catch (_) {}
 
     await sendBalanceUpdate(req.app, purchase.sellerId);
 
@@ -298,6 +358,9 @@ router.post('/:purchaseId/cancel', auth, async (req, res) => {
       purchase.logs.push({ level: 'warn', message: 'Purchase cancelled and refunded' });
       await purchase.save({ session });
     });
+
+    // Atualiza statusCompra do chat
+    try { if (purchase.conversationId) await Conversation.findByIdAndUpdate(purchase.conversationId, { $set: { 'marketplace.statusCompra': 'cancelled' } }); } catch (_) {}
 
     await sendBalanceUpdate(req.app, purchase.buyerId);
 

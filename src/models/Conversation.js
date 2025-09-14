@@ -125,6 +125,25 @@ const conversationSchema = new mongoose.Schema({
     specializations: [String],
     registeredAt: Date
   },
+  // Novo bloco específico de Marketplace (não afeta boosting)
+  marketplace: {
+    buyer: {
+      userid: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      name: String,
+      email: String,
+      avatar: String
+    },
+    seller: {
+      userid: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      name: String,
+      email: String,
+      avatar: String
+    },
+    nomeRegistrado: String,
+    purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Purchase' },
+    marketplaceItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'MarketItem' },
+    statusCompra: { type: String, enum: ['initiated','escrow_reserved','shipped','delivered','completed','cancelled'], default: 'initiated' }
+  },
   metadata: {
     type: Map,
     of: mongoose.Schema.Types.Mixed
