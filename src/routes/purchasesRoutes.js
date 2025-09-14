@@ -8,6 +8,24 @@ const Purchase = require('../models/Purchase');
 const WalletLedger = require('../models/WalletLedger');
 const MarketItem = require('../models/MarketItem');
 const cache = require('../services/GlobalCache');
+const logger = require('../utils/logger');
+
+// Robustly extract a string ObjectId from different legacy shapes
+function safeId(v) {
+  try {
+    if (!v) return null;
+    // If already a valid ObjectId or string
+    if (mongoose.Types.ObjectId.isValid(v)) return String(v);
+    if (typeof v === 'string' && mongoose.Types.ObjectId.isValid(v)) return v;
+    if (typeof v === 'object') {
+      if (v._id && mongoose.Types.ObjectId.isValid(v._id)) return String(v._id);
+      if (v.$oid && typeof v.$oid === 'string' && mongoose.Types.ObjectId.isValid(v.$oid)) return v.$oid;
+      // Some drivers expose toHexString
+      if (typeof v.toHexString === 'function') return v.toHexString();
+    }
+  } catch (_) {}
+  return null;
+}
 
 function round2(v) { return Math.round(Number(v) * 100) / 100; }
 function onlyDigits(v) { return String(v || '').replace(/\D/g, ''); }
@@ -114,10 +132,15 @@ router.post('/initiate', auth, async (req, res) => {
     // Fetch item to derive true seller and price
     const itemDoc = await MarketItem.findById(itemId);
     if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
-    // Validate seller id on the item
-    const sellerRaw = (itemDoc && (itemDoc.userId?._id || itemDoc.userId)) || null;
-    const sellerUserIdFromItem = sellerRaw ? (sellerRaw.toString ? sellerRaw.toString() : String(sellerRaw)) : '';
-    if (!sellerUserIdFromItem || !mongoose.Types.ObjectId.isValid(sellerUserIdFromItem)) {
+    // Validate seller id on the item (support legacy shapes)
+    // Try common legacy field names if needed
+    let sellerUserIdFromItem = safeId(itemDoc.userId) 
+      || safeId(itemDoc.ownerId)
+      || safeId(itemDoc.sellerId)
+      || safeId(itemDoc.user)
+      || safeId(itemDoc.createdBy);
+    if (!sellerUserIdFromItem) {
+      try { logger.warn('[PURCHASES] Invalid item seller id for initiate', { itemId, userIdField: itemDoc?.userId, ownerId: itemDoc?.ownerId, sellerId: itemDoc?.sellerId }); } catch (_) {}
       return res.status(400).json({ success: false, message: 'Item inválido: vendedor não configurado ou inválido' });
     }
     // Validate price
