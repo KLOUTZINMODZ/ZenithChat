@@ -67,6 +67,28 @@ class ConversationHandler {
         }
       }
 
+      // Ensure buyer and seller are not the same user due to legacy/edge cases
+      try {
+        if (buyerId && sellerId && buyerId === sellerId) {
+          // Try re-derive seller from item
+          if (meta.marketplaceItemId) {
+            const item = await require('../../models/MarketItem').findById(meta.marketplaceItemId).select('userId');
+            const sellerFromItem = item?.userId?.toString?.();
+            if (sellerFromItem && sellerFromItem !== buyerId) {
+              sellerId = sellerFromItem;
+            }
+          }
+          // If still equal, try use the other participant as seller
+          if (buyerId === sellerId && Array.isArray(conv.participants) && conv.participants.length >= 2) {
+            const partIds = conv.participants.map(p => p && (p._id?.toString?.() || String(p))).filter(Boolean);
+            const candidate = partIds.find(id => id !== buyerId);
+            if (candidate) sellerId = candidate;
+          }
+          // If still equal, drop seller to avoid duplicating same user for both roles
+          if (buyerId === sellerId) sellerId = null;
+        }
+      } catch (_) {}
+
       if (!buyerId && !sellerId) {
         conv.metadata = meta;
         return;
@@ -97,9 +119,9 @@ class ConversationHandler {
       if (clientData) conv.metadata.clientData = { ...(conv.metadata.clientData || {}), ...clientData };
       if (boosterData) conv.metadata.boosterData = { ...(conv.metadata.boosterData || {}), ...boosterData };
 
-      // Compatibilidade com front que usa client/booster
-      if (!conv.client && clientData) conv.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
-      if (!conv.booster && boosterData) conv.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
+      // Compatibilidade com front que usa client/booster (sempre definir conforme computado)
+      if (clientData) conv.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
+      if (boosterData) conv.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
 
       // Rebuild participants for direct chat to ensure two distinct entries
       try {

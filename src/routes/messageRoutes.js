@@ -197,6 +197,28 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           }
         }
 
+        // Ensure buyer and seller are not the same user due to legacy/edge cases
+        try {
+          if (buyerId && sellerId && buyerId === sellerId) {
+            // Try re-derive seller from item
+            if (meta.marketplaceItemId) {
+              const item = await MarketItem.findById(meta.marketplaceItemId).select('userId');
+              const sellerFromItem = item?.userId?.toString?.();
+              if (sellerFromItem && sellerFromItem !== buyerId) {
+                sellerId = sellerFromItem;
+              }
+            }
+            // If still equal, try use the other participant as seller
+            if (buyerId === sellerId && Array.isArray(plain.participants) && plain.participants.length >= 2) {
+              const participantIds = plain.participants.map(p => p && (p._id?.toString?.() || String(p))).filter(Boolean);
+              const candidate = participantIds.find(pid => pid !== buyerId);
+              if (candidate) sellerId = candidate;
+            }
+            // If still equal, drop seller to avoid duplicating same user for both roles
+            if (buyerId === sellerId) sellerId = null;
+          }
+        } catch (_) {}
+
         // Fallback: deduz seller a partir do marketplaceItemId
         try {
           if (meta.marketplaceItemId) {
@@ -242,22 +264,12 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           if (clientData) plain.metadata.clientData = { ...(plain.metadata.clientData || {}), ...clientData };
           if (boosterData) plain.metadata.boosterData = { ...(plain.metadata.boosterData || {}), ...boosterData };
 
-          // Merge/ensure client & booster fields even if object já existe
+          // Always set client & booster from computed roles to avoid stale/wrong data
           if (clientData) {
-            plain.client = {
-              ...(plain.client || {}),
-              userid: clientData.userid,
-              name: plain.client?.name || clientData.name,
-              avatar: plain.client?.avatar || clientData.avatar
-            };
+            plain.client = { userid: clientData.userid, name: clientData.name, avatar: clientData.avatar };
           }
           if (boosterData) {
-            plain.booster = {
-              ...(plain.booster || {}),
-              userid: boosterData.userid,
-              name: plain.booster?.name || boosterData.name,
-              avatar: plain.booster?.avatar || boosterData.avatar
-            };
+            plain.booster = { userid: boosterData.userid, name: boosterData.name, avatar: boosterData.avatar };
           }
 
           // Sempre forneça um bloco marketplace no payload quando for contexto marketplace (para front exibir info ricas)

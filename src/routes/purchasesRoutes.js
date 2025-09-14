@@ -256,18 +256,20 @@ router.post('/initiate', auth, async (req, res) => {
         purchaseDate: purchase.escrowReservedAt || new Date()
       };
 
-      // Compatibilidade: client=buyer, booster=seller
+      // Compatibilidade: client=buyer, booster=seller (sempre sobrescrever com valores computados)
       conv.client = {
         userid: buyerId,
-        name: conv.client?.name || buyer.name || buyer.legalName || buyer.username || 'Cliente',
-        avatar: conv.client?.avatar || buyer.avatar || buyer.profileImage || null
+        name: buyer.name || buyer.legalName || buyer.username || 'Cliente',
+        avatar: buyer.avatar || buyer.profileImage || null
       };
       if (seller) {
         conv.booster = {
           userid: seller._id,
-          name: conv.booster?.name || seller.name || seller.legalName || seller.username || 'Vendedor',
-          avatar: conv.booster?.avatar || seller.avatar || seller.profileImage || null
+          name: seller.name || seller.legalName || seller.username || 'Vendedor',
+          avatar: seller.avatar || seller.profileImage || null
         };
+      } else {
+        conv.booster = { userid: sellerUserIdFromItem, name: 'Vendedor', avatar: null };
       }
 
       // Garante metadados
@@ -294,6 +296,18 @@ router.post('/initiate', auth, async (req, res) => {
     }
 
     await sendBalanceUpdate(req.app, buyerId);
+
+    // Proactively update conversations list for both participants and clear caches
+    try {
+      const ws = req.app.get('webSocketServer');
+      const participants = [buyerId?.toString(), sellerUserIdFromItem?.toString()].filter(Boolean);
+      if (ws?.conversationHandler) {
+        for (const uid of participants) {
+          await ws.conversationHandler.sendConversationsUpdate(uid);
+        }
+      }
+      participants.forEach(pid => cache.invalidateUserCache(pid));
+    } catch (_) {}
 
     try {
       const ns = req.app?.locals?.notificationService;
