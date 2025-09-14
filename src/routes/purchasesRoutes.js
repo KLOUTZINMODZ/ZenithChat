@@ -64,6 +64,16 @@ async function getOrCreateConversation(buyerId, sellerId, metadata) {
   return conv;
 }
 
+// Simple diagnostics (no auth) to confirm router is mounted
+router.get('/', (req, res) => {
+  res.json({ success: true, message: 'Purchases router online' });
+});
+
+// Healthcheck: GET /api/purchases/health
+router.get('/health', (req, res) => {
+  res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // POST /api/purchases/initiate
 router.post('/initiate', auth, async (req, res) => {
   try {

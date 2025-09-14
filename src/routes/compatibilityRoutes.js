@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const purchasesRoutes = require('./purchasesRoutes');
 const { auth } = require('../middleware/auth');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -184,5 +185,8 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
     });
   }
 });
+
+// Ensure purchases routes are available via compatibility mount as well
+router.use('/purchases', purchasesRoutes);
 
 module.exports = router;
