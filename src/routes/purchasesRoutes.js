@@ -7,6 +7,7 @@ const Conversation = require('../models/Conversation');
 const Purchase = require('../models/Purchase');
 const WalletLedger = require('../models/WalletLedger');
 const MarketItem = require('../models/MarketItem');
+const Report = require('../models/Report');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 
@@ -557,7 +558,6 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
     await sendBalanceUpdate(req.app, purchase.sellerId);
     // Also notify buyer so their UI can refresh transaction history
     await sendBalanceUpdate(req.app, purchase.buyerId);
-
     try {
       const ns = req.app?.locals?.notificationService;
       if (ns) {
@@ -568,6 +568,82 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
 
     return res.json({ success: true, message: 'Recebimento confirmado. Valores liberados ao vendedor.' });
   } catch (error) { return res.status(500).json({ success: false, message: 'Erro ao confirmar recebimento', error: error.message }); }
+});
+
+// POST /api/purchases/:purchaseId/not-received
+router.post('/:purchaseId/not-received', auth, async (req, res) => {
+  try {
+    const { purchaseId } = req.params;
+    const buyerId = req.user._id;
+    const comment = (req.body && req.body.comment) ? String(req.body.comment) : '';
+
+    const purchase = await Purchase.findById(purchaseId);
+    if (!purchase) return res.status(404).json({ success: false, message: 'Compra não encontrada' });
+    if (purchase.buyerId.toString() !== buyerId.toString()) return res.status(403).json({ success: false, message: 'Acesso negado' });
+
+    if (['completed', 'cancelled'].includes(String(purchase.status))) {
+      return res.status(400).json({ success: false, message: 'Pedido já finalizado' });
+    }
+
+    await runTx(async (session) => {
+      purchase.status = 'escrow_reserved';
+      purchase.autoReleaseAt = null;
+      purchase.logs.push({ level: 'warn', message: 'Buyer declared NOT RECEIVED. Reverted to escrow.', data: { buyerId: buyerId.toString(), comment: comment || undefined } });
+      await purchase.save({ session });
+      await updateConversationMarketplaceStatus(session, purchase, 'escrow_reserved');
+    });
+
+    await emitMarketplaceStatusChanged(req.app, purchase, 'escrow_reserved');
+
+    // Cria um relatório para arbitragem
+    try {
+      const [buyer, seller] = await Promise.all([
+        User.findById(buyerId),
+        User.findById(purchase.sellerId)
+      ]);
+
+      const report = new Report({
+        conversationId: purchase.conversationId,
+        type: 'service_not_delivered',
+        reason: 'buyer_not_received',
+        description: comment || 'Comprador declarou que não recebeu o item.',
+        reporter: {
+          userid: buyerId,
+          name: buyer?.name || buyer?.legalName || buyer?.username || 'Comprador',
+          email: buyer?.email,
+          avatar: buyer?.avatar || buyer?.profileImage,
+          isVerified: !!buyer?.isVerified,
+          registeredAt: buyer?.joinDate || buyer?.createdAt
+        },
+        reported: {
+          userid: purchase.sellerId,
+          name: seller?.name || seller?.legalName || seller?.username || 'Vendedor',
+          email: seller?.email,
+          avatar: seller?.avatar || seller?.profileImage,
+          isVerified: !!seller?.isVerified,
+          registeredAt: seller?.joinDate || seller?.createdAt
+        },
+        status: 'pending',
+        priority: 'high'
+      });
+      await report.save();
+    } catch (_) {}
+
+    // Notifica o vendedor
+    try {
+      const ns = req.app?.locals?.notificationService;
+      if (ns) ns.sendNotification(String(purchase.sellerId), {
+        type: 'purchase:not_received',
+        title: 'Pedido não recebido',
+        message: 'O comprador declarou que não recebeu o item. A liberação foi pausada e a mediação foi aberta.',
+        data: { purchaseId }
+      });
+    } catch (_) {}
+
+    return res.json({ success: true, message: 'Status retornado ao escrow. Vendedor notificado e arbitragem aberta.' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erro ao registrar não recebimento', error: error.message });
+  }
 });
 
 // POST /api/purchases/:purchaseId/cancel
