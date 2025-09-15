@@ -150,6 +150,82 @@ router.get('/health', (req, res) => {
   res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// GET /api/purchases/list - listagem paginada de compras/vendas do usuário
+router.get('/list', auth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const type = String(req.query.type || '').toLowerCase(); // 'sales' | 'purchases'
+    const statusParam = String(req.query.status || '').trim(); // e.g. 'initiated,escrow_reserved,shipped'
+    const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '10')) || 10));
+
+    const filter = {};
+    if (type === 'sales') {
+      filter.sellerId = userId;
+    } else if (type === 'purchases') {
+      filter.buyerId = userId;
+    } else {
+      filter.$or = [{ buyerId: userId }, { sellerId: userId }];
+    }
+    if (statusParam) {
+      const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
+      if (statuses.length) filter.status = { $in: statuses };
+    }
+
+    const total = await Purchase.countDocuments(filter);
+    const purchases = await Purchase.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
+    const buyerIds = Array.from(new Set((purchases || []).map(p => (p.buyerId || '').toString()).filter(Boolean)));
+    const sellerIds = Array.from(new Set((purchases || []).map(p => (p.sellerId || '').toString()).filter(Boolean)));
+
+    const [items, buyers, sellers] = await Promise.all([
+      MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images').lean(),
+      User.find({ _id: { $in: buyerIds } }).select('_id name legalName username avatar').lean(),
+      User.find({ _id: { $in: sellerIds } }).select('_id name legalName username avatar').lean()
+    ]);
+
+    const itemMap = new Map((items || []).map(d => [String(d._id), d]));
+    const buyerMap = new Map((buyers || []).map(u => [String(u._id), u]));
+    const sellerMap = new Map((sellers || []).map(u => [String(u._id), u]));
+    const userName = (u) => (u?.name || u?.legalName || u?.username || 'Usuário');
+
+    const list = (purchases || []).map(p => {
+      const item = itemMap.get(String(p.itemId)) || {};
+      const buyer = buyerMap.get(String(p.buyerId));
+      const seller = sellerMap.get(String(p.sellerId));
+      const img = item.image || (Array.isArray(item.images) && item.images.length ? String(item.images[0]) : '');
+      return {
+        _id: String(p._id),
+        orderNumber: String(p._id).slice(-8).toUpperCase(),
+        status: String(p.status || ''),
+        price: Number(p.price) || 0,
+        feePercent: p.feePercent,
+        feeAmount: p.feeAmount,
+        sellerReceives: p.sellerReceives,
+        createdAt: p.createdAt,
+        item: { _id: String(p.itemId || ''), title: String(item.title || ''), image: img },
+        buyer: { _id: String(p.buyerId || ''), name: userName(buyer) },
+        seller: { _id: String(p.sellerId || ''), name: userName(seller) }
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        orders: list,
+        pagination: { total, page, limit, pages: Math.ceil(total / limit) }
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erro ao listar compras/vendas', error: error.message });
+  }
+});
+
 // POST /api/purchases/initiate
 router.post('/initiate', auth, async (req, res) => {
   try {
@@ -624,5 +700,7 @@ router.get('/:purchaseId', auth, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Erro ao buscar compra', error: error.message });
   }
 });
+
+// GET /api/purchases/list - listagem paginada de compras/vendas do usuário
 
 module.exports = router;
