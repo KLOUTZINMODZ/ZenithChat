@@ -646,6 +646,112 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
   }
 });
 
+// POST /api/purchases/:purchaseId/support-ticket
+router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
+  try {
+    const { purchaseId } = req.params;
+    const userId = req.user._id;
+    const { description = '', issueType = 'payment_issues' } = req.body || {};
+
+    const purchase = await Purchase.findById(purchaseId);
+    if (!purchase) return res.status(404).json({ success: false, message: 'Compra não encontrada' });
+
+    const isBuyer = purchase.buyerId.toString() === userId.toString();
+    const isSeller = purchase.sellerId.toString() === userId.toString();
+    if (!isBuyer && !isSeller) return res.status(403).json({ success: false, message: 'Acesso negado' });
+
+    // Monta dados do denunciante e denunciado
+    const [reporterUser, reportedUser] = await Promise.all([
+      User.findById(userId),
+      User.findById(isBuyer ? purchase.sellerId : purchase.buyerId)
+    ]);
+
+    // Conversa vinculada (se existir)
+    let conversationId = purchase.conversationId || null;
+    if (!conversationId) {
+      try {
+        const conv = await Conversation.findOne({ 'metadata.purchaseId': purchase._id });
+        if (conv) conversationId = conv._id;
+      } catch (_) {}
+    }
+
+    const report = new Report({
+      conversationId,
+      type: ['service_not_delivered','payment_issues','other'].includes(String(issueType)) ? String(issueType) : 'payment_issues',
+      reason: 'support_ticket_opened',
+      description: description || 'Ticket de suporte aberto pelo usuário.',
+      reporter: {
+        userid: reporterUser?._id || userId,
+        name: reporterUser?.name || reporterUser?.legalName || reporterUser?.username || 'Usuário',
+        email: reporterUser?.email,
+        avatar: reporterUser?.avatar || reporterUser?.profileImage,
+        isVerified: !!reporterUser?.isVerified,
+        registeredAt: reporterUser?.joinDate || reporterUser?.createdAt
+      },
+      reported: {
+        userid: reportedUser?._id,
+        name: reportedUser?.name || reportedUser?.legalName || reportedUser?.username || 'Usuário',
+        email: reportedUser?.email,
+        avatar: reportedUser?.avatar || reportedUser?.profileImage,
+        isVerified: !!reportedUser?.isVerified,
+        registeredAt: reportedUser?.joinDate || reportedUser?.createdAt
+      },
+      status: 'pending',
+      priority: 'high'
+    });
+
+    await report.save();
+
+    // Atualiza conversa com marcações leves, se existir
+    try {
+      if (conversationId) {
+        await Conversation.findByIdAndUpdate(conversationId, {
+          $set: {
+            isReported: true,
+            reportedAt: new Date(),
+            reportedBy: userId
+          }
+        });
+      }
+    } catch (_) {}
+
+    // Notifica via WS e Notifications
+    try {
+      const ws = req.app.get('webSocketServer');
+      const participants = [purchase?.buyerId?.toString?.(), purchase?.sellerId?.toString?.()].filter(Boolean);
+      if (ws) {
+        for (const uid of participants) {
+          ws.sendToUser(uid, {
+            type: 'support:ticket_created',
+            data: {
+              conversationId: conversationId?.toString?.() || conversationId,
+              purchaseId: purchase?._id?.toString?.() || purchase?._id,
+              reportId: report?._id?.toString?.() || report?._id,
+              issueType: report.type,
+              timestamp: new Date().toISOString()
+            }
+          });
+        }
+      }
+      const ns = req.app?.locals?.notificationService;
+      if (ns) {
+        for (const uid of participants) {
+          ns.sendNotification(String(uid), {
+            type: 'support:ticket_created',
+            title: 'Ticket de suporte aberto',
+            message: 'Um ticket de suporte foi aberto para esta compra. Nossa equipe irá avaliar em breve.',
+            data: { purchaseId: purchase._id, conversationId, reportId: report._id }
+          });
+        }
+      }
+    } catch (_) {}
+
+    return res.json({ success: true, message: 'Ticket de suporte aberto com sucesso', data: { reportId: report._id } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erro ao abrir ticket de suporte', error: error.message });
+  }
+});
+
 // POST /api/purchases/:purchaseId/cancel
 router.post('/:purchaseId/cancel', auth, async (req, res) => {
   try {

@@ -24,6 +24,7 @@ const cache = require('./src/services/GlobalCache');
 const walletRoutes = require('./src/routes/walletRoutes');
 const temporaryChatCleanupService = require('./src/services/temporaryChatCleanupService');
 const purchasesRoutes = require('./src/routes/purchasesRoutes');
+const supportRoutes = require('./src/routes/supportRoutes');
 const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseService');
 const mongoose = require('mongoose');
 const adminRoutes = require('./src/routes/adminRoutes');
@@ -211,6 +212,9 @@ app.use('/api/purchases', (req, res, next) => {
   next();
 });
 app.use('/api/purchases', purchasesRoutes);
+
+// Support routes (tickets, detalhes)
+app.use('/api/support', supportRoutes);
 
 app.get('/api/routes', (req, res) => {
   try {
