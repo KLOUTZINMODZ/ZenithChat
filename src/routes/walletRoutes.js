@@ -923,7 +923,11 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
     logger.info('[Asaas Webhook] Received event', { eventType });
 
 
-    if (eventType === 'PAYMENT_RECEIVED' || eventType === 'PAYMENT_CONFIRMED') {
+    if (
+      eventType === 'PAYMENT_RECEIVED' ||
+      eventType === 'PAYMENT_CONFIRMED' ||
+      (String(eventType).toUpperCase() === 'PAYMENT_UPDATED' && ['RECEIVED','CONFIRMED'].includes(String((event.payment || event.data || {}).status || '').toUpperCase()))
+    ) {
       const payment = event.payment || event.data || {};
       const paymentId = payment.id || event.paymentId || event.id;
 
@@ -940,10 +944,42 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       }
 
 
-      const tx = await WalletTransaction.findOne({ asaasPaymentId: paymentId });
+      let tx = await WalletTransaction.findOne({ asaasPaymentId: paymentId });
       if (!tx) {
-        logger.warn('Webhook payment with unknown local transaction', { paymentId });
-        return res.json({ received: true });
+        // Fallback 1: link by externalReference if present
+        const extRef = payment.externalReference || event.externalReference || null;
+        if (extRef) {
+          try {
+            const byExt = await WalletTransaction.findOne({ externalReference: extRef });
+            if (byExt) {
+              byExt.asaasPaymentId = paymentId;
+              byExt.logs.push({ level: 'info', message: 'Linked via webhook by externalReference', data: { paymentId, externalReference: extRef } });
+              await byExt.save();
+              tx = byExt;
+            }
+          } catch (_) {}
+        }
+
+        // Fallback 2: extract tx id from externalReference like "wallet_tx_<ObjectId>"
+        if (!tx && extRef) {
+          const m = String(extRef).match(/wallet_tx_([0-9a-fA-F]{24})/);
+          if (m && m[1]) {
+            try {
+              const byId = await WalletTransaction.findById(m[1]);
+              if (byId) {
+                byId.asaasPaymentId = paymentId;
+                byId.logs.push({ level: 'info', message: 'Linked via webhook by extracted txId from externalReference', data: { paymentId, externalReference: extRef } });
+                await byId.save();
+                tx = byId;
+              }
+            } catch (_) {}
+          }
+        }
+
+        if (!tx) {
+          logger.warn('Webhook payment with unknown local transaction', { paymentId, externalReference: extRef });
+          return res.json({ received: true });
+        }
       }
 
 
