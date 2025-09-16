@@ -1084,7 +1084,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
     }
 
 
-    const evUpper = String(eventType).toUpperCase();
     if (evUpper.includes('TRANSFER')) {
       const transfer = event.transfer || event.data || {};
       const transferId = transfer.id || event.transferId || event.id;
