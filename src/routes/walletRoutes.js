@@ -923,14 +923,20 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
     logger.info('[Asaas Webhook] Received event', { eventType });
 
 
-    if (
-      eventType === 'PAYMENT_RECEIVED' ||
-      eventType === 'PAYMENT_CONFIRMED' ||
-      (String(eventType).toUpperCase() === 'PAYMENT_UPDATED' && ['RECEIVED','CONFIRMED'].includes(String((event.payment || event.data || {}).status || '').toUpperCase()))
-    ) {
-      const payment = event.payment || event.data || {};
+    const evUpper = String(eventType).toUpperCase();
+    const isDepositEvent = evUpper === 'PAYMENT_RECEIVED' || evUpper === 'PAYMENT_CONFIRMED' || evUpper.startsWith('PAYMENT');
+    if (isDepositEvent) {
+      let payment = event.payment || event.data || {};
       const paymentId = payment.id || event.paymentId || event.id;
 
+
+      // If minimal payload received, fetch full payment details from Asaas to get externalReference/status
+      if ((!payment || !payment.externalReference || !payment.billingType) && paymentId) {
+        try {
+          const fetched = await AsaasService.getPayment(paymentId);
+          if (fetched && typeof fetched === 'object') payment = { ...fetched, id: fetched.id || paymentId };
+        } catch (_) {}
+      }
 
       const billingType = String(payment.billingType || '').toUpperCase();
       if (billingType && billingType !== 'PIX') {
@@ -946,11 +952,10 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
 
       let tx = await WalletTransaction.findOne({ asaasPaymentId: paymentId });
       if (!tx) {
-        // Fallback 1: link by externalReference if present
-        const extRef = payment.externalReference || event.externalReference || null;
+        const extRef = payment.externalReference || event.externalReference;
         if (extRef) {
           try {
-            const byExt = await WalletTransaction.findOne({ externalReference: extRef });
+            const byExt = await WalletTransaction.findOne({ externalReference: extRef, type: 'deposit' });
             if (byExt) {
               byExt.asaasPaymentId = paymentId;
               byExt.logs.push({ level: 'info', message: 'Linked via webhook by externalReference', data: { paymentId, externalReference: extRef } });
@@ -959,27 +964,26 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
             }
           } catch (_) {}
         }
-
-        // Fallback 2: extract tx id from externalReference like "wallet_tx_<ObjectId>"
-        if (!tx && extRef) {
-          const m = String(extRef).match(/wallet_tx_([0-9a-fA-F]{24})/);
+        if (!tx && paymentId) {
+          // Fallback: if we fetched details above and found tx id in description
+          const desc = String(payment.description || '');
+          const m = desc.match(/#([0-9a-fA-F]{24})\b/);
           if (m && m[1]) {
             try {
-              const byId = await WalletTransaction.findById(m[1]);
+              const byId = await WalletTransaction.findOne({ _id: m[1], type: 'deposit' });
               if (byId) {
                 byId.asaasPaymentId = paymentId;
-                byId.logs.push({ level: 'info', message: 'Linked via webhook by extracted txId from externalReference', data: { paymentId, externalReference: extRef } });
+                byId.logs.push({ level: 'info', message: 'Linked via webhook by description', data: { paymentId, desc } });
                 await byId.save();
                 tx = byId;
               }
             } catch (_) {}
           }
         }
-
-        if (!tx) {
-          logger.warn('Webhook payment with unknown local transaction', { paymentId, externalReference: extRef });
-          return res.json({ received: true });
-        }
+      }
+      if (!tx) {
+        logger.warn('Webhook payment with unknown local transaction', { paymentId, externalReference: payment?.externalReference });
+        return res.json({ received: true });
       }
 
 
@@ -1000,14 +1004,26 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       if (!txLocked) return res.json({ received: true });
 
 
-      const paidValue = Number(payment.value || payment.netValue || payment.totalValue || 0);
-      if (paidValue && Math.abs(paidValue - txLocked.amountGross) > 0.01) {
-        txLocked.status = 'failed';
-        txLocked.logs.push({ level: 'error', message: 'Payment value mismatch', data: { paidValue, expected: txLocked.amountGross } });
+      const providerValue = Number(payment.value || 0);
+      const providerNet = Number(payment.netValue || 0);
+      const approx = (a, b) => Math.abs(Number(a) - Number(b)) <= 0.01;
+      const valueMatches = providerValue ? approx(providerValue, txLocked.amountGross) : false;
+      const netMatchesGross = providerNet ? approx(providerNet, txLocked.amountGross) : false;
+      const netMatchesNet = providerNet ? approx(providerNet, txLocked.amountNet) : false;
+      if (!(valueMatches || netMatchesGross || netMatchesNet)) {
+        txLocked.logs.push({ level: 'warn', message: 'Payment value mismatch (ignored)', data: { providerValue, providerNet, expectedGross: txLocked.amountGross, expectedNet: txLocked.amountNet } });
+        // Continue processing to avoid missing credit due to provider fee differences
+      }
+
+
+      // Accept based on either explicit event or status in fetched payment
+      const pStatus = String(payment.status || '').toUpperCase();
+      if (!(evUpper === 'PAYMENT_RECEIVED' || evUpper === 'PAYMENT_CONFIRMED' || ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH'].includes(pStatus))) {
+        // Not a final receipt event; ignore silently
+        txLocked.logs.push({ level: 'info', message: 'Ignoring non-final payment event', data: { eventType: evUpper, status: pStatus } });
         await txLocked.save();
         return res.json({ received: true });
       }
-
 
       txLocked.status = 'paid';
       txLocked.logs.push({ level: 'info', message: 'Payment confirmed', at: new Date().toISOString() });

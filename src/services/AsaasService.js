@@ -16,6 +16,12 @@ class AsaasService {
     });
   }
 
+  async getPayment(paymentId) {
+    await this.ensureOk();
+    const res = await this.client.get(`/payments/${paymentId}`);
+    return res.data;
+  }
+
   async ensureOk() {
     if (!this.apiKey) throw new Error('Missing ASAAS_API_KEY');
   }
