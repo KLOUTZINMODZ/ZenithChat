@@ -801,12 +801,10 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
     const status = String(t?.status || '').toUpperCase();
     if (status.includes('DONE') || status.includes('CONFIRMED') || status === 'COMPLETED' || status === 'PAID') {
 
-      const lock = await WalletTransaction.updateOne(
-        { _id: tx._id, status: { $in: ['withdraw_pending', 'processing'] } },
-        {
-          $set: { status: 'processing' },
-          $push: { logs: { level: 'info', message: 'Manual reconcile lock acquired', at: new Date().toISOString() } }
-        }
+      // Proceed without setting invalid 'processing' status; rely on idempotent ledger operations
+      await WalletTransaction.updateOne(
+        { _id: tx._id, status: { $in: ['withdraw_pending', 'withdraw_completed', 'failed'] } },
+        { $push: { logs: { level: 'info', message: 'Manual reconcile started', at: new Date().toISOString() } } }
       );
 
       const fresh = await WalletTransaction.findById(tx._id);
@@ -986,19 +984,27 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         return res.json({ received: true });
       }
 
+      // Determine if payment is final (received/confirmed)
+      const pStatus = String(payment.status || '').toUpperCase();
+      const isFinal = (evUpper === 'PAYMENT_RECEIVED' || evUpper === 'PAYMENT_CONFIRMED' || ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH'].includes(pStatus));
 
-      const lock = await WalletTransaction.updateOne(
-        { _id: tx._id, status: { $in: ['pending', 'processing'] } },
+      if (!isFinal) {
+        // Non-final events: just log and return, do not change status
+        await WalletTransaction.updateOne(
+          { _id: tx._id },
+          { $push: { logs: { level: 'info', message: 'Ignoring non-final payment event', data: { eventType: evUpper, status: pStatus }, at: new Date().toISOString() } } }
+        );
+        return res.json({ received: true });
+      }
+
+      // Final events: atomically move to 'paid' if pending/paid and continue
+      await WalletTransaction.updateOne(
+        { _id: tx._id, status: { $in: ['pending', 'paid'] } },
         {
-          $set: { status: 'processing' },
+          $set: { status: 'paid' },
           $push: { logs: { level: 'info', message: 'Asaas webhook processing lock acquired', at: new Date().toISOString() } }
         }
       );
-      if (lock.modifiedCount !== 1) {
-
-        logger.warn('Concurrent or already processed webhook detected; skipping', { txId: tx._id.toString(), currentStatus: tx.status });
-        return res.json({ received: true, alreadyProcessed: true });
-      }
 
       const txLocked = await WalletTransaction.findById(tx._id);
       if (!txLocked) return res.json({ received: true });
@@ -1015,15 +1021,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         // Continue processing to avoid missing credit due to provider fee differences
       }
 
-
-      // Accept based on either explicit event or status in fetched payment
-      const pStatus = String(payment.status || '').toUpperCase();
-      if (!(evUpper === 'PAYMENT_RECEIVED' || evUpper === 'PAYMENT_CONFIRMED' || ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH'].includes(pStatus))) {
-        // Not a final receipt event; ignore silently
-        txLocked.logs.push({ level: 'info', message: 'Ignoring non-final payment event', data: { eventType: evUpper, status: pStatus } });
-        await txLocked.save();
-        return res.json({ received: true });
-      }
 
       txLocked.status = 'paid';
       txLocked.logs.push({ level: 'info', message: 'Payment confirmed', at: new Date().toISOString() });
@@ -1163,17 +1160,10 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       }
 
 
-      const lock = await WalletTransaction.updateOne(
-        { _id: tx._id, status: { $in: ['withdraw_pending', 'processing'] } },
-        {
-          $set: { status: 'processing' },
-          $push: { logs: { level: 'info', message: 'Asaas transfer webhook processing lock acquired', at: new Date().toISOString() } }
-        }
+      await WalletTransaction.updateOne(
+        { _id: tx._id, status: { $in: ['withdraw_pending', 'withdraw_completed', 'failed'] } },
+        { $push: { logs: { level: 'info', message: 'Asaas transfer webhook processing started', at: new Date().toISOString() } } }
       );
-      if (lock.modifiedCount !== 1) {
-
-        return res.json({ received: true, alreadyProcessed: true });
-      }
 
       const txLocked = await WalletTransaction.findById(tx._id);
       if (!txLocked) return res.json({ received: true });

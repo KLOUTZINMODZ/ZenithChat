@@ -45,7 +45,9 @@ const corsOptions = {
       'http://localhost:3000',
       'https://hacklotesite.vercel.app',
       'https://hacklote-front.vercel.app',
-      'https://zenith.enrelyugi.com.br'
+      'https://zenith.enrelyugi.com.br',
+      'https://zenithpaineladm.vercel.app',
+      'https://apizenithadmin-byzenith.vercel.app'
     ];
 
     if (!origin) {
