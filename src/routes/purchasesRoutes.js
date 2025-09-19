@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const Purchase = require('../models/Purchase');
 const WalletLedger = require('../models/WalletLedger');
+const Mediator = require('../models/Mediator');
 const MarketItem = require('../models/MarketItem');
 const Report = require('../models/Report');
 const cache = require('../services/GlobalCache');
@@ -516,7 +517,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
       const after = round2(before + Number(purchase.sellerReceives));
       seller.walletBalance = after;
       await seller.save({ session });
-      await WalletLedger.create([{
+      const releaseCreated = await WalletLedger.create([{
         userId: purchase.sellerId,
         txId: null,
         direction: 'credit',
@@ -527,6 +528,34 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
         balanceAfter: after,
         metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, price: Number(purchase.price), feeAmount: Number(purchase.feeAmount || 0), sellerReceives: Number(purchase.sellerReceives) }
       }], { session });
+
+      // Log platform release into mediator (idempotent)
+      try {
+        const operationId = `release:${purchase._id.toString()}`;
+        await Mediator.updateOne(
+          { operationId },
+          {
+            $setOnInsert: {
+              eventType: 'release',
+              amount: Number(purchase.sellerReceives),
+              currency: 'BRL',
+              operationId,
+              source: 'HackloteChatApi',
+              occurredAt: new Date(),
+              reference: {
+                purchaseId: purchase._id,
+                orderId: null,
+                walletLedgerId: Array.isArray(releaseCreated) ? releaseCreated[0]?._id : (releaseCreated?._id || null),
+                transactionId: null,
+                asaasTransferId: null
+              },
+              metadata: { price: Number(purchase.price), feeAmount: Number(purchase.feeAmount || 0), sellerReceives: Number(purchase.sellerReceives) },
+              description: 'Liberação de escrow ao vendedor'
+            }
+          },
+          { upsert: true, session }
+        );
+      } catch (_) {}
 
       // Credit mediator with platform fee (5%) within the same transaction
       try {
@@ -546,7 +575,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
             const medAfter = round2(medBefore + feeAmount);
             mediatorUser.walletBalance = medAfter;
             await mediatorUser.save({ session });
-            await WalletLedger.create([{
+            const created = await WalletLedger.create([{
               userId: mediatorUser._id,
               txId: null,
               direction: 'credit',
@@ -557,6 +586,28 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
               balanceAfter: medAfter,
               metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, sellerId: purchase.sellerId, price: Number(purchase.price), feeAmount: feeAmount, sellerReceives: Number(purchase.sellerReceives) }
             }], { session });
+
+            // Log mediator fee event for precise financial reporting
+            try {
+              const medLedgerDoc = Array.isArray(created) ? created[0] : created;
+              await Mediator.create([{
+                eventType: 'fee',
+                amount: feeAmount,
+                currency: 'BRL',
+                operationId: `purchase_fee:${purchase._id.toString()}`,
+                source: 'HackloteChatApi',
+                occurredAt: new Date(),
+                reference: {
+                  purchaseId: purchase._id,
+                  walletLedgerId: medLedgerDoc?._id || null,
+                  orderId: null,
+                  transactionId: null,
+                  asaasTransferId: null
+                },
+                metadata: { price: Number(purchase.price), feeAmount: feeAmount, sellerReceives: Number(purchase.sellerReceives), sellerId: purchase.sellerId },
+                description: 'Taxa de mediação (5%) creditada ao mediador'
+              }], { session });
+            } catch (_) {}
           } else {
             try { logger?.warn?.('[PURCHASES] Mediator user not found; fee not credited', { purchaseId: String(purchase._id), feeAmount }); } catch (_) {}
           }
@@ -855,7 +906,7 @@ router.post('/auto-release/run', auth, async (req, res) => {
           const after = round2(before + Number(p.sellerReceives));
           seller.walletBalance = after;
           await seller.save({ session });
-          await WalletLedger.create([{
+          const release = await WalletLedger.create({
             userId: p.sellerId,
             txId: null,
             direction: 'credit',
@@ -865,7 +916,29 @@ router.post('/auto-release/run', auth, async (req, res) => {
             balanceBefore: before,
             balanceAfter: after,
             metadata: { source: 'purchase', auto: true, purchaseId: p._id.toString(), itemId: p.itemId }
-          }], { session });
+          }, { session });
+          // Log platform release into mediator (auto)
+          try {
+            const Mediator = require('../models/Mediator');
+            const operationId = `release:${p._id.toString()}`;
+            await Mediator.updateOne(
+              { operationId },
+              {
+                $setOnInsert: {
+                  eventType: 'release',
+                  amount: Number(p.sellerReceives),
+                  currency: 'BRL',
+                  operationId,
+                  source: 'HackloteChatApi',
+                  occurredAt: new Date(),
+                  reference: { purchaseId: p._id, orderId: null, walletLedgerId: release?._id || null, transactionId: null, asaasTransferId: null },
+                  metadata: { auto: true, itemId: p.itemId },
+                  description: 'Liberação automática de escrow ao vendedor (7 dias)'
+                }
+              },
+              { upsert: true }
+            );
+          } catch (_) {}
           p.status = 'completed';
           p.logs.push({ level: 'info', message: 'Auto-release after 7 days from shipped' });
           await p.save({ session });

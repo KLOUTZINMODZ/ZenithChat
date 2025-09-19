@@ -1,6 +1,7 @@
 const Purchase = require('../models/Purchase');
 const User = require('../models/User');
 const WalletLedger = require('../models/WalletLedger');
+const Mediator = require('../models/Mediator');
 
 function round2(v) { return Math.round(Number(v) * 100) / 100; }
 
@@ -28,7 +29,7 @@ async function runOnce(app) {
       const after = round2(before + Number(p.sellerReceives));
       seller.walletBalance = after;
       await seller.save();
-      await WalletLedger.create({
+      const release = await WalletLedger.create({
         userId: p.sellerId,
         txId: null,
         direction: 'credit',
@@ -39,6 +40,34 @@ async function runOnce(app) {
         balanceAfter: after,
         metadata: { source: 'purchase', auto: true, purchaseId: p._id.toString(), itemId: p.itemId }
       });
+
+      // Log platform release into 'mediator' collection (idempotent by operationId)
+      try {
+        const operationId = `release:${p._id.toString()}`;
+        await Mediator.updateOne(
+          { operationId },
+          {
+            $setOnInsert: {
+              eventType: 'release',
+              amount: Number(p.sellerReceives),
+              currency: 'BRL',
+              operationId,
+              source: 'HackloteChatApi',
+              occurredAt: new Date(),
+              reference: {
+                purchaseId: p._id,
+                orderId: null,
+                walletLedgerId: release?._id || null,
+                transactionId: null,
+                asaasTransferId: null
+              },
+              metadata: { auto: true, itemId: p.itemId },
+              description: 'Liberação automática de escrow ao vendedor (background)'
+            }
+          },
+          { upsert: true }
+        );
+      } catch (_) {}
       p.status = 'completed';
       p.logs.push({ level: 'info', message: 'Auto-release after 7 days from shipped (background)' });
       await p.save();
