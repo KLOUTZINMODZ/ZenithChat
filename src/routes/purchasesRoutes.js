@@ -528,6 +528,43 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
         metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId }
       }], { session });
 
+      // Credit mediator with platform fee (5%) within the same transaction
+      try {
+        const feeAmount = Number(purchase.feeAmount || 0);
+        if (feeAmount > 0) {
+          let mediatorUser = null;
+          const envId = process.env.MEDIATOR_USER_ID;
+          const envEmail = process.env.MEDIATOR_EMAIL;
+          if (envId) {
+            try { mediatorUser = await User.findById(envId).session(session); } catch (_) {}
+          }
+          if (!mediatorUser && envEmail) {
+            try { mediatorUser = await User.findOne({ email: envEmail }).session(session); } catch (_) {}
+          }
+          if (mediatorUser) {
+            const medBefore = round2(mediatorUser.walletBalance || 0);
+            const medAfter = round2(medBefore + feeAmount);
+            mediatorUser.walletBalance = medAfter;
+            await mediatorUser.save({ session });
+            await WalletLedger.create([{
+              userId: mediatorUser._id,
+              txId: null,
+              direction: 'credit',
+              reason: 'purchase_fee',
+              amount: feeAmount,
+              operationId: `purchase_fee:${purchase._id.toString()}`,
+              balanceBefore: medBefore,
+              balanceAfter: medAfter,
+              metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, sellerId: purchase.sellerId }
+            }], { session });
+          } else {
+            try { logger?.warn?.('[PURCHASES] Mediator user not found; fee not credited', { purchaseId: String(purchase._id), feeAmount }); } catch (_) {}
+          }
+        }
+      } catch (e) {
+        try { logger?.error?.('[PURCHASES] Failed to credit mediator fee', { error: e?.message }); } catch (_) {}
+      }
+
       // Buyer settlement ledger (amount 0) to appear in history without changing balance
       try {
         const buyer = await User.findById(purchase.buyerId).session(session);
