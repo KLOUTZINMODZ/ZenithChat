@@ -525,7 +525,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
         operationId: `purchase_release:${purchase._id.toString()}`,
         balanceBefore: before,
         balanceAfter: after,
-        metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId }
+        metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, price: Number(purchase.price), feeAmount: Number(purchase.feeAmount || 0), sellerReceives: Number(purchase.sellerReceives) }
       }], { session });
 
       // Credit mediator with platform fee (5%) within the same transaction
@@ -555,7 +555,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
               operationId: `purchase_fee:${purchase._id.toString()}`,
               balanceBefore: medBefore,
               balanceAfter: medAfter,
-              metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, sellerId: purchase.sellerId }
+              metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, sellerId: purchase.sellerId, price: Number(purchase.price), feeAmount: feeAmount, sellerReceives: Number(purchase.sellerReceives) }
             }], { session });
           } else {
             try { logger?.warn?.('[PURCHASES] Mediator user not found; fee not credited', { purchaseId: String(purchase._id), feeAmount }); } catch (_) {}
