@@ -39,16 +39,35 @@ router.post('/validate', async (req, res) => {
 
 router.get('/ws-token', async (req, res) => {
   try {
+    // Panel proxy bypass: mint a service token if X-Panel-Secret is valid
+    try {
+      const panelSecret = req.header('X-Panel-Secret') || req.header('x-panel-secret');
+      const expected = process.env.PANEL_PROXY_SECRET;
+      if (expected && panelSecret && panelSecret === expected) {
+        const impersonate = req.header('x-admin-user-id') || req.header('x-impersonate-user-id') || 'panel_admin';
+        const payload = { id: impersonate, name: 'Panel Admin', email: null, role: 'admin' };
+        const serviceToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+        const base = process.env.CHAT_PUBLIC_BASE_URL
+          ? process.env.CHAT_PUBLIC_BASE_URL.replace(/\/$/, '')
+          : `${req.secure ? 'wss' : 'ws'}://${req.get('host')}`;
+        const wsUrl = `${base}/ws`;
+
+        return res.json({
+          success: true,
+          data: {
+            url: wsUrl,
+            token: serviceToken,
+            connectionString: `${wsUrl}?token=${serviceToken}`
+          }
+        });
+      }
+    } catch (_) {}
+
     const token = req.header('Authorization')?.replace('Bearer ', '');
-
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
+      return res.status(401).json({ success: false, message: 'No token provided' });
     }
-
-
     jwt.verify(token, process.env.JWT_SECRET);
 
 
@@ -57,14 +76,7 @@ router.get('/ws-token', async (req, res) => {
       : `${req.secure ? 'wss' : 'ws'}://${req.get('host')}`;
     const wsUrl = `${base}/ws`;
 
-    res.json({
-      success: true,
-      data: {
-        url: wsUrl,
-        token: token,
-        connectionString: `${wsUrl}?token=${token}`
-      }
-    });
+    res.json({ success: true, data: { url: wsUrl, token: token, connectionString: `${wsUrl}?token=${token}` } });
   } catch (error) {
     logger.error('WebSocket token error:', error);
     res.status(401).json({
