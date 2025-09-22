@@ -30,20 +30,34 @@ function panelOrAdminBypass(req, res, next) {
       return next();
     }
   } catch (_) {}
+  try {
+    const origin = req.header('Origin') || '';
+    const referer = req.header('Referer') || '';
+    const allowedOrigins = (process.env.PANEL_ALLOWED_ORIGINS || 'https://zenithpaineladm.vercel.app').split(',').map(s => s.trim()).filter(Boolean);
+    const originTrusted = (!!origin && allowedOrigins.some(o => origin.startsWith(o))) || (!!referer && allowedOrigins.some(o => referer.startsWith(o)));
+    if (originTrusted) {
+      req.isAdminPanel = true;
+      return next();
+    }
+  } catch (_) {}
   return auth(req, res, next);
 }
 
-router.get('/sync/:conversationId', auth, async (req, res) => {
+router.get('/sync/:conversationId', panelOrAdminBypass, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { since } = req.query;
-    const userId = req.user._id || req.user.id;
+    const isAdminPanel = !!req.isAdminPanel;
+    const userId = isAdminPanel ? null : (req.user._id || req.user.id);
     
     logger.info(`[SYNC] Sincronização solicitada para conversa ${conversationId} por usuário ${userId}`);
     
 
     const conversation = await Conversation.findById(conversationId);
-    if (!conversation || !conversation.participants.includes(userId)) {
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    if (!isAdminPanel && !conversation.participants.includes(userId)) {
       logger.warn(`[SYNC] Acesso negado para conversa ${conversationId} - usuário ${userId}`);
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -748,7 +762,7 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
 });
 
 
-router.put('/conversations/:conversationId/read', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
+router.put('/conversations/:conversationId/read', panelOrAdminBypass, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { messageIds = [] } = req.body;
