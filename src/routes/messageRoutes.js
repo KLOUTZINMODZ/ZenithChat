@@ -12,6 +12,19 @@ const cache = require('../services/GlobalCache');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
 
 
+// Admin key bypass: if x-admin-key matches ADMIN_API_KEY, mark request as coming from admin panel
+function adminKeyBypass(req, res, next) {
+  try {
+    const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
+    const expected = process.env.ADMIN_API_KEY;
+    if (expected && provided && provided === expected) {
+      req.isAdminPanel = true;
+      return next();
+    }
+  } catch (_) {}
+  return auth(req, res, next);
+}
+
 router.get('/sync/:conversationId', auth, async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -94,10 +107,11 @@ router.get('/conversations/boosting/:boostingId', auth, async (req, res) => {
 router.use(performanceMiddleware());
 
 
-router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
+router.get('/conversations', adminKeyBypass, cacheMiddleware(120), async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
-    const userId = req.user._id || req.userId;
+    const isAdminPanel = !!req.isAdminPanel;
+    const userId = isAdminPanel ? null : (req.user._id || req.userId);
     const cacheKey = `conversations:${userId}:page:${page}:limit:${limit}`;
     
     logger.info(`Fetching conversations for user ${userId}`, { page, limit });
@@ -115,10 +129,8 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const conversations = await Conversation.find({
-      participants: userId,
-      isActive: true
-    })
+    const match = isAdminPanel ? { isActive: true } : { participants: userId, isActive: true };
+    const conversations = await Conversation.find(match)
       .populate('participants', 'name email avatar profileImage')
       .populate('lastMessage')
       .populate('client.userid', 'name email avatar profileImage')
@@ -130,10 +142,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
-    const total = await Conversation.countDocuments({
-      participants: userId,
-      isActive: true
-    });
+    const total = await Conversation.countDocuments(match);
 
     logger.info(`Found ${conversations.length} conversations for user ${userId}`);
 
@@ -350,14 +359,19 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         let otherParticipant = null;
         const isGroupChat = conv.type === 'group' || conv.participants.length > 2;
         
-        if (!isGroupChat && conv.participants.length >= 2) {
-          otherParticipant = conv.participants.find(
-            p => p && p._id && p._id.toString() !== userId.toString()
-          );
+        if (!isGroupChat && conv.participants.length >= 1) {
+          if (isAdminPanel) {
+            otherParticipant = conv.participants[0];
+          } else if (conv.participants.length >= 2) {
+            otherParticipant = conv.participants.find(
+              p => p && p._id && p._id.toString() !== userId.toString()
+            );
+          }
         }
 
 
         const userUnreadCount = (() => {
+          if (isAdminPanel) return 0;
           const uc = conv.unreadCount;
           if (!uc) return 0;
           if (typeof uc.get === 'function') return uc.get(userId.toString()) || 0;
@@ -456,11 +470,12 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
 });
 
 
-router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300), async (req, res) => {
+router.get('/conversations/:conversationId/messages', adminKeyBypass, cacheMiddleware(300), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { page = 1, limit = 50 } = req.query;
-    const userId = req.user._id || req.userId;
+    const isAdminPanel = !!req.isAdminPanel;
+    const userId = isAdminPanel ? null : (req.user._id || req.userId);
     const cacheKey = `messages:${conversationId}:page:${page}:limit:${limit}`;
 
 
@@ -478,12 +493,12 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
 
 
     const conversation = await Conversation.findById(conversationId);
-    if (!conversation || !conversation.isParticipant(userId)) {
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+    if (!isAdminPanel && !conversation.isParticipant(userId)) {
       logger.warn('[MSG:REST] Access denied', { conversationId, userId });
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
+      return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
     const messages = await Message.find({
@@ -534,11 +549,12 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
 });
 
 
-router.post('/conversations/:conversationId/messages', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
+router.post('/conversations/:conversationId/messages', adminKeyBypass, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { content, type = 'text', attachments = [] } = req.body;
-    const userId = req.user._id || req.userId;
+    const isAdminPanel = !!req.isAdminPanel;
+    let userId = isAdminPanel ? null : (req.user._id || req.userId);
 
     logger.info('[MSG:REST] Incoming message', {
       conversationId,
@@ -550,15 +566,31 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
 
     const conversation = await Conversation.findById(conversationId);
-    if (!conversation || !conversation.isParticipant(userId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+    if (!isAdminPanel) {
+      if (!conversation.isParticipant(userId)) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    } else {
+      // Choose sender for admin-panel actions
+      try {
+        const headerId = req.headers['x-admin-user-id'] || req.headers['x-impersonate-user-id'];
+        const envId = process.env.ADMIN_IMPERSONATE_USER_ID;
+        const pick = (val) => (typeof val === 'string' && val.match(/^[a-fA-F0-9]{24}$/)) ? val : null;
+        userId = pick(headerId) || pick(envId) || (Array.isArray(conversation.participants) && conversation.participants[0]?.toString?.()) || null;
+        if (!userId) {
+          logger.warn('[MSG:REST] Admin panel send without a valid userId; falling back denied', { conversationId });
+          return res.status(400).json({ success: false, message: 'Admin sender userId not provided' });
+        }
+      } catch (e) {
+        return res.status(400).json({ success: false, message: 'Failed to determine admin sender', error: e.message });
+      }
     }
 
 
-    if (conversation.isReported) {
+    if (!isAdminPanel && conversation.isReported) {
       logger.warn('[MSG:REST] Conversation reported - blocking send', { conversationId, userId });
       return res.status(423).json({
         success: false,
@@ -568,7 +600,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
     }
 
 
-    if (!conversation.isActive) {
+    if (!isAdminPanel && !conversation.isActive) {
       logger.warn('[MSG:REST] Conversation inactive/finalized - blocking send', { conversationId, userId });
       return res.status(423).json({
         success: false,
@@ -578,7 +610,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
     }
 
 
-    if (conversation.boostingStatus === 'completed') {
+    if (!isAdminPanel && conversation.boostingStatus === 'completed') {
 
       const Agreement = require('../models/Agreement');
       const AcceptedProposal = require('../models/AcceptedProposal');
@@ -756,10 +788,11 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
 });
 
 
-router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
+router.delete('/messages/:messageId', adminKeyBypass, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
   try {
     const { messageId } = req.params;
-    const userId = req.user._id || req.userId;
+    const isAdminPanel = !!req.isAdminPanel;
+    const userId = isAdminPanel ? null : (req.user._id || req.userId);
 
     const message = await Message.findById(messageId);
     if (!message) {
@@ -770,7 +803,7 @@ router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:',
     }
 
 
-    if (message.sender.toString() !== userId.toString()) {
+    if (!isAdminPanel && message.sender.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
