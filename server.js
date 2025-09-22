@@ -40,7 +40,15 @@ app.use(compression());
 
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
+    const baseAllowed = (process.env.ALLOWED_ORIGINS || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const panelAllowed = (process.env.PANEL_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const defaultAllowed = [
       'http://localhost:5173',
       'http://localhost:3000',
       'https://hacklotesite.vercel.app',
@@ -49,6 +57,7 @@ const corsOptions = {
       'https://zenithpaineladm.vercel.app',
       'https://apizenithadmin-byzenith.vercel.app'
     ];
+    const allowedOrigins = Array.from(new Set([...defaultAllowed, ...baseAllowed, ...panelAllowed]));
 
     if (!origin) {
       callback(null, true);
