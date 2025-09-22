@@ -5,8 +5,25 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const logger = require('../utils/logger');
 const { decryptMessage } = require('../utils/encryption');
+const SupportThread = require('../models/SupportThread');
 
 const router = express.Router();
+
+function requireAdminKey(req, res, next) {
+  try {
+    const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
+    const expected = process.env.ADMIN_API_KEY;
+    if (!expected) {
+      return res.status(500).json({ success: false, message: 'ADMIN_API_KEY não configurada no servidor' });
+    }
+    if (!provided || provided !== expected) {
+      return res.status(403).json({ success: false, message: 'Acesso negado' });
+    }
+    return next();
+  } catch (e) {
+    return res.status(403).json({ success: false, message: 'Acesso negado' });
+  }
+}
 
 // GET /api/support/tickets - Lista tickets do usuário (reporter ou reported)
 router.get('/tickets', auth, async (req, res) => {
@@ -108,3 +125,41 @@ router.get('/tickets/:id', auth, async (req, res) => {
 });
 
 module.exports = router;
+
+// Admin endpoints (somente via ADMIN_API_KEY)
+// GET /api/support/admin/threads
+router.get('/admin/threads', requireAdminKey, async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status, type } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const filter = {};
+    if (status) filter.status = String(status);
+    if (type) filter.type = String(type);
+
+    const [threads, total] = await Promise.all([
+      SupportThread.find(filter)
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      SupportThread.countDocuments(filter)
+    ]);
+
+    const mapped = (threads || []).map(t => ({
+      _id: t._id,
+      type: t.type,
+      status: t.status,
+      linked: t.linked,
+      participants: (t.participants || []).map(p => ({ userId: p.userId, role: p.role })),
+      assignedTo: t.assignedTo || null,
+      createdBy: t.createdBy,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+      lastMessageAt: t.lastMessageAt || t.updatedAt
+    }));
+
+    res.json({ success: true, data: { threads: mapped, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Erro ao listar threads de suporte', error: error.message });
+  }
+});

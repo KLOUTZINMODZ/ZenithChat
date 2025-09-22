@@ -9,6 +9,7 @@ const WalletLedger = require('../models/WalletLedger');
 const Mediator = require('../models/Mediator');
 const MarketItem = require('../models/MarketItem');
 const Report = require('../models/Report');
+const SupportThread = require('../models/SupportThread');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 
@@ -790,6 +791,32 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
 
     await report.save();
 
+    // Create or get SupportThread linked to this purchase/report for real-time support
+    let thread = null;
+    try {
+      thread = await SupportThread.findOne({ 'linked.purchaseId': purchase._id });
+      if (!thread) {
+        thread = await SupportThread.create({
+          type: 'ticket',
+          status: 'bot',
+          participants: [
+            { userId: reporterUser?._id || userId, role: isBuyer ? 'customer' : 'seller' },
+            { userId: reportedUser?._id, role: isBuyer ? 'seller' : 'customer' }
+          ],
+          assignedTo: null,
+          createdBy: userId,
+          linked: {
+            purchaseId: purchase._id,
+            conversationId: conversationId || null,
+            reportId: report._id,
+            kind: 'purchase'
+          },
+          triage: new Map(),
+          metadata: new Map([['source', 'marketplace'], ['issueType', report.type]])
+        });
+      }
+    } catch (_) {}
+
     // Atualiza conversa com marcações leves, se existir
     try {
       if (conversationId) {
@@ -819,6 +846,28 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
               timestamp: new Date().toISOString()
             }
           });
+          // Emit dedicated thread created event for clients interested in Support UI
+          if (thread) {
+            ws.sendToUser(uid, {
+              type: 'support:thread.created',
+              data: {
+                thread: {
+                  id: thread._id?.toString?.() || String(thread._id),
+                  status: thread.status,
+                  linked: {
+                    purchaseId: purchase?._id?.toString?.() || purchase?._id,
+                    conversationId: conversationId?.toString?.() || conversationId,
+                    reportId: report?._id?.toString?.() || report?._id,
+                    kind: 'purchase'
+                  },
+                  participants: (thread.participants || []).map(p => ({ userId: p.userId?.toString?.() || String(p.userId), role: p.role })),
+                  createdAt: thread.createdAt,
+                  lastMessageAt: thread.lastMessageAt
+                }
+              },
+              timestamp: new Date().toISOString()
+            });
+          }
         }
       }
       const ns = req.app?.locals?.notificationService;

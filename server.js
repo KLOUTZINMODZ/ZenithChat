@@ -13,7 +13,6 @@ const messageRoutes = require('./src/routes/messageRoutes');
 const uploadRoutes = require('./src/routes/uploadRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
-const realtimeRoutes = require('./src/routes/realtimeRoutes');
 const marketplaceWebhookRoutes = require('./src/routes/marketplaceWebhookRoutes');
 const boostingChatRoutes = require('./src/routes/boostingChatRoutes');
 const agreementRoutes = require('./src/routes/agreementRoutes');
@@ -68,7 +67,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning', 'X-Admin-Key', 'X-Api-Key']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning']
 };
 app.use(cors(corsOptions));
 
@@ -188,7 +187,6 @@ app.use('/api/uploads', (req, res, next) => {
 });
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/realtime', realtimeRoutes);
 app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);

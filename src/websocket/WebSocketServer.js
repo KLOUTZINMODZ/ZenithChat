@@ -45,21 +45,7 @@ class WebSocketServer {
       }
 
 
-      // Try verifying with CHAT JWT first, then accept ADMIN JWT as fallback for admin dashboards
-      let decoded;
-      try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET);
-      } catch (e1) {
-        if (process.env.ADMIN_JWT_SECRET) {
-          try {
-            decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
-          } catch (e2) {
-            throw e1; // preserve original error
-          }
-        } else {
-          throw e1;
-        }
-      }
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       info.req.userId = decoded.id || decoded._id;
       info.req.userToken = token;
       
