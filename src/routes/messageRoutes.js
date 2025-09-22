@@ -12,8 +12,16 @@ const cache = require('../services/GlobalCache');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
 
 
-// Admin key bypass: if x-admin-key matches ADMIN_API_KEY, mark request as coming from admin panel
-function adminKeyBypass(req, res, next) {
+// Panel/Admin bypass: prefer X-Panel-Secret (PANEL_PROXY_SECRET), else x-admin-key
+function panelOrAdminBypass(req, res, next) {
+  try {
+    const panelSecret = req.headers['x-panel-secret'] || req.headers['x-panelsecret'] || req.headers['x-panelsecret'];
+    const expectedPanel = process.env.PANEL_PROXY_SECRET;
+    if (expectedPanel && panelSecret && panelSecret === expectedPanel) {
+      req.isAdminPanel = true;
+      return next();
+    }
+  } catch (_) {}
   try {
     const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
     const expected = process.env.ADMIN_API_KEY;
@@ -107,7 +115,7 @@ router.get('/conversations/boosting/:boostingId', auth, async (req, res) => {
 router.use(performanceMiddleware());
 
 
-router.get('/conversations', adminKeyBypass, cacheMiddleware(120), async (req, res) => {
+router.get('/conversations', panelOrAdminBypass, cacheMiddleware(120), async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     const isAdminPanel = !!req.isAdminPanel;
@@ -470,7 +478,7 @@ router.get('/conversations', adminKeyBypass, cacheMiddleware(120), async (req, r
 });
 
 
-router.get('/conversations/:conversationId/messages', adminKeyBypass, cacheMiddleware(300), async (req, res) => {
+router.get('/conversations/:conversationId/messages', panelOrAdminBypass, cacheMiddleware(300), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { page = 1, limit = 50 } = req.query;
@@ -549,7 +557,7 @@ router.get('/conversations/:conversationId/messages', adminKeyBypass, cacheMiddl
 });
 
 
-router.post('/conversations/:conversationId/messages', adminKeyBypass, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
+router.post('/conversations/:conversationId/messages', panelOrAdminBypass, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { content, type = 'text', attachments = [] } = req.body;
@@ -788,7 +796,7 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
 });
 
 
-router.delete('/messages/:messageId', adminKeyBypass, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
+router.delete('/messages/:messageId', panelOrAdminBypass, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
   try {
     const { messageId } = req.params;
     const isAdminPanel = !!req.isAdminPanel;

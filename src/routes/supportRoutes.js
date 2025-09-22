@@ -11,15 +11,19 @@ const router = express.Router();
 
 function requireAdminKey(req, res, next) {
   try {
+    // Prefer panel secret (no need for browser token)
+    const panelSecret = req.headers['x-panel-secret'] || req.headers['x-panelsecret'] || req.headers['x-panelsecret'];
+    const expectedPanel = process.env.PANEL_PROXY_SECRET;
+    if (expectedPanel && panelSecret && panelSecret === expectedPanel) {
+      return next();
+    }
+    // Fallback to legacy admin key
     const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
     const expected = process.env.ADMIN_API_KEY;
-    if (!expected) {
-      return res.status(500).json({ success: false, message: 'ADMIN_API_KEY não configurada no servidor' });
+    if (expected && provided && provided === expected) {
+      return next();
     }
-    if (!provided || provided !== expected) {
-      return res.status(403).json({ success: false, message: 'Acesso negado' });
-    }
-    return next();
+    return res.status(403).json({ success: false, message: 'Acesso negado' });
   } catch (e) {
     return res.status(403).json({ success: false, message: 'Acesso negado' });
   }
