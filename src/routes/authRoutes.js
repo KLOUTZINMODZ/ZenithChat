@@ -49,7 +49,10 @@ router.get('/ws-token', async (req, res) => {
         const serviceToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
         const base = process.env.CHAT_PUBLIC_BASE_URL
-          ? process.env.CHAT_PUBLIC_BASE_URL.replace(/\/$/, '')
+          ? process.env.CHAT_PUBLIC_BASE_URL
+              .replace(/^http:/, 'ws:')
+              .replace(/^https:/, 'wss:')
+              .replace(/\/$/, '')
           : `${req.secure ? 'wss' : 'ws'}://${req.get('host')}`;
         const wsUrl = `${base}/ws`;
 
@@ -72,7 +75,10 @@ router.get('/ws-token', async (req, res) => {
 
 
     const base = process.env.CHAT_PUBLIC_BASE_URL
-      ? process.env.CHAT_PUBLIC_BASE_URL.replace(/\/$/, '')
+      ? process.env.CHAT_PUBLIC_BASE_URL
+          .replace(/^http:/, 'ws:')
+          .replace(/^https:/, 'wss:')
+          .replace(/\/$/, '')
       : `${req.secure ? 'wss' : 'ws'}://${req.get('host')}`;
     const wsUrl = `${base}/ws`;
 

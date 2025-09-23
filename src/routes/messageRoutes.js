@@ -15,7 +15,7 @@ const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = requi
 // Panel/Admin bypass: prefer X-Panel-Secret (PANEL_PROXY_SECRET), else x-admin-key
 function panelOrAdminBypass(req, res, next) {
   try {
-    const panelSecret = req.headers['x-panel-secret'] || req.headers['x-panelsecret'] || req.headers['x-panelsecret'];
+    const panelSecret = req.headers['x-panel-secret'] || req.headers['X-Panel-Secret'];
     const expectedPanel = process.env.PANEL_PROXY_SECRET;
     if (expectedPanel && panelSecret && panelSecret === expectedPanel) {
       req.isAdminPanel = true;
@@ -57,7 +57,7 @@ router.get('/sync/:conversationId', panelOrAdminBypass, async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
-    if (!isAdminPanel && !conversation.participants.includes(userId)) {
+    if (!isAdminPanel && !conversation.isParticipant(userId)) {
       logger.warn(`[SYNC] Acesso negado para conversa ${conversationId} - usuário ${userId}`);
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -150,6 +150,48 @@ router.get('/conversations', panelOrAdminBypass, cacheMiddleware(120), async (re
     }
 
     const skip = (page - 1) * limit;
+
+    // Ensure support thread + conversation exists for the user so front-end shows 'Zenith Suporte'
+    if (!isAdminPanel && userId) {
+      try {
+        const SupportThread = require('../models/SupportThread');
+        const mongoose = require('mongoose');
+        const adminId = process.env.SUPPORT_ADMIN_USER_ID || process.env.ADMIN_IMPERSONATE_USER_ID;
+        if (adminId) {
+          let thread = await SupportThread.findOne({ createdBy: userId, type: 'ticket', status: { $ne: 'closed' } });
+          if (!thread) {
+            thread = await SupportThread.create({
+              type: 'ticket',
+              status: 'open',
+              participants: [
+                { userId, role: 'customer' },
+                { userId: adminId, role: 'admin' }
+              ],
+              createdBy: userId,
+              linked: { kind: 'conversation' }
+            });
+          }
+          if (!thread.linked || !thread.linked.conversationId) {
+            const adminObjId = new mongoose.Types.ObjectId(adminId);
+            const userObjId = new mongoose.Types.ObjectId(userId);
+            const participants = [userObjId, adminObjId];
+            let conv = await Conversation.findOne({ participants: { $all: participants, $size: 2 }, type: 'direct', 'metadata.kind': 'support' });
+            if (!conv) {
+              const meta = new Map();
+              meta.set('kind', 'support');
+              meta.set('supportTitle', 'Zenith Suporte');
+              meta.set('supportThreadId', thread._id.toString());
+              conv = await Conversation.create({ participants, type: 'direct', name: 'Zenith Suporte', metadata: meta });
+            }
+            thread.linked = thread.linked || {};
+            thread.linked.conversationId = conv._id;
+            await thread.save();
+          }
+        }
+      } catch (e) {
+        logger.warn('[SUPPORT] ensure support chat failed', { userId, error: e?.message || String(e) });
+      }
+    }
 
     const match = isAdminPanel ? { isActive: true } : { participants: userId, isActive: true };
     const conversations = await Conversation.find(match)
@@ -766,8 +808,12 @@ router.put('/conversations/:conversationId/read', panelOrAdminBypass, invalidati
   try {
     const { conversationId } = req.params;
     const { messageIds = [] } = req.body;
+    const isAdminPanel = !!req.isAdminPanel;
+    if (isAdminPanel) {
+      // No-op for admin panel: do not require req.user, simply acknowledge
+      return res.json({ success: true, message: 'OK' });
+    }
     const userId = req.user._id || req.userId;
-
 
     await Message.updateMany(
       {
@@ -785,13 +831,10 @@ router.put('/conversations/:conversationId/read', panelOrAdminBypass, invalidati
       }
     );
 
-
     const conversation = await Conversation.findById(conversationId);
     if (conversation && conversation.unreadCount) {
       conversation.unreadCount[userId.toString()] = 0;
       await conversation.save();
-      
-
       cache.invalidateUserCache(userId);
     }
 

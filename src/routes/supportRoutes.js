@@ -12,11 +12,21 @@ const router = express.Router();
 function requireAdminKey(req, res, next) {
   try {
     // Prefer panel secret (no need for browser token)
-    const panelSecret = req.headers['x-panel-secret'] || req.headers['x-panelsecret'] || req.headers['x-panelsecret'];
+    const panelSecret = req.headers['x-panel-secret'] || req.headers['X-Panel-Secret'];
     const expectedPanel = process.env.PANEL_PROXY_SECRET;
     if (expectedPanel && panelSecret && panelSecret === expectedPanel) {
       return next();
     }
+    // Trust panel origin if configured (best-effort)
+    try {
+      const origin = req.header('Origin') || '';
+      const referer = req.header('Referer') || '';
+      const allowedOrigins = (process.env.PANEL_ALLOWED_ORIGINS || 'https://zenithpaineladm.vercel.app').split(',').map(s => s.trim()).filter(Boolean);
+      const originTrusted = (!!origin && allowedOrigins.some(o => origin.startsWith(o))) || (!!referer && allowedOrigins.some(o => referer.startsWith(o)));
+      if (originTrusted) {
+        return next();
+      }
+    } catch (_) {}
     // Fallback to legacy admin key
     const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
     const expected = process.env.ADMIN_API_KEY;
@@ -142,6 +152,7 @@ router.get('/admin/threads', requireAdminKey, async (req, res) => {
 
     const [threads, total] = await Promise.all([
       SupportThread.find(filter)
+        .populate('createdBy', 'name email avatar')
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
@@ -156,7 +167,7 @@ router.get('/admin/threads', requireAdminKey, async (req, res) => {
       linked: t.linked,
       participants: (t.participants || []).map(p => ({ userId: p.userId, role: p.role })),
       assignedTo: t.assignedTo || null,
-      createdBy: t.createdBy,
+      createdBy: t.createdBy, // populated minimal fields
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
       lastMessageAt: t.lastMessageAt || t.updatedAt
@@ -165,5 +176,85 @@ router.get('/admin/threads', requireAdminKey, async (req, res) => {
     res.json({ success: true, data: { threads: mapped, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } } });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Erro ao listar threads de suporte', error: error.message });
+  }
+});
+
+// Start or get user's support thread and dedicated conversation
+// POST /api/support/user/start
+router.post('/user/start', auth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const adminId = process.env.SUPPORT_ADMIN_USER_ID || process.env.ADMIN_IMPERSONATE_USER_ID;
+    if (!adminId) {
+      return res.status(500).json({ success: false, message: 'SUPPORT_ADMIN_USER_ID não configurado' });
+    }
+
+    // Find existing open thread
+    let thread = await SupportThread.findOne({ createdBy: userId, type: 'ticket', status: { $ne: 'closed' } });
+
+    // Helper to ensure Conversation exists & link into thread
+    async function ensureConversation(t) {
+      if (t?.linked?.conversationId) return t;
+      const Conversation = require('../models/Conversation');
+      const mongoose = require('mongoose');
+      const adminObjId = new mongoose.Types.ObjectId(adminId);
+      const userObjId = new mongoose.Types.ObjectId(userId);
+      const participants = [userObjId, adminObjId];
+      let conversation = await Conversation.findOne({ participants: { $all: participants, $size: 2 }, type: 'direct', 'metadata.kind': 'support' });
+      if (!conversation) {
+        const meta = new Map();
+        meta.set('kind', 'support');
+        meta.set('supportTitle', 'Zenith Suporte');
+        meta.set('supportThreadId', t?._id?.toString?.());
+        conversation = await Conversation.create({ participants, type: 'direct', name: 'Zenith Suporte', metadata: meta });
+      }
+      t.linked = t.linked || {};
+      t.linked.conversationId = conversation._id;
+      await t.save();
+      return t;
+    }
+
+    if (!thread) {
+      // Create new thread
+      thread = await SupportThread.create({
+        type: 'ticket',
+        status: 'open',
+        participants: [
+          { userId, role: 'customer' },
+          { userId: adminId, role: 'admin' }
+        ],
+        createdBy: userId,
+        linked: { kind: 'conversation' }
+      });
+      thread = await ensureConversation(thread);
+    } else {
+      thread = await ensureConversation(thread);
+    }
+
+    return res.json({ success: true, data: { threadId: thread._id, conversationId: thread.linked?.conversationId } });
+  } catch (error) {
+    logger.error('[SUPPORT] Error starting user support thread', error);
+    return res.status(500).json({ success: false, message: 'Erro ao iniciar suporte', error: error.message });
+  }
+});
+
+// Close a support thread (admin)
+// POST /api/support/admin/threads/:id/close
+router.post('/admin/threads/:id/close', requireAdminKey, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const thread = await SupportThread.findById(id);
+    if (!thread) return res.status(404).json({ success: false, message: 'Thread não encontrada' });
+    thread.status = 'closed';
+    await thread.save();
+    try {
+      if (thread.linked?.conversationId) {
+        const Conversation = require('../models/Conversation');
+        await Conversation.findByIdAndUpdate(thread.linked.conversationId, { isActive: false, isFinalized: true, finalizedAt: new Date() });
+      }
+    } catch (_) {}
+    return res.json({ success: true, message: 'Suporte finalizado', data: { id: thread._id } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erro ao finalizar suporte', error: error.message });
   }
 });

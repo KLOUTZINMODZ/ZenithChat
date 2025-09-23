@@ -16,6 +16,43 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
     const userId = req.user._id || req.userId;
     const skip = (page - 1) * limit;
 
+    // Ensure support thread + conversation exists so legacy frontends also see 'Zenith Suporte'
+    try {
+      const SupportThread = require('../models/SupportThread');
+      const adminId = process.env.SUPPORT_ADMIN_USER_ID || process.env.ADMIN_IMPERSONATE_USER_ID;
+      if (adminId) {
+        let thread = await SupportThread.findOne({ createdBy: userId, type: 'ticket', status: { $ne: 'closed' } });
+        if (!thread) {
+          thread = await SupportThread.create({
+            type: 'ticket',
+            status: 'open',
+            participants: [ { userId, role: 'customer' }, { userId: adminId, role: 'admin' } ],
+            createdBy: userId,
+            linked: { kind: 'conversation' }
+          });
+        }
+        if (!thread.linked || !thread.linked.conversationId) {
+          const mongoose = require('mongoose');
+          const adminObjId = new mongoose.Types.ObjectId(adminId);
+          const userObjId = new mongoose.Types.ObjectId(userId);
+          const participants = [userObjId, adminObjId];
+          let conv = await Conversation.findOne({ participants: { $all: participants, $size: 2 }, type: 'direct', 'metadata.kind': 'support' });
+          if (!conv) {
+            const meta = new Map();
+            meta.set('kind', 'support');
+            meta.set('supportTitle', 'Zenith Suporte');
+            meta.set('supportThreadId', thread._id.toString());
+            conv = await Conversation.create({ participants, type: 'direct', name: 'Zenith Suporte', metadata: meta });
+          }
+          thread.linked = thread.linked || {};
+          thread.linked.conversationId = conv._id;
+          await thread.save();
+        }
+      }
+    } catch (e) {
+      try { logger.warn('[COMPATIBILITY] ensure support chat failed', { userId, error: e?.message || String(e) }); } catch (_) {}
+    }
+
     logger.info(`[COMPATIBILITY] Fetching conversations for user ${userId}`, { page, limit });
 
     const conversations = await Conversation.find({
