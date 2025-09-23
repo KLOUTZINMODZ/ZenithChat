@@ -5,6 +5,8 @@ const Agreement = require('../models/Agreement');
 const Report = require('../models/Report');
 const axios = require('axios');
 
+const { sendSupportTicketNotification } = require('../services/TelegramService');
+
 class BoostingChatController {
 
   async getAcceptedProposal(req, res) {
@@ -676,6 +678,73 @@ class BoostingChatController {
       });
 
       await reportData.save();
+
+      // Envia notificação ao Telegram com dados do cliente
+      try {
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+
+        // Prioriza cliente do acceptedProposal; fallback para conversation.client; se não houver, usa o reporter
+        let clientUserId = null;
+        try {
+          if (acceptedProposal?.client?.userid) {
+            clientUserId = acceptedProposal.client.userid.toString ? acceptedProposal.client.userid.toString() : String(acceptedProposal.client.userid);
+          } else if (conversation?.client?.userid) {
+            clientUserId = conversation.client.userid.toString ? conversation.client.userid.toString() : String(conversation.client.userid);
+          } else if (reporter?._id) {
+            clientUserId = reporter._id.toString ? reporter._id.toString() : String(reporter._id);
+          }
+        } catch (_) {}
+
+        let clientApi = null;
+        if (clientUserId) {
+          try {
+            const resp = await axios.get(`${apiUrl}/api/users/${clientUserId}`, {
+              headers: { 'Authorization': req.headers.authorization }
+            });
+            clientApi = resp?.data?.user || null;
+          } catch (e) {
+            console.log('Erro ao buscar dados do cliente na MAIN_API (boosting report):', e?.message || e);
+          }
+        }
+
+        await sendSupportTicketNotification({
+          client: {
+            id: clientUserId || (reporter?._id?.toString?.() || null),
+            name: clientApi?.name || reporterData?.name || reporter?.name || 'Cliente',
+            username: clientApi?.username || null,
+            email: clientApi?.email || reporterData?.email || reporter?.email || null,
+            phone: clientApi?.whatsapp || clientApi?.phone || clientApi?.phoneNumber || clientApi?.mobile || null
+          },
+          reporter: {
+            id: reporter?._id?.toString?.() || (req.user?.id || req.user?._id),
+            name: reporterData?.name || reporter?.name || 'Usuário',
+            username: reporterData?.username || null,
+            email: reporterData?.email || reporter?.email || null
+          },
+          reported: {
+            id: reported?._id?.toString?.() || null,
+            name: reportedData?.name || reported?.name || null,
+            username: reportedData?.username || null,
+            email: reportedData?.email || reported?.email || null
+          },
+          report: {
+            id: reportData?._id?.toString?.() || null,
+            type: type || 'other',
+            reason,
+            description
+          },
+          context: {
+            conversationId,
+            purchaseId: (() => {
+              try {
+                if (conversation?.marketplace?.purchaseId) return conversation.marketplace.purchaseId.toString?.() || conversation.marketplace.purchaseId;
+                if (conversation?.metadata && typeof conversation.metadata.get === 'function') return conversation.metadata.get('purchaseId') || null;
+              } catch (_) {}
+              return null;
+            })()
+          }
+        });
+      } catch (_) {}
 
 
       await Conversation.findByIdAndUpdate(conversationId, {

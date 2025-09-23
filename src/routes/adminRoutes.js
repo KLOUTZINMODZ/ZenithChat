@@ -21,31 +21,15 @@ function safeId(v) {
 }
 
 function requireAdminKey(req, res, next) {
-  try {
-    // Prefer panel shared secret (no browser token exposure)
-    const panelSecret = req.headers['x-panel-secret'] || req.headers['X-Panel-Secret'];
-    const expectedPanel = process.env.PANEL_PROXY_SECRET;
-    if (expectedPanel && panelSecret && panelSecret === expectedPanel) {
-      return next();
-    }
-    // Trust panel origin if configured (best-effort)
-    const origin = req.header('Origin') || '';
-    const referer = req.header('Referer') || '';
-    const allowedOrigins = (process.env.PANEL_ALLOWED_ORIGINS || 'https://zenithpaineladm.vercel.app').split(',').map(s => s.trim()).filter(Boolean);
-    const originTrusted = (!!origin && allowedOrigins.some(o => origin.startsWith(o))) || (!!referer && allowedOrigins.some(o => referer.startsWith(o)));
-    if (originTrusted) {
-      return next();
-    }
-    // Legacy admin key fallback
-    const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
-    const expected = process.env.ADMIN_API_KEY;
-    if (expected && provided && provided === expected) {
-      return next();
-    }
-    return res.status(403).json({ success: false, message: 'Acesso negado' });
-  } catch (_) {
+  const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
+  const expected = process.env.ADMIN_API_KEY;
+  if (!expected) {
+    return res.status(500).json({ success: false, message: 'ADMIN_API_KEY não configurada no servidor' });
+  }
+  if (!provided || provided !== expected) {
     return res.status(403).json({ success: false, message: 'Acesso negado' });
   }
+  return next();
 }
 
 // PATCH /api/admin/market-items/:itemId/seller

@@ -40,15 +40,7 @@ app.use(compression());
 
 const corsOptions = {
   origin: function (origin, callback) {
-    const baseAllowed = (process.env.ALLOWED_ORIGINS || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-    const panelAllowed = (process.env.PANEL_ALLOWED_ORIGINS || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean);
-    const defaultAllowed = [
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:5173',
       'http://localhost:3000',
       'https://hacklotesite.vercel.app',
@@ -57,7 +49,6 @@ const corsOptions = {
       'https://zenithpaineladm.vercel.app',
       'https://apizenithadmin-byzenith.vercel.app'
     ];
-    const allowedOrigins = Array.from(new Set([...defaultAllowed, ...baseAllowed, ...panelAllowed]));
 
     if (!origin) {
       callback(null, true);
@@ -76,7 +67,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Requested-With', 'ngrok-skip-browser-warning', 'x-admin-key', 'x-api-key', 'X-Admin-Key', 'X-API-Key', 'x-panel-secret', 'X-Panel-Secret']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning']
 };
 app.use(cors(corsOptions));
 

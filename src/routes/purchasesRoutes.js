@@ -9,9 +9,10 @@ const WalletLedger = require('../models/WalletLedger');
 const Mediator = require('../models/Mediator');
 const MarketItem = require('../models/MarketItem');
 const Report = require('../models/Report');
-const SupportThread = require('../models/SupportThread');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
+const axios = require('axios');
+const { sendSupportTicketNotification } = require('../services/TelegramService');
 
 // Robustly extract a string ObjectId from different legacy shapes
 function safeId(v) {
@@ -716,23 +717,67 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
         priority: 'high'
       });
       await report.save();
-    } catch (_) {}
 
-    // Notifica o vendedor
-    try {
-      const ns = req.app?.locals?.notificationService;
-      if (ns) ns.sendNotification(String(purchase.sellerId), {
-        type: 'purchase:not_received',
-        title: 'Pedido não recebido',
-        message: 'O comprador declarou que não recebeu o item. A liberação foi pausada e a mediação foi aberta.',
-        data: { purchaseId }
-      });
-    } catch (_) {}
+      // Envia notificação ao Telegram com dados do cliente (comprador)
+      try {
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+        let clientApi = null;
+        try {
+          const resp = await axios.get(`${apiUrl}/api/users/${buyerId}`, {
+            headers: { 'Authorization': req.headers.authorization }
+          });
+          clientApi = resp?.data?.user || null;
+        } catch (e) {
+          try { logger?.warn?.('[PURCHASES] Falha ao obter dados do cliente na MAIN_API', { error: e?.message }); } catch (_) {}
+        }
 
-    return res.json({ success: true, message: 'Status retornado ao escrow. Vendedor notificado e arbitragem aberta.' });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: 'Erro ao registrar não recebimento', error: error.message });
-  }
+        await sendSupportTicketNotification({
+          client: {
+            id: String(buyerId),
+            name: buyer?.name || buyer?.legalName || buyer?.username || clientApi?.name || null,
+            username: clientApi?.username || null,
+            email: buyer?.email || clientApi?.email || null,
+            phone: clientApi?.whatsapp || clientApi?.phone || clientApi?.phoneNumber || clientApi?.mobile || null
+          },
+          reporter: {
+            id: String(buyerId),
+            name: buyer?.name || buyer?.legalName || buyer?.username || 'Comprador',
+            username: clientApi?.username || null,
+            email: buyer?.email || clientApi?.email || null
+          },
+          reported: {
+            id: purchase?.sellerId?.toString?.() || String(purchase.sellerId),
+            name: seller?.name || seller?.legalName || seller?.username || 'Vendedor',
+            email: seller?.email || null
+          },
+          report: {
+            id: report?._id?.toString?.() || String(report._id),
+            type: 'service_not_delivered',
+            reason: 'buyer_not_received',
+            description: comment || 'Comprador declarou que não recebeu o item.'
+          },
+          context: {
+            conversationId: purchase?.conversationId?.toString?.() || purchase.conversationId || null,
+            purchaseId: purchase?._id?.toString?.() || String(purchaseId)
+          }
+        });
+      } catch (_) {}
+
+      // Notifica o vendedor
+      try {
+        const ns = req.app?.locals?.notificationService;
+        if (ns) ns.sendNotification(String(purchase.sellerId), {
+          type: 'purchase:not_received',
+          title: 'Pedido não recebido',
+          message: 'O comprador declarou que não recebeu o item. A liberação foi pausada e a mediação foi aberta.',
+          data: { purchaseId }
+        });
+      } catch (_) {}
+
+      return res.json({ success: true, message: 'Status retornado ao escrow. Vendedor notificado e arbitragem aberta.' });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: 'Erro ao registrar não recebimento', error: error.message });
+    }
 });
 
 // POST /api/purchases/:purchaseId/support-ticket
@@ -791,30 +836,51 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
 
     await report.save();
 
-    // Create or get SupportThread linked to this purchase/report for real-time support
-    let thread = null;
+    // Envia notificação ao Telegram com dados do cliente (comprador)
     try {
-      thread = await SupportThread.findOne({ 'linked.purchaseId': purchase._id });
-      if (!thread) {
-        thread = await SupportThread.create({
-          type: 'ticket',
-          status: 'bot',
-          participants: [
-            { userId: reporterUser?._id || userId, role: isBuyer ? 'customer' : 'seller' },
-            { userId: reportedUser?._id, role: isBuyer ? 'seller' : 'customer' }
-          ],
-          assignedTo: null,
-          createdBy: userId,
-          linked: {
-            purchaseId: purchase._id,
-            conversationId: conversationId || null,
-            reportId: report._id,
-            kind: 'purchase'
-          },
-          triage: new Map(),
-          metadata: new Map([['source', 'marketplace'], ['issueType', report.type]])
-        });
+      const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+      const clientUserId = purchase?.buyerId?.toString?.() || purchase.buyerId;
+      let clientApi = null;
+      try {
+        if (clientUserId) {
+          const resp = await axios.get(`${apiUrl}/api/users/${clientUserId}`, {
+            headers: { 'Authorization': req.headers.authorization }
+          });
+          clientApi = resp?.data?.user || null;
+        }
+      } catch (e) {
+        try { logger?.warn?.('[PURCHASES] Falha ao obter dados do cliente na MAIN_API (support-ticket)', { error: e?.message }); } catch (_) {}
       }
+
+      await sendSupportTicketNotification({
+        client: {
+          id: String(clientUserId || ''),
+          name: clientApi?.name || (reporterUser && reporterUser._id?.toString?.() === String(clientUserId) ? (reporterUser.name || reporterUser.legalName || reporterUser.username) : null),
+          username: clientApi?.username || null,
+          email: clientApi?.email || null,
+          phone: clientApi?.whatsapp || clientApi?.phone || clientApi?.phoneNumber || clientApi?.mobile || null
+        },
+        reporter: {
+          id: String(userId),
+          name: reporterUser?.name || reporterUser?.legalName || reporterUser?.username || 'Usuário',
+          email: reporterUser?.email || null
+        },
+        reported: {
+          id: reportedUser?._id?.toString?.() || String(reportedUser?._id || ''),
+          name: reportedUser?.name || reportedUser?.legalName || reportedUser?.username || 'Usuário',
+          email: reportedUser?.email || null
+        },
+        report: {
+          id: report?._id?.toString?.() || String(report._id),
+          type: ['service_not_delivered','payment_issues','other'].includes(String(issueType)) ? String(issueType) : 'payment_issues',
+          reason: 'support_ticket_opened',
+          description: description || 'Ticket de suporte aberto pelo usuário.'
+        },
+        context: {
+          conversationId: (conversationId && conversationId.toString) ? conversationId.toString() : conversationId,
+          purchaseId: purchase?._id?.toString?.() || String(purchaseId)
+        }
+      });
     } catch (_) {}
 
     // Atualiza conversa com marcações leves, se existir
@@ -846,28 +912,6 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
               timestamp: new Date().toISOString()
             }
           });
-          // Emit dedicated thread created event for clients interested in Support UI
-          if (thread) {
-            ws.sendToUser(uid, {
-              type: 'support:thread.created',
-              data: {
-                thread: {
-                  id: thread._id?.toString?.() || String(thread._id),
-                  status: thread.status,
-                  linked: {
-                    purchaseId: purchase?._id?.toString?.() || purchase?._id,
-                    conversationId: conversationId?.toString?.() || conversationId,
-                    reportId: report?._id?.toString?.() || report?._id,
-                    kind: 'purchase'
-                  },
-                  participants: (thread.participants || []).map(p => ({ userId: p.userId?.toString?.() || String(p.userId), role: p.role })),
-                  createdAt: thread.createdAt,
-                  lastMessageAt: thread.lastMessageAt
-                }
-              },
-              timestamp: new Date().toISOString()
-            });
-          }
         }
       }
       const ns = req.app?.locals?.notificationService;

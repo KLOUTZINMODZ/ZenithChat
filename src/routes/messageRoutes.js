@@ -12,52 +12,17 @@ const cache = require('../services/GlobalCache');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
 
 
-// Panel/Admin bypass: prefer X-Panel-Secret (PANEL_PROXY_SECRET), else x-admin-key
-function panelOrAdminBypass(req, res, next) {
-  try {
-    const panelSecret = req.headers['x-panel-secret'] || req.headers['X-Panel-Secret'];
-    const expectedPanel = process.env.PANEL_PROXY_SECRET;
-    if (expectedPanel && panelSecret && panelSecret === expectedPanel) {
-      req.isAdminPanel = true;
-      return next();
-    }
-  } catch (_) {}
-  try {
-    const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
-    const expected = process.env.ADMIN_API_KEY;
-    if (expected && provided && provided === expected) {
-      req.isAdminPanel = true;
-      return next();
-    }
-  } catch (_) {}
-  try {
-    const origin = req.header('Origin') || '';
-    const referer = req.header('Referer') || '';
-    const allowedOrigins = (process.env.PANEL_ALLOWED_ORIGINS || 'https://zenithpaineladm.vercel.app').split(',').map(s => s.trim()).filter(Boolean);
-    const originTrusted = (!!origin && allowedOrigins.some(o => origin.startsWith(o))) || (!!referer && allowedOrigins.some(o => referer.startsWith(o)));
-    if (originTrusted) {
-      req.isAdminPanel = true;
-      return next();
-    }
-  } catch (_) {}
-  return auth(req, res, next);
-}
-
-router.get('/sync/:conversationId', panelOrAdminBypass, async (req, res) => {
+router.get('/sync/:conversationId', auth, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { since } = req.query;
-    const isAdminPanel = !!req.isAdminPanel;
-    const userId = isAdminPanel ? null : (req.user._id || req.user.id);
+    const userId = req.user._id || req.user.id;
     
     logger.info(`[SYNC] Sincronização solicitada para conversa ${conversationId} por usuário ${userId}`);
     
 
     const conversation = await Conversation.findById(conversationId);
-    if (!conversation) {
-      return res.status(404).json({ error: 'Conversation not found' });
-    }
-    if (!isAdminPanel && !conversation.isParticipant(userId)) {
+    if (!conversation || !conversation.participants.includes(userId)) {
       logger.warn(`[SYNC] Acesso negado para conversa ${conversationId} - usuário ${userId}`);
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -129,11 +94,10 @@ router.get('/conversations/boosting/:boostingId', auth, async (req, res) => {
 router.use(performanceMiddleware());
 
 
-router.get('/conversations', panelOrAdminBypass, cacheMiddleware(120), async (req, res) => {
+router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
-    const isAdminPanel = !!req.isAdminPanel;
-    const userId = isAdminPanel ? null : (req.user._id || req.userId);
+    const userId = req.user._id || req.userId;
     const cacheKey = `conversations:${userId}:page:${page}:limit:${limit}`;
     
     logger.info(`Fetching conversations for user ${userId}`, { page, limit });
@@ -151,50 +115,10 @@ router.get('/conversations', panelOrAdminBypass, cacheMiddleware(120), async (re
 
     const skip = (page - 1) * limit;
 
-    // Ensure support thread + conversation exists for the user so front-end shows 'Zenith Suporte'
-    if (!isAdminPanel && userId) {
-      try {
-        const SupportThread = require('../models/SupportThread');
-        const mongoose = require('mongoose');
-        const adminId = process.env.SUPPORT_ADMIN_USER_ID || process.env.ADMIN_IMPERSONATE_USER_ID;
-        if (adminId) {
-          let thread = await SupportThread.findOne({ createdBy: userId, type: 'ticket', status: { $ne: 'closed' } });
-          if (!thread) {
-            thread = await SupportThread.create({
-              type: 'ticket',
-              status: 'open',
-              participants: [
-                { userId, role: 'customer' },
-                { userId: adminId, role: 'admin' }
-              ],
-              createdBy: userId,
-              linked: { kind: 'conversation' }
-            });
-          }
-          if (!thread.linked || !thread.linked.conversationId) {
-            const adminObjId = new mongoose.Types.ObjectId(adminId);
-            const userObjId = new mongoose.Types.ObjectId(userId);
-            const participants = [userObjId, adminObjId];
-            let conv = await Conversation.findOne({ participants: { $all: participants, $size: 2 }, type: 'direct', 'metadata.kind': 'support' });
-            if (!conv) {
-              const meta = new Map();
-              meta.set('kind', 'support');
-              meta.set('supportTitle', 'Zenith Suporte');
-              meta.set('supportThreadId', thread._id.toString());
-              conv = await Conversation.create({ participants, type: 'direct', name: 'Zenith Suporte', metadata: meta });
-            }
-            thread.linked = thread.linked || {};
-            thread.linked.conversationId = conv._id;
-            await thread.save();
-          }
-        }
-      } catch (e) {
-        logger.warn('[SUPPORT] ensure support chat failed', { userId, error: e?.message || String(e) });
-      }
-    }
-
-    const match = isAdminPanel ? { isActive: true } : { participants: userId, isActive: true };
-    const conversations = await Conversation.find(match)
+    const conversations = await Conversation.find({
+      participants: userId,
+      isActive: true
+    })
       .populate('participants', 'name email avatar profileImage')
       .populate('lastMessage')
       .populate('client.userid', 'name email avatar profileImage')
@@ -206,7 +130,10 @@ router.get('/conversations', panelOrAdminBypass, cacheMiddleware(120), async (re
       .limit(parseInt(limit))
       .lean();
 
-    const total = await Conversation.countDocuments(match);
+    const total = await Conversation.countDocuments({
+      participants: userId,
+      isActive: true
+    });
 
     logger.info(`Found ${conversations.length} conversations for user ${userId}`);
 
@@ -423,19 +350,14 @@ router.get('/conversations', panelOrAdminBypass, cacheMiddleware(120), async (re
         let otherParticipant = null;
         const isGroupChat = conv.type === 'group' || conv.participants.length > 2;
         
-        if (!isGroupChat && conv.participants.length >= 1) {
-          if (isAdminPanel) {
-            otherParticipant = conv.participants[0];
-          } else if (conv.participants.length >= 2) {
-            otherParticipant = conv.participants.find(
-              p => p && p._id && p._id.toString() !== userId.toString()
-            );
-          }
+        if (!isGroupChat && conv.participants.length >= 2) {
+          otherParticipant = conv.participants.find(
+            p => p && p._id && p._id.toString() !== userId.toString()
+          );
         }
 
 
         const userUnreadCount = (() => {
-          if (isAdminPanel) return 0;
           const uc = conv.unreadCount;
           if (!uc) return 0;
           if (typeof uc.get === 'function') return uc.get(userId.toString()) || 0;
@@ -534,12 +456,11 @@ router.get('/conversations', panelOrAdminBypass, cacheMiddleware(120), async (re
 });
 
 
-router.get('/conversations/:conversationId/messages', panelOrAdminBypass, cacheMiddleware(300), async (req, res) => {
+router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { page = 1, limit = 50 } = req.query;
-    const isAdminPanel = !!req.isAdminPanel;
-    const userId = isAdminPanel ? null : (req.user._id || req.userId);
+    const userId = req.user._id || req.userId;
     const cacheKey = `messages:${conversationId}:page:${page}:limit:${limit}`;
 
 
@@ -557,12 +478,12 @@ router.get('/conversations/:conversationId/messages', panelOrAdminBypass, cacheM
 
 
     const conversation = await Conversation.findById(conversationId);
-    if (!conversation) {
-      return res.status(404).json({ success: false, message: 'Conversation not found' });
-    }
-    if (!isAdminPanel && !conversation.isParticipant(userId)) {
+    if (!conversation || !conversation.isParticipant(userId)) {
       logger.warn('[MSG:REST] Access denied', { conversationId, userId });
-      return res.status(403).json({ success: false, message: 'Access denied' });
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
     }
 
     const messages = await Message.find({
@@ -613,12 +534,11 @@ router.get('/conversations/:conversationId/messages', panelOrAdminBypass, cacheM
 });
 
 
-router.post('/conversations/:conversationId/messages', panelOrAdminBypass, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
+router.post('/conversations/:conversationId/messages', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { content, type = 'text', attachments = [] } = req.body;
-    const isAdminPanel = !!req.isAdminPanel;
-    let userId = isAdminPanel ? null : (req.user._id || req.userId);
+    const userId = req.user._id || req.userId;
 
     logger.info('[MSG:REST] Incoming message', {
       conversationId,
@@ -630,31 +550,15 @@ router.post('/conversations/:conversationId/messages', panelOrAdminBypass, inval
 
 
     const conversation = await Conversation.findById(conversationId);
-    if (!conversation) {
-      return res.status(404).json({ success: false, message: 'Conversation not found' });
-    }
-    if (!isAdminPanel) {
-      if (!conversation.isParticipant(userId)) {
-        return res.status(403).json({ success: false, message: 'Access denied' });
-      }
-    } else {
-      // Choose sender for admin-panel actions
-      try {
-        const headerId = req.headers['x-admin-user-id'] || req.headers['x-impersonate-user-id'];
-        const envId = process.env.ADMIN_IMPERSONATE_USER_ID;
-        const pick = (val) => (typeof val === 'string' && val.match(/^[a-fA-F0-9]{24}$/)) ? val : null;
-        userId = pick(headerId) || pick(envId) || (Array.isArray(conversation.participants) && conversation.participants[0]?.toString?.()) || null;
-        if (!userId) {
-          logger.warn('[MSG:REST] Admin panel send without a valid userId; falling back denied', { conversationId });
-          return res.status(400).json({ success: false, message: 'Admin sender userId not provided' });
-        }
-      } catch (e) {
-        return res.status(400).json({ success: false, message: 'Failed to determine admin sender', error: e.message });
-      }
+    if (!conversation || !conversation.isParticipant(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
     }
 
 
-    if (!isAdminPanel && conversation.isReported) {
+    if (conversation.isReported) {
       logger.warn('[MSG:REST] Conversation reported - blocking send', { conversationId, userId });
       return res.status(423).json({
         success: false,
@@ -664,7 +568,7 @@ router.post('/conversations/:conversationId/messages', panelOrAdminBypass, inval
     }
 
 
-    if (!isAdminPanel && !conversation.isActive) {
+    if (!conversation.isActive) {
       logger.warn('[MSG:REST] Conversation inactive/finalized - blocking send', { conversationId, userId });
       return res.status(423).json({
         success: false,
@@ -674,7 +578,7 @@ router.post('/conversations/:conversationId/messages', panelOrAdminBypass, inval
     }
 
 
-    if (!isAdminPanel && conversation.boostingStatus === 'completed') {
+    if (conversation.boostingStatus === 'completed') {
 
       const Agreement = require('../models/Agreement');
       const AcceptedProposal = require('../models/AcceptedProposal');
@@ -804,16 +708,12 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
 });
 
 
-router.put('/conversations/:conversationId/read', panelOrAdminBypass, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
+router.put('/conversations/:conversationId/read', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { messageIds = [] } = req.body;
-    const isAdminPanel = !!req.isAdminPanel;
-    if (isAdminPanel) {
-      // No-op for admin panel: do not require req.user, simply acknowledge
-      return res.json({ success: true, message: 'OK' });
-    }
     const userId = req.user._id || req.userId;
+
 
     await Message.updateMany(
       {
@@ -831,10 +731,13 @@ router.put('/conversations/:conversationId/read', panelOrAdminBypass, invalidati
       }
     );
 
+
     const conversation = await Conversation.findById(conversationId);
     if (conversation && conversation.unreadCount) {
       conversation.unreadCount[userId.toString()] = 0;
       await conversation.save();
+      
+
       cache.invalidateUserCache(userId);
     }
 
@@ -853,11 +756,10 @@ router.put('/conversations/:conversationId/read', panelOrAdminBypass, invalidati
 });
 
 
-router.delete('/messages/:messageId', panelOrAdminBypass, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
+router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
   try {
     const { messageId } = req.params;
-    const isAdminPanel = !!req.isAdminPanel;
-    const userId = isAdminPanel ? null : (req.user._id || req.userId);
+    const userId = req.user._id || req.userId;
 
     const message = await Message.findById(messageId);
     if (!message) {
@@ -868,7 +770,7 @@ router.delete('/messages/:messageId', panelOrAdminBypass, invalidationMiddleware
     }
 
 
-    if (!isAdminPanel && message.sender.toString() !== userId.toString()) {
+    if (message.sender.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
