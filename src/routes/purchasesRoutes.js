@@ -778,6 +778,9 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
     } catch (error) {
       return res.status(500).json({ success: false, message: 'Erro ao registrar não recebimento', error: error.message });
     }
+  } catch (outerErr) {
+    return res.status(500).json({ success: false, message: 'Erro ao registrar não recebimento', error: outerErr.message });
+  }
 });
 
 // POST /api/purchases/:purchaseId/support-ticket
