@@ -25,6 +25,7 @@ const walletRoutes = require('./src/routes/walletRoutes');
 const temporaryChatCleanupService = require('./src/services/temporaryChatCleanupService');
 const purchasesRoutes = require('./src/routes/purchasesRoutes');
 const supportRoutes = require('./src/routes/supportRoutes');
+const userRoutes = require('./src/routes/userRoutes');
 const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseService');
 const mongoose = require('mongoose');
 const adminRoutes = require('./src/routes/adminRoutes');
@@ -198,6 +199,7 @@ app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/users', userRoutes);
 // Purchases logger to debug 404 reports
 app.use('/api/purchases', (req, res, next) => {
   try {

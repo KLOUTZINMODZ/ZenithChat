@@ -29,6 +29,32 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Contact numbers
+  phone: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  phoneNumber: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  whatsapp: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  mobile: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  phoneNormalized: {
+    type: String,
+    default: null,
+    trim: true
+  },
   walletBalance: {
     type: Number,
     default: 0
@@ -88,6 +114,7 @@ const userSchema = new mongoose.Schema({
 
 userSchema.index({ email: 1 });
 userSchema.index({ pixKeyFingerprint: 1 }, { unique: true, sparse: true });
+userSchema.index({ phoneNormalized: 1 }, { sparse: true });
 
 
 userSchema.virtual('displayName').get(function() {
