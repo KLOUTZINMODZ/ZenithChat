@@ -25,15 +25,25 @@ function safeId(v) {
 }
 
 function requireAdminKey(req, res, next) {
-  const provided = req.headers['x-admin-key'] || req.headers['x-api-key'];
-  const expected = process.env.ADMIN_API_KEY;
-  if (!expected) {
-    return res.status(500).json({ success: false, message: 'ADMIN_API_KEY não configurada no servidor' });
-  }
-  if (!provided || provided !== expected) {
+  try {
+    const headerPanel = req.headers['x-panel-proxy-secret'];
+    const headerAdmin = req.headers['x-admin-key'] || req.headers['x-api-key'];
+    const panelSecret = process.env.PANEL_PROXY_SECRET || '';
+    const adminKey = process.env.ADMIN_API_KEY || '';
+
+    // Prefer PANEL_PROXY_SECRET. If it matches, allow.
+    if (panelSecret && headerPanel && String(headerPanel) === String(panelSecret)) {
+      return next();
+    }
+    // Backward compatibility: accept ADMIN_API_KEY if present and matches
+    if (adminKey && headerAdmin && String(headerAdmin) === String(adminKey)) {
+      return next();
+    }
+
     return res.status(403).json({ success: false, message: 'Acesso negado' });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Erro na verificação de chave de admin', error: e?.message });
   }
-  return next();
 }
 
 // PATCH /api/admin/market-items/:itemId/seller
