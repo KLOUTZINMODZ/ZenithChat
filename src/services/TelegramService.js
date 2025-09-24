@@ -21,12 +21,27 @@ function normalizeBrazilPhone(raw) {
   } catch (_) { return null; }
 }
 
+// Deriva os últimos 8 caracteres do ObjectId (em caixa alta) para exibir como Ticket #NNNNNNNN
+function shortTicketIdHex(idLike) {
+  try {
+    if (!idLike) return null;
+    const hex = String(idLike).replace(/[^a-fA-F0-9]/g, '');
+    if (hex.length >= 8) return hex.slice(-8).toUpperCase();
+    return null;
+  } catch { return null; }
+}
+
 // Monta o texto da mensagem do ticket com HTML (parse_mode: 'HTML')
 function buildTicketMessage({ client = {}, reporter = {}, reported = {}, report = {}, context = {} }) {
   const lines = [];
   lines.push('🚨 <b>Novo Ticket de Suporte</b>');
   if (report?.type) lines.push(`🧾 <b>Tipo:</b> ${escapeHtml(String(report.type))}`);
-  if (report?.id) lines.push(`🎫 <b>Ticket ID:</b> <code>${escapeHtml(String(report.id))}</code>`);
+  const fullId = report?.id || report?._id;
+  if (fullId) {
+    const shortId = shortTicketIdHex(fullId);
+    lines.push(`🎫 <b>Ticket ID:</b> <code>${escapeHtml(String(fullId))}</code>`);
+    if (shortId) lines.push(`Ticket #${escapeHtml(shortId)}`);
+  }
   if (context?.conversationId) lines.push(`💬 <b>Conversa:</b> <code>${escapeHtml(String(context.conversationId))}</code>`);
   if (context?.purchaseId) lines.push(`🛒 <b>Compra:</b> <code>${escapeHtml(String(context.purchaseId))}</code>`);
   lines.push('');

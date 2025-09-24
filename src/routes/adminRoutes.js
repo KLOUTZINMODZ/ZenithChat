@@ -86,7 +86,7 @@ router.get('/market-items/without-seller', requireAdminKey, async (req, res) => 
 // ========== SUPPORT / TICKETS (ADMIN) ==========
 
 // GET /api/admin/support/tickets
-// Query: page, limit, status, priority, type, q
+// Query: page, limit, status, priority, type, q, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail
 router.get('/support/tickets', requireAdminKey, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
@@ -94,19 +94,69 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const filter = {};
-    const { status, priority, type, q } = req.query || {};
+    const { status, priority, type, q, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail } = req.query || {};
     if (status) filter.status = String(status);
     if (priority) filter.priority = String(priority);
     if (type) filter.type = String(type);
+    // Exact match filters for IDs
+    const sid = safeId(id);
+    if (sid) filter._id = sid;
+    const scid = safeId(conversationId);
+    if (scid) filter.conversationId = scid;
+    const spid = safeId(proposalId);
+    if (spid) filter.proposalId = spid;
+    const sReporterId = safeId(reporterId);
+    if (sReporterId) filter['reporter.userid'] = sReporterId;
+    const sReportedId = safeId(reportedId);
+    if (sReportedId) filter['reported.userid'] = sReportedId;
+    // Emails (case-insensitive exact)
+    function escRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+    if (reporterEmail) filter['reporter.email'] = new RegExp(`^${escRe(reporterEmail)}$`, 'i');
+    if (reportedEmail) filter['reported.email'] = new RegExp(`^${escRe(reportedEmail)}$`, 'i');
     if (q) {
       const s = String(q).trim();
       if (s) {
-        filter.$or = [
+        const ors = [
           { reason: new RegExp(s, 'i') },
           { description: new RegExp(s, 'i') },
           { 'reporter.name': new RegExp(s, 'i') },
           { 'reported.name': new RegExp(s, 'i') }
         ];
+
+        // If it looks like an email, search reporter/reported emails too
+        if (/@/.test(s)) {
+          ors.push({ 'reporter.email': new RegExp(s, 'i') });
+          ors.push({ 'reported.email': new RegExp(s, 'i') });
+        }
+
+        // Support "Ticket #<short>" or plain 8-hex suffix of ObjectId
+        const mTicket = /ticket\s*#\s*([A-Fa-f0-9]{8})/i.exec(s);
+        const short = mTicket ? mTicket[1] : (/^[A-Fa-f0-9]{8}$/.test(s) ? s : null);
+        if (short) {
+          ors.push({
+            $expr: {
+              $regexMatch: {
+                input: { $toString: '$_id' },
+                regex: `${short}$`,
+                options: 'i'
+              }
+            }
+          });
+        }
+
+        // If it's a full ObjectId, try matching across multiple id fields
+        if (/^[a-fA-F0-9]{24}$/.test(s)) {
+          try {
+            const oid = new mongoose.Types.ObjectId(s);
+            ors.push({ _id: oid });
+            ors.push({ conversationId: oid });
+            ors.push({ proposalId: oid });
+            ors.push({ 'reporter.userid': oid });
+            ors.push({ 'reported.userid': oid });
+          } catch (_) {}
+        }
+
+        filter.$or = ors;
       }
     }
 
