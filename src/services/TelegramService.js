@@ -46,6 +46,7 @@ function buildTicketMessage({ client = {}, reporter = {}, reported = {}, report 
     if (reporter.username) lines.push(`• <b>Usuário:</b> @${escapeHtml(String(reporter.username))}`);
     if (reporter.email) lines.push(`• <b>Email:</b> ${escapeHtml(String(reporter.email))}`);
     if (reporter.id) lines.push(`• <b>ID:</b> <code>${escapeHtml(String(reporter.id))}</code>`);
+    if (reporter.phoneNormalized) lines.push(`• <b>WhatsApp:</b> +${escapeHtml(String(reporter.phoneNormalized))}`);
   }
 
   // Reported (opcional)
@@ -114,22 +115,32 @@ async function sendMessageToTelegram({ text, buttonUrl = null, buttonText = 'Ent
 
 async function sendSupportTicketNotification({ client = {}, reporter = {}, reported = {}, report = {}, context = {} }) {
   try {
-    // Normaliza telefone (se presente)
-    const normalized = normalizeBrazilPhone(client.phone || client.phoneNumber || client.whatsapp || client.whatsApp || null);
+    // Normaliza telefones (se presentes)
+    const normalizedClient = normalizeBrazilPhone(
+      client.phone || client.phoneNumber || client.whatsapp || client.whatsApp || client.mobile || client.phoneNormalized || null
+    );
+    const normalizedReporter = normalizeBrazilPhone(
+      reporter.phone || reporter.phoneNumber || reporter.whatsapp || reporter.whatsApp || reporter.mobile || reporter.phoneNormalized || null
+    );
     const message = buildTicketMessage({
       client: {
         ...client,
-        phoneNormalized: normalized || null
+        phoneNormalized: normalizedClient || null
       },
-      reporter,
+      reporter: {
+        ...reporter,
+        phoneNormalized: normalizedReporter || null
+      },
       reported,
       report,
       context
     });
 
-    const waLink = normalized ? `https://wa.me/${normalized}` : null;
+    // Preferimos o WhatsApp do solicitante (reporter); fallback para o cliente
+    const prefer = normalizedReporter || normalizedClient || null;
+    const waLink = prefer ? `https://wa.me/${prefer}` : null;
 
-    return await sendMessageToTelegram({ text: message, buttonUrl: waLink, buttonText: 'Entrar em Contato' });
+    return await sendMessageToTelegram({ text: message, buttonUrl: waLink, buttonText: 'Prestar Suporte' });
   } catch (e) {
     try { console.error('[TelegramService] Error building/sending support ticket notification:', e?.message || e); } catch (_) {}
     return { success: false, error: e?.message };

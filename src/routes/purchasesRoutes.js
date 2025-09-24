@@ -743,7 +743,8 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
             id: String(buyerId),
             name: buyer?.name || buyer?.legalName || buyer?.username || 'Comprador',
             username: clientApi?.username || null,
-            email: buyer?.email || clientApi?.email || null
+            email: buyer?.email || clientApi?.email || null,
+            phone: buyer?.phone || buyer?.phoneNumber || buyer?.whatsapp || buyer?.mobile || buyer?.phoneNormalized || clientApi?.whatsapp || clientApi?.phone || clientApi?.phoneNumber || clientApi?.mobile || null
           },
           reported: {
             id: purchase?.sellerId?.toString?.() || String(purchase.sellerId),
@@ -866,7 +867,8 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
         reporter: {
           id: String(userId),
           name: reporterUser?.name || reporterUser?.legalName || reporterUser?.username || 'Usuário',
-          email: reporterUser?.email || null
+          email: reporterUser?.email || null,
+          phone: reporterUser?.phone || reporterUser?.phoneNumber || reporterUser?.whatsapp || reporterUser?.mobile || reporterUser?.phoneNormalized || null
         },
         reported: {
           id: reportedUser?._id?.toString?.() || String(reportedUser?._id || ''),

@@ -719,7 +719,8 @@ class BoostingChatController {
             id: reporter?._id?.toString?.() || (req.user?.id || req.user?._id),
             name: reporterData?.name || reporter?.name || 'Usuário',
             username: reporterData?.username || null,
-            email: reporterData?.email || reporter?.email || null
+            email: reporterData?.email || reporter?.email || null,
+            phone: reporter?.phone || reporter?.phoneNumber || reporter?.whatsapp || reporter?.mobile || reporter?.phoneNormalized || reporterData?.whatsapp || reporterData?.phone || reporterData?.phoneNumber || reporterData?.mobile || null
           },
           reported: {
             id: reported?._id?.toString?.() || null,
