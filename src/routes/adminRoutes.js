@@ -86,7 +86,7 @@ router.get('/market-items/without-seller', requireAdminKey, async (req, res) => 
 // ========== SUPPORT / TICKETS (ADMIN) ==========
 
 // GET /api/admin/support/tickets
-// Query: page, limit, status, priority, type, q, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail
+// Query: page, limit, status, priority, type, q, any, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail
 router.get('/support/tickets', requireAdminKey, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
@@ -94,7 +94,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const filter = {};
-    const { status, priority, type, q, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail } = req.query || {};
+    const { status, priority, type, q, any, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail } = req.query || {};
     if (status) filter.status = String(status);
     if (priority) filter.priority = String(priority);
     if (type) filter.type = String(type);
@@ -113,51 +113,82 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
     function escRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
     if (reporterEmail) filter['reporter.email'] = new RegExp(`^${escRe(reporterEmail)}$`, 'i');
     if (reportedEmail) filter['reported.email'] = new RegExp(`^${escRe(reportedEmail)}$`, 'i');
+
+    // Build OR array from 'q' and 'any'
+    let ors = [];
     if (q) {
       const s = String(q).trim();
       if (s) {
-        const ors = [
+        ors.push(
           { reason: new RegExp(s, 'i') },
           { description: new RegExp(s, 'i') },
           { 'reporter.name': new RegExp(s, 'i') },
           { 'reported.name': new RegExp(s, 'i') }
-        ];
-
-        // If it looks like an email, search reporter/reported emails too
-        if (/@/.test(s)) {
-          ors.push({ 'reporter.email': new RegExp(s, 'i') });
-          ors.push({ 'reported.email': new RegExp(s, 'i') });
-        }
-
-        // Support "Ticket #<short>" or plain 8-hex suffix of ObjectId
-        const mTicket = /ticket\s*#\s*([A-Fa-f0-9]{8})/i.exec(s);
-        const short = mTicket ? mTicket[1] : (/^[A-Fa-f0-9]{8}$/.test(s) ? s : null);
-        if (short) {
-          ors.push({
-            $expr: {
-              $regexMatch: {
-                input: { $toString: '$_id' },
-                regex: `${short}$`,
-                options: 'i'
-              }
-            }
-          });
-        }
-
-        // If it's a full ObjectId, try matching across multiple id fields
-        if (/^[a-fA-F0-9]{24}$/.test(s)) {
-          try {
-            const oid = new mongoose.Types.ObjectId(s);
-            ors.push({ _id: oid });
-            ors.push({ conversationId: oid });
-            ors.push({ proposalId: oid });
-            ors.push({ 'reporter.userid': oid });
-            ors.push({ 'reported.userid': oid });
-          } catch (_) {}
-        }
-
-        filter.$or = ors;
+        );
       }
+    }
+    if (any) {
+      const s = String(any).trim();
+      if (s) {
+        // Extract potential ObjectIds and emails from the whole string
+        const rawIds = (s.match(/[a-fA-F0-9]{24}/g) || []);
+        const uniqIds = Array.from(new Set(rawIds));
+        for (const tid of uniqIds) {
+          const mid = safeId(tid);
+          if (mid) {
+            ors.push(
+              { _id: mid },
+              { conversationId: mid },
+              { proposalId: mid },
+              { 'reporter.userid': mid },
+              { 'reported.userid': mid }
+            );
+          }
+        }
+
+        const rawEmails = (s.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig) || []);
+        const uniqEmails = Array.from(new Set(rawEmails));
+        for (const em of uniqEmails) {
+          const reEmail = new RegExp(`^${escRe(em)}$`, 'i');
+          ors.push(
+            { 'reporter.email': reEmail },
+            { 'reported.email': reEmail }
+          );
+        }
+
+        // If the entire input is a single ID token
+        const maybeId = safeId(s);
+        if (maybeId) {
+          ors.push(
+            { _id: maybeId },
+            { conversationId: maybeId },
+            { proposalId: maybeId },
+            { 'reporter.userid': maybeId },
+            { 'reported.userid': maybeId }
+          );
+        }
+
+        // If the entire input looks like an email
+        if (/@/.test(s)) {
+          const reEmail = new RegExp(`^${escRe(s)}$`, 'i');
+          ors.push(
+            { 'reporter.email': reEmail },
+            { 'reported.email': reEmail }
+          );
+        }
+
+        // Fallback to text search as in 'q'
+        ors.push(
+          { reason: new RegExp(s, 'i') },
+          { description: new RegExp(s, 'i') },
+          { 'reporter.name': new RegExp(s, 'i') },
+          { 'reported.name': new RegExp(s, 'i') }
+        );
+      }
+    }
+    if (ors.length) {
+      // Merge with any prior $or (shouldn't exist yet) or set anew
+      filter.$or = Array.isArray(filter.$or) ? filter.$or.concat(ors) : ors;
     }
 
     const [tickets, total] = await Promise.all([
