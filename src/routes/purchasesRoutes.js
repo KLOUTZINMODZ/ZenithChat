@@ -723,7 +723,14 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
         status: 'pending',
         priority: 'high'
       });
+      try {
       await report.save();
+    } catch (e) {
+      if (e && (e.code === 11000 || e.code === 'E11000')) {
+        return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: e?.keyValue?._id || null } });
+      }
+      throw e;
+    }
 
       // Envia notificação ao Telegram com dados do cliente (comprador)
       try {
@@ -796,7 +803,23 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
 router.get('/:purchaseId/support-ticket/status', auth, async (req, res) => {
   try {
     const { purchaseId } = req.params;
-    const existing = await Report.findOne({ purchaseId });
+    const purchase = await Purchase.findById(purchaseId);
+    let conversationId = null;
+    if (purchase) {
+      conversationId = purchase.conversationId || null;
+      if (!conversationId) {
+        try {
+          const conv = await Conversation.findOne({ 'metadata.purchaseId': purchase._id });
+          if (conv) conversationId = conv._id;
+        } catch (_) {}
+      }
+    }
+    const existing = await Report.findOne({
+      $or: [
+        { purchaseId: purchase ? purchase._id : null },
+        ...(conversationId ? [{ conversationId }] : [])
+      ]
+    });
     return res.json({ success: true, data: { exists: !!existing, reportId: existing ? existing._id : null } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Erro ao verificar status do ticket', error: error.message });
@@ -816,8 +839,20 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
     const isSeller = purchase.sellerId.toString() === userId.toString();
     if (!isBuyer && !isSeller) return res.status(403).json({ success: false, message: 'Acesso negado' });
 
-    // Prevent duplicate ticket for the same purchase
-    const existing = await Report.findOne({ purchaseId: purchase._id });
+    // Prevent duplicate ticket for the same purchase (also consider legacy tickets by conversation)
+    let convIdForCheck = purchase.conversationId || null;
+    if (!convIdForCheck) {
+      try {
+        const conv = await Conversation.findOne({ 'metadata.purchaseId': purchase._id });
+        if (conv) convIdForCheck = conv._id;
+      } catch (_) {}
+    }
+    const existing = await Report.findOne({
+      $or: [
+        { purchaseId: purchase._id },
+        ...(convIdForCheck ? [{ conversationId: convIdForCheck }] : [])
+      ]
+    });
     if (existing) {
       return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: existing._id } });
     }
@@ -863,7 +898,14 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
       priority: 'high'
     });
 
-    await report.save();
+    try {
+      await report.save();
+    } catch (e) {
+      if (e && (e.code === 11000 || e.code === 'E11000')) {
+        return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido' });
+      }
+      throw e;
+    }
 
     // Envia notificação ao Telegram com dados do cliente (comprador)
     try {

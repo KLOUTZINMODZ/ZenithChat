@@ -628,8 +628,30 @@ class BoostingChatController {
       }
 
 
+      // Try to resolve a marketplace purchaseId linked to this conversation
+      const resolvedPurchaseId = (() => {
+        try {
+          if (conversation?.marketplace?.purchaseId) {
+            return conversation.marketplace.purchaseId.toString?.() || conversation.marketplace.purchaseId;
+          }
+          if (conversation?.metadata && typeof conversation.metadata.get === 'function') {
+            return conversation.metadata.get('purchaseId') || null;
+          }
+          return conversation?.metadata?.purchaseId || null;
+        } catch (_) { return null; }
+      })();
+
+      // If linked to a purchase, prevent duplicate ticket for the same order
+      if (resolvedPurchaseId) {
+        const existing = await Report.findOne({ purchaseId: resolvedPurchaseId });
+        if (existing) {
+          return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: existing._id } });
+        }
+      }
+
       const reportData = new Report({
         conversationId,
+        purchaseId: resolvedPurchaseId || undefined,
         proposalId: acceptedProposal?._id,
         type,
         reason,
@@ -677,7 +699,14 @@ class BoostingChatController {
         priority: calculateReportPriority(type, reportedData?.previousReportsCount || 0)
       });
 
-      await reportData.save();
+      try {
+        await reportData.save();
+      } catch (e) {
+        if (e && (e.code === 11000 || e.code === 'E11000')) {
+          return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido' });
+        }
+        throw e;
+      }
 
       // Envia notificação ao Telegram com dados do cliente
       try {
