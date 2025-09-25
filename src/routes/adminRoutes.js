@@ -86,7 +86,7 @@ router.get('/market-items/without-seller', requireAdminKey, async (req, res) => 
 // ========== SUPPORT / TICKETS (ADMIN) ==========
 
 // GET /api/admin/support/tickets
-// Query: page, limit, status, priority, type, q, any, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail
+// Query: page, limit, status, priority, type, q, any, id, conversationId, proposalId, purchaseId, reporterId, reportedId, reporterEmail, reportedEmail
 router.get('/support/tickets', requireAdminKey, async (req, res) => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
@@ -94,7 +94,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const filter = {};
-    const { status, priority, type, q, any, id, conversationId, proposalId, reporterId, reportedId, reporterEmail, reportedEmail } = req.query || {};
+    const { status, priority, type, q, any, id, conversationId, proposalId, purchaseId, reporterId, reportedId, reporterEmail, reportedEmail } = req.query || {};
     if (status) filter.status = String(status);
     if (priority) filter.priority = String(priority);
     if (type) filter.type = String(type);
@@ -105,6 +105,8 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
     if (scid) filter.conversationId = scid;
     const spid = safeId(proposalId);
     if (spid) filter.proposalId = spid;
+    const spurch = safeId(purchaseId);
+    if (spurch) filter.purchaseId = spurch;
     const sReporterId = safeId(reporterId);
     if (sReporterId) filter['reporter.userid'] = sReporterId;
     const sReportedId = safeId(reportedId);
@@ -140,6 +142,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
               { _id: mid },
               { conversationId: mid },
               { proposalId: mid },
+              { purchaseId: mid },
               { 'reporter.userid': mid },
               { 'reported.userid': mid }
             );
@@ -163,6 +166,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
             { _id: maybeId },
             { conversationId: maybeId },
             { proposalId: maybeId },
+            { purchaseId: maybeId },
             { 'reporter.userid': maybeId },
             { 'reported.userid': maybeId }
           );
@@ -199,6 +203,8 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
     const mapped = tickets.map(t => ({
       _id: t._id,
       conversationId: t.conversationId,
+      proposalId: t.proposalId,
+      purchaseId: t.purchaseId,
       type: t.type,
       reason: t.reason,
       description: t.description,

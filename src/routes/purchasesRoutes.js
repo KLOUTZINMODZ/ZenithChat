@@ -692,8 +692,15 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
         User.findById(purchase.sellerId)
       ]);
 
+      // Prevent duplicate ticket for the same purchase
+      const existing = await Report.findOne({ purchaseId: purchase._id });
+      if (existing) {
+        return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: existing._id } });
+      }
+
       const report = new Report({
         conversationId: purchase.conversationId,
+        purchaseId: purchase._id,
         type: 'service_not_delivered',
         reason: 'buyer_not_received',
         description: comment || 'Comprador declarou que não recebeu o item.',
@@ -785,6 +792,17 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
 });
 
 // POST /api/purchases/:purchaseId/support-ticket
+// GET /api/purchases/:purchaseId/support-ticket/status
+router.get('/:purchaseId/support-ticket/status', auth, async (req, res) => {
+  try {
+    const { purchaseId } = req.params;
+    const existing = await Report.findOne({ purchaseId });
+    return res.json({ success: true, data: { exists: !!existing, reportId: existing ? existing._id : null } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erro ao verificar status do ticket', error: error.message });
+  }
+});
+
 router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
   try {
     const { purchaseId } = req.params;
@@ -797,6 +815,12 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
     const isBuyer = purchase.buyerId.toString() === userId.toString();
     const isSeller = purchase.sellerId.toString() === userId.toString();
     if (!isBuyer && !isSeller) return res.status(403).json({ success: false, message: 'Acesso negado' });
+
+    // Prevent duplicate ticket for the same purchase
+    const existing = await Report.findOne({ purchaseId: purchase._id });
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: existing._id } });
+    }
 
     // Monta dados do denunciante e denunciado
     const [reporterUser, reportedUser] = await Promise.all([
@@ -815,6 +839,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
 
     const report = new Report({
       conversationId,
+      purchaseId: purchase._id,
       type: ['service_not_delivered','payment_issues','other'].includes(String(issueType)) ? String(issueType) : 'payment_issues',
       reason: 'support_ticket_opened',
       description: description || 'Ticket de suporte aberto pelo usuário.',

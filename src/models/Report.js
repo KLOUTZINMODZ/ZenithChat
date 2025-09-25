@@ -12,6 +12,12 @@ const reportSchema = new mongoose.Schema({
     ref: 'AcceptedProposal',
     index: true
   },
+  // When a ticket is tied to a marketplace purchase
+  purchaseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Purchase',
+    index: true
+  },
   type: {
     type: String,
     enum: ['harassment', 'fraud', 'inappropriate_behavior', 'service_not_delivered', 'poor_quality', 'payment_issues', 'other'],
@@ -193,6 +199,8 @@ reportSchema.index({ status: 1, priority: -1, createdAt: -1 });
 reportSchema.index({ 'reporter.userid': 1, createdAt: -1 });
 reportSchema.index({ 'reported.userid': 1, createdAt: -1 });
 reportSchema.index({ type: 1, status: 1 });
+// Ensure only one ticket per purchase order (sparse allows reports without purchaseId)
+reportSchema.index({ purchaseId: 1 }, { unique: true, sparse: true });
 
 
 reportSchema.methods.escalate = function(reason) {
