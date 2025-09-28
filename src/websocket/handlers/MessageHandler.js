@@ -389,10 +389,12 @@ class MessageHandler {
 
   async sendPendingMessages(userId, ws) {
     try {
+      const replayStart = Date.now();
       logger.info(`🔄 CACHE: Sending pending messages for user ${userId}`);
 
 
       const offlineMessages = cache.getOfflineMessages(userId);
+      const dedupIds = new Set();
       if (offlineMessages.length > 0) {
         logger.info(`📤 CACHE: Found ${offlineMessages.length} cached offline messages for user ${userId}`);
         
@@ -406,6 +408,11 @@ class MessageHandler {
             }
             messagesByConversation.get(convId).push(msg);
           }
+          // collect ids for dedup
+          try {
+            const mid = msg?.messageId || msg?.data?.message?.id || msg?.data?.message?._id?.toString?.() || msg?.data?.messageId;
+            if (mid) dedupIds.add(String(mid));
+          } catch (_) {}
         });
 
 
@@ -453,11 +460,17 @@ class MessageHandler {
 
           if (msgs.length > 0) {
             const decrypted = msgs.map(m => ({ ...m, content: decryptMessage(m.content) }));
+            const filtered = decrypted.filter(m => {
+              const mid = String(m?._id || m?.id || '');
+              return mid ? !dedupIds.has(mid) : true;
+            });
+            // add to dedup set to avoid duplicates across conversations
+            filtered.forEach(m => { try { const mid = String(m?._id || m?.id || ''); if (mid) dedupIds.add(mid); } catch (_) {} });
             this.sendToUser(userId, {
               type: 'message:pending',
               data: {
                 conversationId: conv._id,
-                messages: decrypted,
+                messages: filtered,
                 requiresAck: true
               },
               timestamp: new Date().toISOString()
@@ -487,12 +500,17 @@ class MessageHandler {
               ...msg,
               content: decryptMessage(msg.content)
             }));
+            const filtered = decryptedMessages.filter(m => {
+              const mid = String(m?._id || m?.id || '');
+              return mid ? !dedupIds.has(mid) : true;
+            });
+            filtered.forEach(m => { try { const mid = String(m?._id || m?.id || ''); if (mid) dedupIds.add(mid); } catch (_) {} });
   
             this.sendToUser(userId, {
               type: 'message:pending',
               data: {
                 conversationId: conversation._id,
-                messages: decryptedMessages,
+                messages: filtered,
                 requiresAck: true
               },
               timestamp: new Date().toISOString()
@@ -501,7 +519,12 @@ class MessageHandler {
         }
       }
 
-      logger.info(`✅ CACHE: Completed sending pending messages for user ${userId}`);
+      const duration = Date.now() - replayStart;
+      logger.info(`✅ CACHE: Completed sending pending messages for user ${userId}`, {
+        durationMs: duration,
+        offlineMessagesCount: offlineMessages?.length || 0,
+        dedupCollected: dedupIds.size
+      });
 
     } catch (error) {
       logger.error('Error sending pending messages:', error);
@@ -535,8 +558,18 @@ class MessageHandler {
 
       if (!messageSent) {
         logger.info(`🔄 CACHE: User ${userId} online but send failed - caching message`);
+        const toCache = (() => {
+          const m = { ...message };
+          try {
+            if (!m.messageId && m?.type === 'message:new') {
+              const mid = m?.data?.message?._id?.toString?.() || m?.data?.message?.id || m?.data?.messageId;
+              m.messageId = mid || uuidv4();
+            }
+          } catch (_) {}
+          return m;
+        })();
         cache.cacheOfflineMessage(userId, {
-          ...message,
+          ...toCache,
           cached_reason: 'send_failed',
           cached_at: new Date().toISOString()
         });
@@ -544,8 +577,18 @@ class MessageHandler {
     } else {
 
       logger.info(`📦 CACHE: User ${userId} is offline - caching message type: ${message.type}`);
+      const toCache = (() => {
+        const m = { ...message };
+        try {
+          if (!m.messageId && m?.type === 'message:new') {
+            const mid = m?.data?.message?._id?.toString?.() || m?.data?.message?.id || m?.data?.messageId;
+            m.messageId = mid || uuidv4();
+          }
+        } catch (_) {}
+        return m;
+      })();
       cache.cacheOfflineMessage(userId, {
-        ...message,
+        ...toCache,
         cached_reason: 'user_offline',
         cached_at: new Date().toISOString()
       });
