@@ -15,6 +15,11 @@ class ConversationHandler {
     this.connectionManager = connectionManager;
     this.userLastCheck = new Map();
     this.activePolling = new Map();
+    // Feature flags and runtime caches
+    this.updateThrottleMs = parseInt(process.env.WS_CONV_UPDATE_THROTTLE_MS || '2000');
+    this.userUpdateTimers = new Map();
+    this.userLastUpdateAt = new Map();
+    this.marketplaceCache = new Map(); // key: purchaseId or conversationId -> { data, expires }
   }
 
   /**
@@ -41,6 +46,26 @@ class ConversationHandler {
         conv.metadata = meta; // ainda normalize metadata
         return;
       }
+
+      // Simple cache to avoid repeated enrichment work across frequent refreshes
+      try {
+        const ttl = parseInt(process.env.MARKETPLACE_ENRICH_CACHE_TTL_MS || '60000');
+        const cacheKey = String(meta?.purchaseId || conv._id?.toString?.() || conv._id);
+        const cached = cacheKey && this.marketplaceCache.get(cacheKey);
+        if (cached && cached.expires > Date.now()) {
+          const d = cached.data;
+          conv.metadata = d.metadata ?? meta;
+          if (d.client) conv.client = d.client;
+          if (d.booster) conv.booster = d.booster;
+          if (d.marketplace) conv.marketplace = d.marketplace;
+          if (Array.isArray(d.participants)) conv.participants = d.participants;
+          return;
+        }
+        // After enrichment, we'll store into cache
+        var cacheKeyToUse = cacheKey;
+        var cacheTtlToUse = ttl;
+        var cacheStore = true;
+      } catch (_) {}
 
       let buyerId = null, sellerId = null;
       let purchasePrice = null, purchaseStatus = null, purchaseDateVal = null, itemTitleUsed = null, itemImageUsed = null;
@@ -187,6 +212,21 @@ class ConversationHandler {
       // Loga mas não quebra fluxo
       try { logger.warn('Marketplace enrichment failed for conversation', { id: conv?._id?.toString?.(), error: err?.message }); } catch (_) {}
     }
+    // Cache the enrichment if prepared
+    try {
+      if (cacheStore && cacheKeyToUse) {
+        this.marketplaceCache.set(cacheKeyToUse, {
+          data: {
+            metadata: conv.metadata,
+            client: conv.client,
+            booster: conv.booster,
+            marketplace: conv.marketplace,
+            participants: conv.participants
+          },
+          expires: Date.now() + (cacheTtlToUse || 60000)
+        });
+      }
+    } catch (_) {}
   }
 
   /**
@@ -308,11 +348,17 @@ class ConversationHandler {
 
       const conversationsWithUnread = await Promise.all(
         conversations.map(async (conv) => {
-          const unreadCount = await Message.countDocuments({
-            conversation: conv._id,
-            sender: { $ne: userId },
-            'readBy.user': { $ne: userId }
-          });
+          // Use stored unreadCount map on Conversation instead of heavy COUNTs
+          const uc = conv.unreadCount;
+          const unreadCount = (() => {
+            try {
+              if (!uc) return 0;
+              if (typeof uc.get === 'function') return uc.get(userId.toString()) || 0;
+              if (typeof uc === 'object') return uc[userId?.toString?.()] || 0;
+              if (typeof uc === 'number') return uc;
+              return 0;
+            } catch (_) { return 0; }
+          })();
 
           const plainConv = { ...conv };
           // Decrypt lastMessage preview if available
@@ -404,6 +450,85 @@ class ConversationHandler {
   }
 
   /**
+   * Throttled wrapper for sendConversationsUpdate to reduce spam
+   */
+  sendConversationsUpdateThrottled(userId) {
+    try {
+      const now = Date.now();
+      const last = this.userLastUpdateAt.get(userId) || 0;
+      const remaining = this.updateThrottleMs - (now - last);
+      if (remaining > 0 && this.userUpdateTimers.has(userId)) {
+        return; // already scheduled
+      }
+      const delay = Math.max(0, remaining);
+      if (this.userUpdateTimers.has(userId)) {
+        clearTimeout(this.userUpdateTimers.get(userId));
+      }
+      const t = setTimeout(async () => {
+        try { await this.sendConversationsUpdate(userId); } catch (_) {}
+        this.userLastUpdateAt.set(userId, Date.now());
+        this.userUpdateTimers.delete(userId);
+      }, delay);
+      this.userUpdateTimers.set(userId, t);
+    } catch (_) {}
+  }
+
+  /**
+   * Emit a compact conversation:updated event to all participants except the sender
+   */
+  async sendCompactUpdateToParticipants(conversation, message, senderId) {
+    try {
+      const convObj = conversation.toObject ? conversation.toObject() : conversation;
+      const now = new Date();
+      for (const participant of convObj.participants || []) {
+        const uid = participant?._id?.toString?.() || participant?.toString?.();
+        if (!uid || uid === senderId) continue;
+
+        // unreadCount from conversation map
+        const uc = convObj.unreadCount;
+        const unreadCount = (() => {
+          try {
+            if (!uc) return 0;
+            if (typeof uc.get === 'function') return uc.get(uid) || 0;
+            if (typeof uc === 'object') return uc[uid] || 0;
+            if (typeof uc === 'number') return uc;
+            return 0;
+          } catch (_) { return 0; }
+        })();
+
+        this.sendToUser(uid, {
+          type: 'conversation:updated',
+          data: {
+            _id: convObj._id,
+            lastMessage: message?.content ?? '',
+            lastMessageDate: convObj.lastMessageAt || now,
+            unreadCount,
+            isTemporary: !!convObj.isTemporary,
+            status: convObj.status || null,
+            updatedAt: convObj.updatedAt || now,
+            // Minimal participant avatars for UI list
+            participants: (convObj.participants || []).map(p => ({
+              _id: p._id?.toString?.() || String(p),
+              name: p.name,
+              profileImage: p.avatar || p.profileImage || null
+            })),
+            // Optional compact marketplace summary if present
+            marketplace: convObj.marketplace ? {
+              price: convObj.marketplace.price ?? null,
+              statusCompra: convObj.marketplace.statusCompra ?? null,
+              itemTitle: convObj.marketplace.itemTitle ?? null,
+              itemImage: convObj.marketplace.itemImage ?? null
+            } : null
+          },
+          timestamp: now.toISOString()
+        });
+      }
+    } catch (e) {
+      logger.warn('sendCompactUpdateToParticipants failed', { error: e?.message });
+    }
+  }
+
+  /**
    * Envia dados para um usuário específico
    */
   sendToUser(userId, data) {
@@ -428,9 +553,14 @@ class ConversationHandler {
 
       for (const participant of conversation.participants) {
         const userId = participant.user?.toString() || participant.toString();
-        
+        // If compact updates are enabled, we prefer letting MessageHandler emit them.
+        // Otherwise, fall back to throttled full updates for polling users.
         if (this.activePolling.has(userId)) {
-          await this.sendConversationsUpdate(userId);
+          if (String(process.env.WS_CONV_UPDATE_COMPACT || 'true').toLowerCase() === 'true') {
+            this.sendConversationsUpdateThrottled(userId);
+          } else {
+            await this.sendConversationsUpdate(userId);
+          }
         }
       }
 

@@ -60,6 +60,8 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
 messageSchema.index({ 'readBy.user': 1 });
+// Optimize unread lookups combined with conversation and sender filters
+messageSchema.index({ conversation: 1, 'readBy.user': 1, sender: 1, createdAt: -1 });
 
 messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 15 });
 

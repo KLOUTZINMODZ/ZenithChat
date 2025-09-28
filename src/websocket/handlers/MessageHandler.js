@@ -23,6 +23,13 @@ class MessageHandler {
     this.maxRetryInterval = 30000;
     
     this.setupCleanupInterval();
+
+    // Feature flags and replay limits
+    this.enableCompactUpdates = String(process.env.WS_CONV_UPDATE_COMPACT || 'true').toLowerCase() === 'true';
+    this.typingNoDb = String(process.env.WS_TYPING_NO_DB || 'true').toLowerCase() === 'true';
+    this.pendingStrategy = String(process.env.WS_PENDING_FETCH_STRATEGY || 'indexed'); // 'indexed' | 'legacy'
+    this.pendingReplayConversationsLimit = parseInt(process.env.WS_PENDING_REPLAY_MAX_CONV || '5');
+    this.pendingReplayMessagesLimit = parseInt(process.env.WS_PENDING_REPLAY_MAX_MSG || '100');
   }
 
   setupCleanupInterval() {
@@ -141,6 +148,15 @@ class MessageHandler {
         }
       });
 
+      // Emit compact conversation updates instead of forcing a full-list refresh
+      try {
+        if (this.enableCompactUpdates && this.conversationHandler && typeof this.conversationHandler.sendCompactUpdateToParticipants === 'function') {
+          await this.conversationHandler.sendCompactUpdateToParticipants(conversation, { content }, userId);
+        }
+      } catch (e) {
+        logger.warn('sendCompactUpdateToParticipants failed from MessageHandler', { error: e?.message });
+      }
+
 
       setImmediate(() => {
         const participantIds = conversation.participants.map(p => p._id.toString());
@@ -158,12 +174,6 @@ class MessageHandler {
   async handleTypingIndicator(userId, payload) {
     try {
       const { conversationId, isTyping } = payload;
-
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) {
-        throw new Error('Conversation not found');
-      }
-
       const typingMessage = {
         type: 'message:typing',
         data: {
@@ -174,12 +184,21 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       };
 
-
-      conversation.participants.forEach(participant => {
-        if (participant.toString() !== userId) {
-          this.sendToUser(participant.toString(), typingMessage);
+      if (this.typingNoDb) {
+        // Broadcast only to users who have this conversation active (reduces load)
+        try { this.connectionManager.broadcastToConversation(conversationId, typingMessage, userId); } catch (_) {}
+      } else {
+        const conversation = await Conversation.findById(conversationId).select('participants').lean();
+        if (!conversation) {
+          throw new Error('Conversation not found');
         }
-      });
+        (conversation.participants || []).forEach(participant => {
+          const pid = participant?.toString?.() || participant?._id?.toString?.();
+          if (pid && pid !== userId) {
+            this.sendToUser(pid, typingMessage);
+          }
+        });
+      }
 
     } catch (error) {
       logger.error('Error handling typing indicator:', error);
@@ -291,50 +310,11 @@ class MessageHandler {
 
   async handleListConversations(userId, ws) {
     try {
-      const conversationsAll = await Conversation.find({
-        participants: userId
-      })
-        .populate('participants', 'name email avatar')
-        .populate('lastMessage')
-        .sort('-lastMessageAt')
-        .limit(50);
-
-
-      const conversations = conversationsAll.filter(conv => {
-        try {
-          const deletedFor = conv.metadata && (conv.metadata.get 
-            ? conv.metadata.get('deletedFor') 
-            : conv.metadata?.deletedFor);
-          if (Array.isArray(deletedFor)) {
-            const list = deletedFor.map(id => id.toString());
-            return !list.includes(userId.toString());
-          }
-        } catch (_) {}
-        return true;
-      });
-
-      const conversationData = conversations.map(conv => {
-        const convObj = conv.toObject();
-        return {
-          ...convObj,
-          unreadCount: conv.unreadCount?.[userId] || 0,
-          isOnline: conv.participants.some(p => 
-            p._id.toString() !== userId && 
-            this.connectionManager.isUserOnline(p._id.toString())
-          ),
-
-          isTemporary: convObj.isTemporary || false,
-          expiresAt: convObj.expiresAt || null,
-          status: convObj.status || null,
-          client: convObj.client || null,
-          booster: convObj.booster || null,
-          metadata: convObj.metadata || null
-        };
-      });
-
+      // Delegate to ConversationHandler's optimized query (lean + unreadCount map)
+      const data = await (this.conversationHandler?.getConversationsData(userId).catch(() => ({ conversations: [] })) || { conversations: [] });
       this.sendToUser(userId, {
         type: 'conversation:list',
-        data: conversationData,
+        data: Array.isArray(data.conversations) ? data.conversations : [],
         timestamp: new Date().toISOString()
       });
 
@@ -365,8 +345,9 @@ class MessageHandler {
       }
 
 
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation || !conversation.participants.includes(userId)) {
+      const conversation = await Conversation.findById(conversationId).select('_id participants').lean();
+      const partIds = Array.isArray(conversation?.participants) ? conversation.participants.map(p => p?.toString?.()) : [];
+      if (!conversation || !partIds.includes(userId?.toString?.())) {
         throw new Error('Conversation not found or access denied');
       }
 
@@ -379,11 +360,12 @@ class MessageHandler {
       const messages = await Message.find(query)
         .populate('sender', 'name email avatar')
         .sort('-createdAt')
-        .limit(limit);
+        .limit(limit)
+        .lean();
 
 
       const decryptedMessages = messages.map(msg => ({
-        ...msg.toObject(),
+        ...msg,
         content: decryptMessage(msg.content)
       }));
 
@@ -448,36 +430,74 @@ class MessageHandler {
       }
 
 
-      const conversations = await Conversation.find({
-        participants: userId,
-        [`unreadCount.${userId}`]: { $gt: 0 }
-      });
+      // Additional server-side replay using indexed strategy (limited) to avoid dynamic map key queries
+      if (this.pendingStrategy === 'indexed') {
+        const MAX_CONV = this.pendingReplayConversationsLimit;
+        const MAX_MSG = this.pendingReplayMessagesLimit;
+        const recentConvs = await Conversation.find({ participants: userId })
+          .select('_id participants unreadCount updatedAt isTemporary status client booster marketplace')
+          .sort({ updatedAt: -1 })
+          .limit(MAX_CONV)
+          .lean();
 
-      for (const conversation of conversations) {
-        const messages = await Message.find({
-          conversation: conversation._id,
-          sender: { $ne: userId },
-          'readBy.user': { $ne: userId }
-        })
-          .populate('sender', 'name email avatar')
-          .sort('createdAt')
-          .limit(100);
+        for (const conv of recentConvs) {
+          const msgs = await Message.find({
+            conversation: conv._id,
+            sender: { $ne: userId },
+            'readBy.user': { $ne: userId }
+          })
+            .populate('sender', 'name email avatar')
+            .sort('createdAt')
+            .limit(MAX_MSG)
+            .lean();
 
-        if (messages.length > 0) {
-          const decryptedMessages = messages.map(msg => ({
-            ...msg.toObject(),
-            content: decryptMessage(msg.content)
-          }));
+          if (msgs.length > 0) {
+            const decrypted = msgs.map(m => ({ ...m, content: decryptMessage(m.content) }));
+            this.sendToUser(userId, {
+              type: 'message:pending',
+              data: {
+                conversationId: conv._id,
+                messages: decrypted,
+                requiresAck: true
+              },
+              timestamp: new Date().toISOString()
+            });
+          }
+        }
+      } else {
+        // Legacy behavior (may be heavy)
+        const conversations = await Conversation.find({
+          participants: userId,
+          [`unreadCount.${userId}`]: { $gt: 0 }
+        }).select('_id').lean();
 
-          this.sendToUser(userId, {
-            type: 'message:pending',
-            data: {
-              conversationId: conversation._id,
-              messages: decryptedMessages,
-              requiresAck: true
-            },
-            timestamp: new Date().toISOString()
-          });
+        for (const conversation of conversations) {
+          const messages = await Message.find({
+            conversation: conversation._id,
+            sender: { $ne: userId },
+            'readBy.user': { $ne: userId }
+          })
+            .populate('sender', 'name email avatar')
+            .sort('createdAt')
+            .limit(this.pendingReplayMessagesLimit)
+            .lean();
+  
+          if (messages.length > 0) {
+            const decryptedMessages = messages.map(msg => ({
+              ...msg,
+              content: decryptMessage(msg.content)
+            }));
+  
+            this.sendToUser(userId, {
+              type: 'message:pending',
+              data: {
+                conversationId: conversation._id,
+                messages: decryptedMessages,
+                requiresAck: true
+              },
+              timestamp: new Date().toISOString()
+            });
+          }
         }
       }
 
