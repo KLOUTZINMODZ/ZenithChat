@@ -5,6 +5,7 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 const axios = require('axios');
 const { sendSupportTicketNotification } = require('../services/TelegramService');
+const { checkProhibitedContent } = require('../utils/contentFilter');
 
 const sanitizeUserSnapshot = (user) => {
   if (!user) return null;
@@ -48,6 +49,16 @@ module.exports = {
       const text = String(question).trim();
       if (text.length > 5000) {
         return res.status(400).json({ success: false, message: 'A pergunta excede o limite de 5000 caracteres' });
+      }
+
+      // Content Safety Filter: profanity, emails, phones, CPFs, and excessive digits
+      try {
+        const check = checkProhibitedContent(text);
+        if (!check.ok) {
+          return res.status(400).json({ success: false, message: 'Sua pergunta contém conteúdo não permitido (profanidade, contato ou dados sensíveis).', data: { violations: check.violations } });
+        }
+      } catch (e) {
+        try { logger?.warn?.('[QA] contentFilter failed', { error: e?.message }); } catch (_) {}
       }
 
       const item = await MarketItem.findById(itemId).lean();
