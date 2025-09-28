@@ -12,4 +12,7 @@ router.post('/items/:itemId/questions', auth, qaController.createQuestion);
 // Responder a uma pergunta (somente vendedor)
 router.post('/questions/:id/answer', auth, qaController.answerQuestion);
 
+// Denunciar uma pergunta (usuários autenticados; não pode denunciar a própria pergunta)
+router.post('/questions/:id/report', auth, qaController.reportQuestion);
+
 module.exports = router;

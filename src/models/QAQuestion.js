@@ -23,7 +23,7 @@ const qaQuestionSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true,
-    maxlength: 2000
+    maxlength: 5000
   },
   answer: {
     type: String,

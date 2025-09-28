@@ -1,7 +1,10 @@
 const QAQuestion = require('../models/QAQuestion');
 const MarketItem = require('../models/MarketItem');
+const Report = require('../models/Report');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const axios = require('axios');
+const { sendSupportTicketNotification } = require('../services/TelegramService');
 
 const sanitizeUserSnapshot = (user) => {
   if (!user) return null;
@@ -42,6 +45,10 @@ module.exports = {
       if (!question || String(question).trim().length === 0) {
         return res.status(400).json({ success: false, message: 'A pergunta não pode estar vazia' });
       }
+      const text = String(question).trim();
+      if (text.length > 5000) {
+        return res.status(400).json({ success: false, message: 'A pergunta excede o limite de 5000 caracteres' });
+      }
 
       const item = await MarketItem.findById(itemId).lean();
       if (!item) {
@@ -64,7 +71,7 @@ module.exports = {
         itemId,
         buyerId: userId,
         sellerId,
-        question: String(question).trim(),
+        question: text,
         status: 'pending',
         buyerSnapshot: sanitizeUserSnapshot(buyer),
         sellerSnapshot: sanitizeUserSnapshot(seller),
@@ -107,6 +114,10 @@ module.exports = {
       if (!answer || String(answer).trim().length === 0) {
         return res.status(400).json({ success: false, message: 'A resposta não pode estar vazia' });
       }
+      const ansText = String(answer).trim();
+      if (ansText.length > 5000) {
+        return res.status(400).json({ success: false, message: 'A resposta excede o limite de 5000 caracteres' });
+      }
 
       const qa = await QAQuestion.findById(id);
       if (!qa) {
@@ -121,7 +132,7 @@ module.exports = {
         return res.status(400).json({ success: false, message: 'Pergunta já foi respondida' });
       }
 
-      qa.answer = String(answer).trim();
+      qa.answer = ansText;
       qa.answeredAt = new Date();
       qa.status = 'answered';
       await qa.save();
@@ -150,6 +161,153 @@ module.exports = {
     } catch (error) {
       logger.error('Failed to answer QA question:', error);
       return res.status(500).json({ success: false, message: 'Erro interno ao responder pergunta' });
+    }
+  }
+  ,
+
+  // POST /api/qa/questions/:id/report
+  async reportQuestion(req, res) {
+    try {
+      const { id } = req.params;
+      const { reason, description } = req.body || {};
+      const userId = req.userId;
+
+      if (!reason || String(reason).trim().length === 0) {
+        return res.status(400).json({ success: false, message: 'Motivo é obrigatório' });
+      }
+      if (!description || String(description).trim().length === 0) {
+        return res.status(400).json({ success: false, message: 'Descrição é obrigatória' });
+      }
+
+      const qa = await QAQuestion.findById(id);
+      if (!qa) {
+        return res.status(404).json({ success: false, message: 'Pergunta não encontrada' });
+      }
+
+      // Block reporting own content
+      if (String(qa.buyerId) === String(userId)) {
+        return res.status(400).json({ success: false, message: 'Você não pode denunciar a própria pergunta' });
+      }
+
+      // Prevent duplicate report by same user for the same question
+      const existing = await Report.findOne({ qaQuestionId: qa._id, 'reporter.userid': userId });
+      if (existing) {
+        return res.status(409).json({ success: false, message: 'Você já abriu um ticket para esta pergunta', data: { reportId: existing._id } });
+      }
+
+      // Load reporter and reported users
+      const [reporter, reported, item] = await Promise.all([
+        User.findById(userId).lean(),
+        User.findById(qa.buyerId).lean(),
+        MarketItem.findById(qa.itemId).lean()
+      ]);
+
+      const report = await Report.create({
+        conversationId: null,
+        proposalId: null,
+        purchaseId: null,
+        qaQuestionId: qa._id,
+        qaItemId: qa.itemId,
+        qaMeta: {
+          status: qa.status,
+          question: qa.question,
+          answeredAt: qa.answeredAt || null,
+          buyerSnapshot: qa.buyerSnapshot || null,
+          sellerSnapshot: qa.sellerSnapshot || null,
+          itemTitle: item?.title || null,
+        },
+        type: 'qa_comment',
+        reason: String(reason).trim().slice(0, 200),
+        description: String(description).trim().slice(0, 2000),
+        reporter: {
+          userid: reporter?._id || userId,
+          name: reporter?.name || 'Usuário',
+          email: reporter?.email || null,
+          avatar: reporter?.avatar || reporter?.profilePicture || null,
+          isVerified: !!reporter?.isVerified,
+          registeredAt: reporter?.joinDate || reporter?.createdAt
+        },
+        reported: {
+          userid: reported?._id || qa.buyerId,
+          name: reported?.name || 'Usuário',
+          email: reported?.email || null,
+          avatar: reported?.avatar || reported?.profilePicture || null,
+          isVerified: !!reported?.isVerified,
+          registeredAt: reported?.joinDate || reported?.createdAt
+        },
+        status: 'pending',
+        priority: 'medium'
+      });
+
+      // Optional: notify admins via WS
+      try {
+        const ns = req.app?.locals?.notificationService;
+        if (ns) {
+          // Notify reporter with a confirmation
+          await ns.sendNotification(String(userId), {
+            type: 'support:ticket_opened',
+            title: 'Denúncia registrada',
+            message: 'Sua denúncia foi registrada e será analisada pela equipe.',
+            meta: { reportId: String(report._id), qaQuestionId: String(qa._id), itemId: String(qa.itemId) }
+          }, { persistent: true });
+        }
+      } catch (e) {
+        logger.warn('Failed to send ticket opened notification:', e.message);
+      }
+
+      // Notify via Telegram (best-effort)
+      try {
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+        let clientApi = null;
+        try {
+          const resp = await axios.get(`${apiUrl}/api/users/${userId}`, {
+            headers: { 'Authorization': req.headers.authorization }
+          });
+          clientApi = resp?.data?.user || null;
+        } catch (e) {
+          try { logger?.warn?.('[QA] Falha ao obter dados do cliente na MAIN_API', { error: e?.message }); } catch (_) {}
+        }
+
+        await sendSupportTicketNotification({
+          client: {
+            id: String(userId),
+            name: reporter?.name || reporter?.legalName || reporter?.username || clientApi?.name || 'Usuário',
+            username: clientApi?.username || null,
+            email: reporter?.email || clientApi?.email || null,
+            phone: clientApi?.whatsapp || clientApi?.phone || clientApi?.phoneNumber || clientApi?.mobile || null
+          },
+          reporter: {
+            id: String(userId),
+            name: reporter?.name || reporter?.legalName || reporter?.username || 'Usuário',
+            username: clientApi?.username || null,
+            email: reporter?.email || clientApi?.email || null,
+            phone: reporter?.phone || reporter?.phoneNumber || reporter?.whatsapp || reporter?.mobile || reporter?.phoneNormalized || clientApi?.whatsapp || clientApi?.phone || clientApi?.phoneNumber || clientApi?.mobile || null
+          },
+          reported: {
+            id: qa?.buyerId?.toString?.() || String(qa.buyerId),
+            name: reported?.name || reported?.legalName || reported?.username || 'Autor da pergunta',
+            email: reported?.email || null
+          },
+          report: {
+            id: report?._id?.toString?.() || String(report._id),
+            type: 'qa_comment',
+            reason: String(reason).trim().slice(0, 200),
+            description: String(description).trim().slice(0, 2000)
+          },
+          context: {
+            qaQuestionId: String(qa._id),
+            qaItemId: String(qa.itemId),
+            itemTitle: report?.qaMeta?.itemTitle || null
+          }
+        });
+      } catch (e) {
+        try { logger?.warn?.('[QA] Falha ao enviar alerta Telegram', { error: e?.message }); } catch (_) {}
+      }
+
+      return res.status(201).json({ success: true, data: { reportId: report._id } });
+    } catch (error) {
+      logger.error('Failed to create QA report:', error);
+      return res.status(500).json({ success: false, message: 'Erro interno ao criar denúncia' });
     }
   }
 };

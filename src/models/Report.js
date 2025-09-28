@@ -4,7 +4,7 @@ const reportSchema = new mongoose.Schema({
   conversationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Conversation',
-    required: true,
+    required: false,
     index: true
   },
   proposalId: {
@@ -18,9 +18,26 @@ const reportSchema = new mongoose.Schema({
     ref: 'Purchase',
     index: true
   },
+  // For QA (Perguntas e Respostas) comment reports
+  qaQuestionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'QAQuestion',
+    index: true,
+    default: null
+  },
+  qaItemId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'MarketItem',
+    index: true,
+    default: null
+  },
+  qaMeta: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
+  },
   type: {
     type: String,
-    enum: ['harassment', 'fraud', 'inappropriate_behavior', 'service_not_delivered', 'poor_quality', 'payment_issues', 'other'],
+    enum: ['harassment', 'fraud', 'inappropriate_behavior', 'service_not_delivered', 'poor_quality', 'payment_issues', 'other', 'qa_comment'],
     required: true,
     index: true
   },
@@ -201,6 +218,9 @@ reportSchema.index({ 'reported.userid': 1, createdAt: -1 });
 reportSchema.index({ type: 1, status: 1 });
 // Ensure only one ticket per purchase order (sparse allows reports without purchaseId)
 reportSchema.index({ purchaseId: 1 }, { unique: true, sparse: true });
+// Helpful indexes for QA tickets
+reportSchema.index({ qaQuestionId: 1 });
+reportSchema.index({ qaItemId: 1 });
 
 
 reportSchema.methods.escalate = function(reason) {
