@@ -189,10 +189,10 @@ module.exports = {
         return res.status(400).json({ success: false, message: 'Você não pode denunciar a própria pergunta' });
       }
 
-      // Prevent duplicate report by same user for the same question
-      const existing = await Report.findOne({ qaQuestionId: qa._id, 'reporter.userid': userId });
+      // Prevent duplicate report by same reporter against the same user (global across QA)
+      const existing = await Report.findOne({ 'reporter.userid': userId, 'reported.userid': qa.buyerId, type: 'qa_comment' });
       if (existing) {
-        return res.status(409).json({ success: false, message: 'Você já abriu um ticket para esta pergunta', data: { reportId: existing._id } });
+        return res.status(409).json({ success: false, message: 'Você já denunciou este usuário por Q&A', data: { reportId: existing._id } });
       }
 
       // Load reporter and reported users
@@ -202,7 +202,9 @@ module.exports = {
         MarketItem.findById(qa.itemId).lean()
       ]);
 
-      const report = await Report.create({
+      let report;
+      try {
+      report = await Report.create({
         conversationId: null,
         proposalId: null,
         purchaseId: null,
@@ -238,6 +240,13 @@ module.exports = {
         status: 'pending',
         priority: 'medium'
       });
+      } catch (e) {
+        if (e && (e.code === 11000 || e.code === 'E11000')) {
+          const dup = await Report.findOne({ 'reporter.userid': userId, 'reported.userid': qa.buyerId, type: 'qa_comment' }).lean();
+          return res.status(409).json({ success: false, message: 'Você já denunciou este usuário por Q&A', data: { reportId: dup?._id || null } });
+        }
+        throw e;
+      }
 
       // Optional: notify admins via WS
       try {

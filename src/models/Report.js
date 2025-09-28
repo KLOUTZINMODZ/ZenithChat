@@ -221,6 +221,11 @@ reportSchema.index({ purchaseId: 1 }, { unique: true, sparse: true });
 // Helpful indexes for QA tickets
 reportSchema.index({ qaQuestionId: 1 });
 reportSchema.index({ qaItemId: 1 });
+// Ensure only one QA report per reporter->reported pair (for type qa_comment)
+reportSchema.index(
+  { 'reporter.userid': 1, 'reported.userid': 1, type: 1 },
+  { unique: true, partialFilterExpression: { type: 'qa_comment' } }
+);
 
 
 reportSchema.methods.escalate = function(reason) {
