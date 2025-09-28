@@ -171,13 +171,11 @@ class CacheService {
       messages.push(cachedMessage);
       
 
-      const perUserCap = parseInt(process.env.OFFLINE_CACHE_MAX_PER_USER || '50');
-      if (messages.length > perUserCap) {
-        messages = messages.slice(-perUserCap);
+      if (messages.length > 50) {
+        messages = messages.slice(-50);
       }
       
-      const ttlSeconds = parseInt(process.env.OFFLINE_MESSAGES_TTL_SECONDS || '1296000');
-      this.set(key, messages, ttlSeconds);
+      this.set(key, messages, 1296000);
       logger.info(`📦 CACHE: Cached offline message for user ${userId} - type: ${message.type}, reason: ${message.cached_reason}, total cached: ${messages.length}`);
     } catch (error) {
       logger.error('Error caching offline message:', error);

@@ -134,12 +134,7 @@ class WebSocketServer {
       });
 
 
-      try {
-        const source = String(process.env.WS_OFFLINE_REPLAY_SOURCE || 'message_handler').toLowerCase();
-        if (source === 'message_handler') {
-          this.messageHandler.sendPendingMessages(userId, ws);
-        }
-      } catch (_) {}
+      this.messageHandler.sendPendingMessages(userId, ws);
       
 
       this.notificationHandler.handleUserConnected(userId);

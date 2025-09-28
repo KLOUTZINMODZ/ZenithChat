@@ -18,18 +18,12 @@ class ConnectionManager {
     if (offlineStatus) {
       logger.info(`🔄 CACHE: User ${userId} reconnected - was offline since ${offlineStatus.activatedAt}`);
     }
-    
-    // Single-source replay: only deliver here if configured
-    try {
-      const source = String(process.env.WS_OFFLINE_REPLAY_SOURCE || 'message_handler').toLowerCase();
-      if (source === 'connection_manager') {
-        const offlineMessages = cache.getOfflineMessages(userId);
-        if (offlineMessages.length > 0) {
-          logger.info(`📬 CACHE: User ${userId} reconnected - delivering ${offlineMessages.length} cached offline messages`);
-          this.sendCachedMessagesGradually(ws, userId, offlineMessages);
-        }
-      }
-    } catch (_) {}
+
+    const offlineMessages = cache.getOfflineMessages(userId);
+    if (offlineMessages.length > 0) {
+      logger.info(`📬 CACHE: User ${userId} reconnected - delivering ${offlineMessages.length} cached offline messages`);
+      this.sendCachedMessagesGradually(ws, userId, offlineMessages);
+    }
   }
 
   removeConnection(userId, ws) {

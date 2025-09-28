@@ -19,8 +19,7 @@ class OfflineCacheService {
     };
 
     this.offlineUsers.set(userId, offlineData);
-    const statusTtl = parseInt(process.env.OFFLINE_STATUS_TTL_SECONDS || process.env.OFFLINE_MESSAGES_TTL_SECONDS || '86400');
-    cache.set(`offline_status:${userId}`, offlineData, statusTtl);
+    cache.set(`offline_status:${userId}`, offlineData, 86400);
 
     logger.info(`🔄 [Offline Cache] Activated for user ${userId} from route: ${offlineData.lastRoute}`);
     
@@ -165,10 +164,9 @@ class OfflineCacheService {
       const activatedAt = new Date(data.activatedAt);
       const now = new Date();
       const hoursSinceActivation = (now - activatedAt) / (1000 * 60 * 60);
-      const statusTtlHours = (parseInt(process.env.OFFLINE_STATUS_TTL_SECONDS || process.env.OFFLINE_MESSAGES_TTL_SECONDS || '86400') / 3600) || 24;
       
 
-      if (hoursSinceActivation > statusTtlHours) {
+      if (hoursSinceActivation > 24) {
         this.deactivateOfflineMode(userId);
         this.clearUserCache(userId);
         cleanedCount++;

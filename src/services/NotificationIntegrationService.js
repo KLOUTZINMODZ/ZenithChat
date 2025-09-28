@@ -20,8 +20,6 @@ class NotificationIntegrationService {
       deliveryStatus: 3600
     };
     
-    this.recentDeliveredNotif = new Map(); // userId -> { ids: Set<string>, expires: number }
-    this.recentDeliveredWindowMs = parseInt(process.env.NOTIF_RECENT_DEDUP_WINDOW_MS || '120000');
   }
 
   /**
@@ -193,38 +191,16 @@ class NotificationIntegrationService {
       }
 
 
-      const unify = String(process.env.NOTIF_OFFLINE_UNIFY || 'true').toLowerCase() === 'true';
-      if (unify && message?.type === 'notification:new') {
-        try {
-          const notif = message?.data?.notification;
-          if (notif) {
-            this.cacheNotification(userId, notif);
-            logger.debug(`Cached notification (unified) for offline user ${userId}: ${notif.id || notif._id}`);
-          }
-        } catch (e) {
-          logger.warn('Failed unified notification cache path, falling back to offline queue', { error: e?.message });
-          this.cacheToOfflineQueue(userId, message);
-        }
-      } else {
-        this.cacheToOfflineQueue(userId, message);
-      }
+      const offlineKey = `notifications:offline:${userId}`;
+      const offlineNotifications = cache.get(offlineKey) || [];
+      offlineNotifications.unshift(message);
+      cache.set(offlineKey, offlineNotifications.slice(0, 50), this.cacheTTL.notifications);
+      logger.debug(`Cached notification for offline user ${userId}: ${message.type}`);
       return false;
 
     } catch (error) {
       logger.error(`Error sending notification to user ${userId}:`, error);
       return false;
-    }
-  }
-
-  cacheToOfflineQueue(userId, message) {
-    try {
-      const offlineKey = `notifications:offline:${userId}`;
-      const offlineNotifications = cache.get(offlineKey) || [];
-      offlineNotifications.unshift(message);
-      cache.set(offlineKey, offlineNotifications.slice(0, 100), this.cacheTTL.notifications);
-      logger.debug(`Cached notification for offline user ${userId}: ${message.type}`);
-    } catch (e) {
-      logger.error('Error caching to offline notification queue:', e);
     }
   }
 
@@ -348,10 +324,8 @@ class NotificationIntegrationService {
    */
   async sendPendingNotifications(userId) {
     try {
-      const recent = this.recentDeliveredNotif.get(userId);
-      const dedupIds = recent && recent.expires > Date.now() ? recent.ids : new Set();
       const pendingNotifications = this.getCachedNotifications(userId)
-        .filter(n => !n.delivered && !n.isRead && !dedupIds.has(String(n.id || n._id || '')))
+        .filter(n => !n.delivered && !n.isRead)
         .slice(0, 20);
 
       if (pendingNotifications.length === 0) {
@@ -384,46 +358,8 @@ class NotificationIntegrationService {
    */
   async handleUserConnected(userId) {
     try {
-      const start = Date.now();
-      logger.debug(`User ${userId} connected - checking for pending notifications and offline queue`);
-
-      // First, deliver offline queue if present
-      const offlineKey = `notifications:offline:${userId}`;
-      const offlineMsgs = cache.get(offlineKey) || [];
-      const deliveredIds = new Set();
-      if (offlineMsgs.length > 0) {
-        logger.info(`Delivering ${offlineMsgs.length} notifications from offline queue to user ${userId}`);
-        let i = 0;
-        for (const msg of offlineMsgs) {
-          try {
-            if (msg?.type === 'notification:new') {
-              const nid = msg?.data?.notification?.id || msg?.data?.notification?._id;
-              if (nid) deliveredIds.add(String(nid));
-            }
-            // Send directly (user is online now)
-            this.sendToUser(userId, msg);
-            await new Promise(res => setTimeout(res, 200));
-          } catch (_) {}
-          i++;
-        }
-        cache.delete(offlineKey);
-        logger.info(`Cleared offline notifications queue for user ${userId}`);
-      }
-
-      // Save recent delivered ids for dedup window
-      if (deliveredIds.size > 0) {
-        this.recentDeliveredNotif.set(userId, { ids: deliveredIds, expires: Date.now() + this.recentDeliveredWindowMs });
-      }
-
-      // Then, deliver pending from persistent cache, skipping recently delivered ids
+      logger.debug(`User ${userId} connected - checking for pending notifications`);
       await this.sendPendingNotifications(userId);
-
-      const duration = Date.now() - start;
-      logger.info(`Completed notification reconnect delivery for user ${userId}`, {
-        durationMs: duration,
-        offlineQueueCount: offlineMsgs.length,
-        dedupIds: deliveredIds.size
-      });
 
     } catch (error) {
       logger.error('Error handling user connected:', error);

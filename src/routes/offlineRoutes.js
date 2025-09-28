@@ -18,8 +18,7 @@ router.post('/activate', auth, async (req, res) => {
     };
     
 
-    const statusTtl = parseInt(process.env.OFFLINE_STATUS_TTL_SECONDS || process.env.OFFLINE_MESSAGES_TTL_SECONDS || '86400');
-    cache.set(`offline_status:${userId}`, offlineStatus, statusTtl);
+    cache.set(`offline_status:${userId}`, offlineStatus, 86400);
     
     logger.info(`🔄 [Offline Mode] Activated for user ${userId} from route: ${offlineStatus.lastActiveRoute}`);
     
