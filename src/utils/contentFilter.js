@@ -100,6 +100,18 @@ function containsProfanity(text = '') {
   return null;
 }
 
+function containsIdentitySensitive(text = '') {
+  if (!text) return null;
+  const prepared = normalizeLeet(removeDiacritics(String(text).toLowerCase()));
+  const tokens = prepared.split(/\s+/).filter(Boolean);
+  for (const t of tokens) {
+    if (IDENTITY_SET.has(normalizeWord(t))) return { code: 'identity', match: t };
+    const deobf = squeezeDuplicates(t.replace(/[^a-z0-9]+/gi, ''));
+    if (deobf && IDENTITY_SET.has(normalizeWord(deobf))) return { code: 'identity', match: deobf };
+  }
+  return null;
+}
+
 function detectEmail(text = '') {
   const emailRegex = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
   const m = emailRegex.exec(text);
