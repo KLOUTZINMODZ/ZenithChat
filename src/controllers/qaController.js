@@ -78,6 +78,18 @@ module.exports = {
       const buyer = await User.findById(userId).lean();
       const seller = await User.findById(sellerId).lean();
 
+      // Daily limit: max 5 questions per buyer per day (server local day)
+      try {
+        const start = new Date(); start.setHours(0, 0, 0, 0);
+        const end = new Date(start); end.setDate(end.getDate() + 1);
+        const todayCount = await QAQuestion.countDocuments({ buyerId: userId, createdAt: { $gte: start, $lt: end } });
+        if (todayCount >= 5) {
+          return res.status(429).json({ success: false, message: 'Limite diário de 5 perguntas atingido. Tente novamente amanhã.', data: { limit: 5, remaining: 0, resetAt: end.toISOString() } });
+        }
+      } catch (e) {
+        try { logger?.warn?.('[QA] daily limit check failed', { error: e?.message }); } catch (_) {}
+      }
+
       const qa = await QAQuestion.create({
         itemId,
         buyerId: userId,

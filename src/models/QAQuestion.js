@@ -58,5 +58,6 @@ const qaQuestionSchema = new mongoose.Schema({
 });
 
 qaQuestionSchema.index({ itemId: 1, createdAt: -1 });
+qaQuestionSchema.index({ buyerId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('QAQuestion', qaQuestionSchema);
