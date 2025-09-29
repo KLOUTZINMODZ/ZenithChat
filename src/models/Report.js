@@ -123,6 +123,15 @@ const reportSchema = new mongoose.Schema({
     conversationDuration: Number
   },
 
+  // Security and antifraud metadata
+  security: {
+    clientFingerprint: { type: String, default: null },
+    fingerprintComponents: { type: mongoose.Schema.Types.Mixed, default: null },
+    ip: { type: String, default: null },
+    userAgent: { type: String, default: null },
+    receivedAt: { type: Date, default: Date.now }
+  },
+
   status: {
     type: String,
     enum: ['pending', 'under_review', 'resolved', 'dismissed', 'escalated'],

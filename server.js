@@ -30,6 +30,7 @@ const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseSe
 const mongoose = require('mongoose');
 const adminRoutes = require('./src/routes/adminRoutes');
 const qaRoutes = require('./src/routes/qaRoutes');
+const aiSupportRoutes = require('./src/routes/aiSupportRoutes');
 
 const app = express();
 
@@ -202,6 +203,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/qa', qaRoutes);
+app.use('/api/ai/support', aiSupportRoutes);
 // Purchases logger to debug 404 reports
 app.use('/api/purchases', (req, res, next) => {
   try {

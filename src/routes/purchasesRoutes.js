@@ -13,6 +13,7 @@ const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 const axios = require('axios');
 const { sendSupportTicketNotification } = require('../services/TelegramService');
+const { checkProhibitedContent } = require('../utils/contentFilter');
 
 // Robustly extract a string ObjectId from different legacy shapes
 function safeId(v) {
@@ -830,7 +831,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
   try {
     const { purchaseId } = req.params;
     const userId = req.user._id;
-    const { description = '', issueType = 'payment_issues' } = req.body || {};
+    const { description = '', issueType = 'payment_issues', security: clientSecurity } = req.body || {};
 
     const purchase = await Purchase.findById(purchaseId);
     if (!purchase) return res.status(404).json({ success: false, message: 'Compra não encontrada' });
@@ -838,6 +839,14 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
     const isBuyer = purchase.buyerId.toString() === userId.toString();
     const isSeller = purchase.sellerId.toString() === userId.toString();
     if (!isBuyer && !isSeller) return res.status(403).json({ success: false, message: 'Acesso negado' });
+
+    // Content safety filter before creation
+    try {
+      const safety = checkProhibitedContent(String(description || ''));
+      if (safety && safety.ok === false && Array.isArray(safety.violations) && safety.violations.length > 0) {
+        return res.status(400).json({ success: false, message: 'Descrição contém conteúdo não permitido.', data: { violations: safety.violations } });
+      }
+    } catch (_) {}
 
     // Prevent duplicate ticket for the same purchase (also consider legacy tickets by conversation)
     let convIdForCheck = purchase.conversationId || null;
@@ -895,7 +904,14 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
         registeredAt: reportedUser?.joinDate || reportedUser?.createdAt
       },
       status: 'pending',
-      priority: 'high'
+      priority: 'high',
+      security: {
+        clientFingerprint: clientSecurity?.fingerprint || null,
+        fingerprintComponents: clientSecurity?.components || null,
+        ip: (req.headers['x-forwarded-for']?.toString?.() || '').split(',')[0] || req.ip || null,
+        userAgent: req.headers['user-agent'] || null,
+        receivedAt: new Date()
+      }
     });
 
     try {
