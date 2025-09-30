@@ -14,7 +14,7 @@ class PresenceHandler {
     this.sockets = new Set();
     /** @type {Map<any, Set<string>>} */
     this.subscriptions = new Map(); // ws -> Set<userId>
-    this.graceMs = parseInt(process.env.PRESENCE_OFFLINE_GRACE_MS || '20000');
+    this.graceMs = parseInt(process.env.PRESENCE_OFFLINE_GRACE_MS || '5000');
   }
 
   registerEvents(ws) {
