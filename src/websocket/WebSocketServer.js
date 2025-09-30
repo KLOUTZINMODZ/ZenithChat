@@ -6,6 +6,7 @@ const NotificationHandler = require('./handlers/NotificationHandler');
 const WhatsAppMessageHandler = require('./handlers/WhatsAppMessageHandler');
 const ConversationHandler = require('./handlers/ConversationHandler');
 const ProposalHandler = require('./handlers/ProposalHandler');
+const PresenceHandler = require('./handlers/PresenceHandler');
 const ConnectionManager = require('./ConnectionManager');
 const NotificationIntegrationService = require('../services/NotificationIntegrationService');
 const { authenticateWebSocket } = require('../middleware/wsAuth');
@@ -25,6 +26,7 @@ class WebSocketServer {
 
     this.notificationService = new NotificationIntegrationService(this.connectionManager);
     this.notificationHandler = new NotificationHandler(this.connectionManager, this.notificationService);
+    this.presenceHandler = new PresenceHandler(this.connectionManager);
     
     this.setupWebSocketServer();
     this.startHeartbeat();
@@ -75,10 +77,12 @@ class WebSocketServer {
 
       ws.on('pong', () => {
         ws.isAlive = true;
+        try { this.presenceHandler.onActivity(userId); } catch (_) {}
       });
 
 
       this.conversationHandler.registerEvents(ws);
+      this.presenceHandler.registerEvents(ws);
       
 
       this.proposalHandler.registerEvents(ws);
@@ -87,6 +91,7 @@ class WebSocketServer {
       ws.on('message', async (data) => {
         try {
           const message = JSON.parse(data.toString());
+          try { this.presenceHandler.onActivity(ws.userId); } catch (_) {}
           await this.handleMessage(ws, message);
         } catch (error) {
           logger.error('Error processing message:', error);
@@ -102,6 +107,7 @@ class WebSocketServer {
         try {
           this.notificationHandler.handleUserDisconnected(userId);
           this.conversationHandler.onUserDisconnect(userId);
+          this.presenceHandler.onUserDisconnected(userId);
         } catch (error) {
           logger.error('Error handling user disconnection:', error);
         }
@@ -138,6 +144,7 @@ class WebSocketServer {
       
 
       this.notificationHandler.handleUserConnected(userId);
+      try { this.presenceHandler.onUserConnected(userId); } catch (_) {}
     });
 
     this.wss.on('error', (error) => {
@@ -151,10 +158,12 @@ class WebSocketServer {
 
     switch (type) {
       case 'message:send':
+        try { this.presenceHandler.onActivity(ws.userId); } catch (_) {}
         await this.messageHandler.handleSendMessage(ws.userId, payload);
         break;
 
       case 'message:typing':
+        try { this.presenceHandler.onActivity(ws.userId); } catch (_) {}
         await this.messageHandler.handleTypingIndicator(ws.userId, payload);
         break;
 
@@ -189,6 +198,17 @@ class WebSocketServer {
 
       case 'conversations:get_list':
         await this.conversationHandler.handleGetConversations(ws, payload);
+        break;
+
+      // Presence channel
+      case 'presence:subscribe':
+        this.presenceHandler.handleSubscribe(ws, payload);
+        break;
+      case 'presence:unsubscribe':
+        this.presenceHandler.handleUnsubscribe(ws, payload);
+        break;
+      case 'presence:query':
+        this.presenceHandler.handleQuery(ws, payload);
         break;
 
 
