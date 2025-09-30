@@ -44,7 +44,13 @@ class ConnectionManager {
   }
 
   isUserOnline(userId) {
-    return this.connections.has(userId) && this.connections.get(userId).size > 0;
+    try {
+      // Normalize by reusing getUserConnections which already checks both raw and string keys
+      const conns = this.getUserConnections(userId);
+      return Array.isArray(conns) ? conns.length > 0 : (conns?.size || 0) > 0;
+    } catch (_) {
+      return false;
+    }
   }
 
   getOnlineUsers() {

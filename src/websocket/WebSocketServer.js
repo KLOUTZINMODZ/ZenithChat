@@ -48,7 +48,8 @@ class WebSocketServer {
 
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      info.req.userId = decoded.id || decoded._id;
+      const possibleId = decoded.id || decoded._id || decoded.userid || decoded.userId || decoded.user?.id || decoded.user?._id;
+      info.req.userId = (possibleId && possibleId.toString) ? possibleId.toString() : String(possibleId || '');
       info.req.userToken = token;
       
       
