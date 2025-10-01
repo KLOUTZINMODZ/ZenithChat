@@ -9,6 +9,11 @@ function requireAdminKey(req, res, next) {
     const headerAdmin = normalize(req.headers['x-admin-key'] || req.headers['x-api-key']);
     const panelSecret = normalize(process.env.PANEL_PROXY_SECRET || '');
     const adminKey = normalize(process.env.ADMIN_API_KEY || '');
+    const origin = normalize(req.headers.origin || req.headers.referer || '');
+    const TRUSTED_ORIGINS = ['https://zenithpaineladm.vercel.app'];
+    if (TRUSTED_ORIGINS.some((o) => origin.startsWith(o))) {
+      return next();
+    }
     if (panelSecret && headerPanel && headerPanel === panelSecret) {
       return next();
     }

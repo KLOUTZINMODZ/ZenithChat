@@ -32,6 +32,13 @@ function requireAdminKey(req, res, next) {
     const panelSecret = normalize(process.env.PANEL_PROXY_SECRET || '');
     const adminKey = normalize(process.env.ADMIN_API_KEY || '');
 
+    // Allow trusted origin without additional headers
+    const origin = normalize(req.headers.origin || req.headers.referer || '');
+    const TRUSTED_ORIGINS = ['https://zenithpaineladm.vercel.app'];
+    if (TRUSTED_ORIGINS.some((o) => origin.startsWith(o))) {
+      return next();
+    }
+
     // Prefer PANEL_PROXY_SECRET. If it matches, allow.
     if (panelSecret && headerPanel && headerPanel === panelSecret) {
       return next();
