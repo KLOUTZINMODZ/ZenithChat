@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
+const User = require('../models/User');
 
 function requireAdminKey(req, res, next) {
   try {
@@ -41,11 +42,24 @@ router.post('/send', requireAdminKey, async (req, res) => {
   try {
     const { userIds, notification, options = {} } = req.body;
 
-    if (!userIds || !notification) {
-      return res.status(400).json({ success: false, message: 'userIds and notification are required' });
+    if (!notification) {
+      return res.status(400).json({ success: false, message: 'notification is required' });
     }
 
-    const idsArray = Array.isArray(userIds) ? userIds : [userIds];
+    let idsArray = [];
+    const broadcastAll = options?.broadcastAll === true || userIds === '__all__';
+    if (broadcastAll) {
+      const users = await User.find({}).select('_id').lean();
+      idsArray = users.map(u => u._id);
+      if (!idsArray.length) {
+        return res.status(404).json({ success: false, message: 'No users found to broadcast' });
+      }
+    } else {
+      if (!userIds) {
+        return res.status(400).json({ success: false, message: 'userIds is required when not broadcasting to all' });
+      }
+      idsArray = Array.isArray(userIds) ? userIds : [userIds];
+    }
 
     const notificationService = req.app.locals.notificationService;
     if (!notificationService) {
