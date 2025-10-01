@@ -2,6 +2,24 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 
+function requireAdminKey(req, res, next) {
+  try {
+    const headerPanel = req.headers['x-panel-proxy-secret'];
+    const headerAdmin = req.headers['x-admin-key'] || req.headers['x-api-key'];
+    const panelSecret = process.env.PANEL_PROXY_SECRET || '';
+    const adminKey = process.env.ADMIN_API_KEY || '';
+    if (panelSecret && headerPanel && String(headerPanel) === String(panelSecret)) {
+      return next();
+    }
+    if (adminKey && headerAdmin && String(headerAdmin) === String(adminKey)) {
+      return next();
+    }
+    return res.status(403).json({ success: false, message: 'Acesso negado' });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Erro na verificação de chave de admin', error: e?.message });
+  }
+}
+
 /**
  * POST /api/notifications/send
  * Body: {
@@ -12,7 +30,7 @@ const logger = require('../utils/logger');
  *
  * Requires that server.js has set app.locals.notificationService
  */
-router.post('/send', async (req, res) => {
+router.post('/send', requireAdminKey, async (req, res) => {
   try {
     const { userIds, notification, options = {} } = req.body;
 
