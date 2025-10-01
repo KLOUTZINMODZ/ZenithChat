@@ -50,7 +50,7 @@ router.post('/send', requireAdminKey, async (req, res) => {
     const broadcastAll = options?.broadcastAll === true || userIds === '__all__';
     if (broadcastAll) {
       const users = await User.find({}).select('_id').lean();
-      idsArray = users.map(u => u._id);
+      idsArray = users.map(u => String(u._id));
       if (!idsArray.length) {
         return res.status(404).json({ success: false, message: 'No users found to broadcast' });
       }
@@ -58,7 +58,7 @@ router.post('/send', requireAdminKey, async (req, res) => {
       if (!userIds) {
         return res.status(400).json({ success: false, message: 'userIds is required when not broadcasting to all' });
       }
-      idsArray = Array.isArray(userIds) ? userIds : [userIds];
+      idsArray = (Array.isArray(userIds) ? userIds : [userIds]).map(String);
     }
 
     const notificationService = req.app.locals.notificationService;
