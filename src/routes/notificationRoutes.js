@@ -4,16 +4,18 @@ const logger = require('../utils/logger');
 
 function requireAdminKey(req, res, next) {
   try {
-    const headerPanel = req.headers['x-panel-proxy-secret'];
-    const headerAdmin = req.headers['x-admin-key'] || req.headers['x-api-key'];
-    const panelSecret = process.env.PANEL_PROXY_SECRET || '';
-    const adminKey = process.env.ADMIN_API_KEY || '';
-    if (panelSecret && headerPanel && String(headerPanel) === String(panelSecret)) {
+    const normalize = (v) => (v == null ? '' : String(v).trim());
+    const headerPanel = normalize(req.headers['x-panel-proxy-secret']);
+    const headerAdmin = normalize(req.headers['x-admin-key'] || req.headers['x-api-key']);
+    const panelSecret = normalize(process.env.PANEL_PROXY_SECRET || '');
+    const adminKey = normalize(process.env.ADMIN_API_KEY || '');
+    if (panelSecret && headerPanel && headerPanel === panelSecret) {
       return next();
     }
-    if (adminKey && headerAdmin && String(headerAdmin) === String(adminKey)) {
+    if (adminKey && headerAdmin && headerAdmin === adminKey) {
       return next();
     }
+    try { require('../utils/logger').warn('[NOTIF][AUTH] Access denied: panelHeaderPresent=%s adminHeaderPresent=%s', !!headerPanel, !!headerAdmin); } catch (_) {}
     return res.status(403).json({ success: false, message: 'Acesso negado' });
   } catch (e) {
     return res.status(500).json({ success: false, message: 'Erro na verificação de chave de admin', error: e?.message });
