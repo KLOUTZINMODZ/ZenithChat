@@ -27,9 +27,43 @@ const marketItemSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  images: {
+    type: [String],
+    default: []
+  },
   category: {
     type: String,
     required: true
+  },
+  // Inventory controls (optional for non-account items)
+  stock: {
+    type: Number,
+    min: 0,
+    max: 9999,
+    default: undefined
+  },
+  stockLeft: {
+    type: Number,
+    min: 0,
+    default: undefined
+  },
+  reservedCount: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'reserved', 'sold'],
+    default: 'active'
+  },
+  reservedAt: {
+    type: Date,
+    required: false
+  },
+  soldAt: {
+    type: Date,
+    required: false
   },
   isHighlighted: {
     type: Boolean,

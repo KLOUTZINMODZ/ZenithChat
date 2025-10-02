@@ -254,7 +254,7 @@ router.post('/initiate', auth, async (req, res) => {
     if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'E-mail inválido' });
     if (getAge(birthDate) < 18) return res.status(400).json({ success: false, message: 'Idade mínima para compra é 18 anos' });
 
-    // Fetch item to derive true seller and price (lean to preserve all fields like sellerId from main API)
+    // Fetch item to derive true seller and price (lean for initial validation)
     const itemDoc = await MarketItem.findById(itemId).lean();
     if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
     // Validate seller id on the item (support legacy shapes). Prefer sellerId (main API canonical), then userId, then others
@@ -311,6 +311,41 @@ router.post('/initiate', auth, async (req, res) => {
     const sellerReceives = round2(Number(priceUsed) - platformFee);
 
     const purchase = await runTx(async (session) => {
+      // Stock and availability guard within the same transaction
+      const itemInTx = await MarketItem.findById(itemId).session(session);
+      if (!itemInTx) throw new Error('ITEM_NOT_FOUND');
+      const isAccount = String(itemInTx.category || '').toLowerCase() === 'account' || itemInTx.stock == null;
+      if (isAccount) {
+        // Unique item: must be active to reserve
+        if (String(itemInTx.status || 'active') !== 'active') {
+          throw new Error('ITEM_UNAVAILABLE');
+        }
+        itemInTx.status = 'reserved';
+        itemInTx.reservedAt = new Date();
+        await itemInTx.save({ session });
+      } else {
+        // Multi-stock item: initialize stockLeft if missing, enforce bounds, decrement
+        const maxCap = 9999;
+        const declaredStock = Math.max(0, Math.min(Number(itemInTx.stock || 0), maxCap));
+        if (!Number.isFinite(declaredStock) || declaredStock < 1) {
+          throw new Error('INVALID_STOCK');
+        }
+        if (itemInTx.stockLeft == null || !Number.isFinite(Number(itemInTx.stockLeft))) {
+          itemInTx.stockLeft = declaredStock;
+        }
+        if (Number(itemInTx.stockLeft) <= 0) {
+          throw new Error('OUT_OF_STOCK');
+        }
+        itemInTx.stockLeft = Number(itemInTx.stockLeft) - 1;
+        itemInTx.reservedCount = Number(itemInTx.reservedCount || 0) + 1;
+        // If depleting to zero, move to reserved state to prevent further initiations until completion
+        if (itemInTx.stockLeft === 0) {
+          itemInTx.status = 'reserved';
+        }
+        itemInTx.reservedAt = new Date();
+        await itemInTx.save({ session });
+      }
+
       let p = await Purchase.create([{
         buyerId, sellerId: sellerUserIdFromItem, itemId, price: Number(priceUsed), feePercent, feeAmount: platformFee, sellerReceives,
         status: 'initiated',
@@ -642,6 +677,33 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
       await purchase.save({ session });
 
       await updateConversationMarketplaceStatus(session, purchase, 'completed');
+
+      // Finalize item status: for unique items -> sold; for stock items -> sold if depleted else remain active
+      try {
+        const item = await MarketItem.findById(purchase.itemId).session(session);
+        if (item) {
+          const isAccount = String(item.category || '').toLowerCase() === 'account' || item.stock == null;
+          if (isAccount) {
+            item.status = 'sold';
+            item.soldAt = new Date();
+          } else {
+            if (item.stockLeft == null) {
+              // initialize defensively
+              item.stockLeft = Math.max(0, Math.min(Number(item.stock || 0), 9999));
+            }
+            if (Number(item.stockLeft) <= 0) {
+              item.status = 'sold';
+              item.soldAt = new Date();
+            } else {
+              // keep available for next purchases
+              item.status = 'active';
+            }
+          }
+          await item.save({ session });
+        }
+      } catch (e) {
+        try { logger?.warn?.('[PURCHASES] Failed to finalize MarketItem status on confirm', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
+      }
     });
 
     await emitMarketplaceStatusChanged(req.app, purchase, 'completed');
@@ -1056,6 +1118,34 @@ router.post('/:purchaseId/cancel', auth, async (req, res) => {
       await purchase.save({ session });
 
       await updateConversationMarketplaceStatus(session, purchase, 'cancelled');
+
+      // Restore item availability/stock when cancelling
+      try {
+        const item = await MarketItem.findById(purchase.itemId).session(session);
+        if (item) {
+          const isAccount = String(item.category || '').toLowerCase() === 'account' || item.stock == null;
+          if (isAccount) {
+            // unique item returns to active
+            item.status = 'active';
+            item.reservedAt = null;
+            item.soldAt = null;
+          } else {
+            // increment stock back and ensure active
+            const maxCap = 9999;
+            const declaredStock = Math.max(0, Math.min(Number(item.stock || 0), maxCap));
+            if (item.stockLeft == null || !Number.isFinite(Number(item.stockLeft))) {
+              item.stockLeft = declaredStock;
+            } else {
+              item.stockLeft = Math.max(0, Number(item.stockLeft) + 1);
+              if (item.stockLeft > declaredStock) item.stockLeft = declaredStock;
+            }
+            item.status = 'active';
+          }
+          await item.save({ session });
+        }
+      } catch (e) {
+        try { logger?.warn?.('[PURCHASES] Failed to restore MarketItem on cancel', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
+      }
     });
     await emitMarketplaceStatusChanged(req.app, purchase, 'cancelled');
 
@@ -1125,6 +1215,29 @@ router.post('/auto-release/run', auth, async (req, res) => {
           await p.save({ session });
 
           await updateConversationMarketplaceStatus(session, p, 'completed');
+
+          // Finalize item status similar to manual confirm
+          try {
+            const item = await MarketItem.findById(p.itemId).session(session);
+            if (item) {
+              const isAccount = String(item.category || '').toLowerCase() === 'account' || item.stock == null;
+              if (isAccount) {
+                item.status = 'sold';
+                item.soldAt = new Date();
+              } else {
+                if (item.stockLeft == null) {
+                  item.stockLeft = Math.max(0, Math.min(Number(item.stock || 0), 9999));
+                }
+                if (Number(item.stockLeft) <= 0) {
+                  item.status = 'sold';
+                  item.soldAt = new Date();
+                } else {
+                  item.status = 'active';
+                }
+              }
+              await item.save({ session });
+            }
+          } catch (_) {}
         });
         released++;
         await sendBalanceUpdate(req.app, p.sellerId);
@@ -1135,9 +1248,7 @@ router.post('/auto-release/run', auth, async (req, res) => {
   } catch (error) { return res.status(500).json({ success: false, message: 'Erro no auto-release', error: error.message }); }
 });
 
-// GET /api/purchases/:purchaseId - summary for frontend (marketplace chat context)
 router.get('/:purchaseId', auth, async (req, res) => {
-  try {
     const { purchaseId } = req.params;
     const purchase = await Purchase.findById(purchaseId);
     if (!purchase) {
