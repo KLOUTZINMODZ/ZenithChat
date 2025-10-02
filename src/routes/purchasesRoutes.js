@@ -1249,6 +1249,7 @@ router.post('/auto-release/run', auth, async (req, res) => {
 });
 
 router.get('/:purchaseId', auth, async (req, res) => {
+    try {
     const { purchaseId } = req.params;
     const purchase = await Purchase.findById(purchaseId);
     if (!purchase) {
