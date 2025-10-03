@@ -67,6 +67,15 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Complaints counters
+  complaintsSent: {
+    type: Number,
+    default: 0
+  },
+  complaintsReceived: {
+    type: Number,
+    default: 0
+  },
   preferences: {
     notifications: {
 
@@ -115,6 +124,8 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ email: 1 });
 userSchema.index({ pixKeyFingerprint: 1 }, { unique: true, sparse: true });
 userSchema.index({ phoneNormalized: 1 }, { sparse: true });
+userSchema.index({ complaintsReceived: -1 });
+userSchema.index({ complaintsSent: -1 });
 
 
 userSchema.virtual('displayName').get(function() {

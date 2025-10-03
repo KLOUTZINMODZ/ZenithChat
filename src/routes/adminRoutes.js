@@ -81,6 +81,24 @@ router.patch('/market-items/:itemId/seller', requireAdminKey, async (req, res) =
   }
 });
 
+// GET /api/admin/users/:id - fetch single user including complaints counters
+router.get('/users/:id', requireAdminKey, async (req, res) => {
+  try {
+    const id = safeId(req.params.id);
+    if (!id) return res.status(400).json({ success: false, message: 'ID inválido' });
+
+    const user = await User.findById(id)
+      .select('_id name email avatar username walletBalance lastSeen isOnline complaintsSent complaintsReceived createdAt phone phoneNormalized whatsapp mobile')
+      .lean();
+    if (!user) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+
+    return res.json({ success: true, data: { user } });
+  } catch (error) {
+    try { logger.error('[ADMIN] users/:id failed', error); } catch (_) {}
+    return res.status(500).json({ success: false, message: 'Erro ao buscar usuário', error: error?.message });
+  }
+});
+
 // GET /api/admin/market-items/without-seller - list items missing seller
 router.get('/market-items/without-seller', requireAdminKey, async (req, res) => {
   try {

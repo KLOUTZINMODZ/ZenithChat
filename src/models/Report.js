@@ -236,6 +236,33 @@ reportSchema.index(
   { unique: true, partialFilterExpression: { type: 'qa_comment' } }
 );
 
+// Track whether this document is new to avoid double-counting on updates
+reportSchema.pre('save', function(next) {
+  this._wasNew = this.isNew;
+  next();
+});
+
+// When a new report is created, increment complaints counters on Users
+reportSchema.post('save', async function(doc, next) {
+  try {
+    if (!doc._wasNew) return next();
+    const User = require('./User');
+    const reporterId = doc?.reporter?.userid;
+    const reportedId = doc?.reported?.userid;
+    const ops = [];
+    if (reporterId) {
+      ops.push(User.updateOne({ _id: reporterId }, { $inc: { complaintsSent: 1 } }).exec());
+    }
+    if (reportedId) {
+      ops.push(User.updateOne({ _id: reportedId }, { $inc: { complaintsReceived: 1 } }).exec());
+    }
+    if (ops.length) await Promise.all(ops);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 reportSchema.methods.escalate = function(reason) {
   this.status = 'escalated';
