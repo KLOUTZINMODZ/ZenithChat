@@ -13,7 +13,8 @@ function cacheMiddleware(ttlSeconds = 300, keyGenerator = null) {
     }
 
 
-    const defaultKey = `route:${req.originalUrl}:${req.userId || 'anonymous'}`;
+    const uid = req.userId || (req.user && (req.user._id || req.user.id));
+    const defaultKey = `route:${req.originalUrl}:${uid || 'anonymous'}`;
     const cacheKey = keyGenerator ? keyGenerator(req) : defaultKey;
 
 
@@ -63,7 +64,7 @@ function invalidationMiddleware(patterns = []) {
 
         const autoPatterns = [
           `route:${req.originalUrl.split('/')[1]}`,
-          `${req.userId}`
+          String(req.userId || (req.user && (req.user._id || req.user.id)) || '')
         ];
         
         const allPatterns = [...patterns, ...autoPatterns];
@@ -89,13 +90,14 @@ function invalidationMiddleware(patterns = []) {
 function invalidatePattern(pattern) {
   try {
     const keysToDelete = [];
-    
-    for (const key of cache.cache.keys()) {
-      if (key.includes(pattern)) {
-        keysToDelete.push(key);
-      }
+    const keys = (typeof cache.listKeys === 'function')
+      ? cache.listKeys()
+      : (cache.cache && typeof cache.cache.keys === 'function' ? Array.from(cache.cache.keys()) : []);
+
+    for (const key of keys) {
+      try { if (typeof key === 'string' && key.includes(pattern)) keysToDelete.push(key); } catch (_) {}
     }
-    
+
     keysToDelete.forEach(key => cache.delete(key));
     return keysToDelete.length;
   } catch (error) {

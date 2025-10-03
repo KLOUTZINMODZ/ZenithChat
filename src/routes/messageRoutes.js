@@ -9,7 +9,7 @@ const User = require('../models/User');
 const { encryptMessage, decryptMessage } = require('../utils/encryption');
 const logger = require('../utils/logger');
 const cache = require('../services/GlobalCache');
-const { cacheMiddleware, invalidationMiddleware, performanceMiddleware } = require('../middleware/cacheMiddleware');
+const { cacheMiddleware, invalidationMiddleware, performanceMiddleware, invalidatePattern } = require('../middleware/cacheMiddleware');
 
 
 router.get('/sync/:conversationId', auth, async (req, res) => {
@@ -636,6 +636,11 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
     const participantIds = conversation.participants.map(p => p.toString());
     cache.invalidateConversationCache(conversationId, participantIds);
+    // Also invalidate route-level caches for GET message lists that use cacheMiddleware
+    try {
+      invalidatePattern(`route:/api/messages/conversations/${conversationId}`);
+      invalidatePattern('route:/api/messages');
+    } catch (_) {}
     
 
     cache.cacheMessage(conversationId, {

@@ -92,6 +92,16 @@ class GlobalCache {
   close() {
     return this.cacheService.close();
   }
+
+  // Utility: expose current cache keys for invalidation helpers
+  listKeys() {
+    try {
+      const it = this.cacheService && this.cacheService.cache && this.cacheService.cache.keys ? this.cacheService.cache.keys() : [];
+      return Array.from(it);
+    } catch (_) {
+      return [];
+    }
+  }
 }
 
 
