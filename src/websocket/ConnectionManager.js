@@ -5,6 +5,8 @@ class ConnectionManager {
   constructor() {
     this.connections = new Map();
     this.activeConversations = new Map();
+    // Feature flag: gradual offline replay handled here (default off, rely on MessageHandler.sendPendingMessages)
+    this.useGradualOfflineReplay = String(process.env.WS_CM_GRADUAL_OFFLINE || 'false').toLowerCase() === 'true';
   }
 
   addConnection(userId, ws) {
@@ -19,10 +21,13 @@ class ConnectionManager {
       logger.info(`🔄 CACHE: User ${userId} reconnected - was offline since ${offlineStatus.activatedAt}`);
     }
 
-    const offlineMessages = cache.getOfflineMessages(userId);
-    if (offlineMessages.length > 0) {
-      logger.info(`📬 CACHE: User ${userId} reconnected - delivering ${offlineMessages.length} cached offline messages`);
-      this.sendCachedMessagesGradually(ws, userId, offlineMessages);
+    // Avoid duplicate offline replay: only send here if explicitly enabled.
+    if (this.useGradualOfflineReplay) {
+      const offlineMessages = cache.getOfflineMessages(userId);
+      if (offlineMessages.length > 0) {
+        logger.info(`📬 CACHE: User ${userId} reconnected - delivering ${offlineMessages.length} cached offline messages (gradual)`);
+        this.sendCachedMessagesGradually(ws, userId, offlineMessages);
+      }
     }
   }
 
