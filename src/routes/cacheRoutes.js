@@ -11,7 +11,7 @@ const authenticateCache = (req, res, next) => {
   const source = req.headers['x-cache-source'];
   
 
-  if (source !== 'HackLoteAPI') {
+  if (source !== 'ZenithAPI') {
     return res.status(401).json({
       success: false,
       message: 'Fonte de cache não autorizada'

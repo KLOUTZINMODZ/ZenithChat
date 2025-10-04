@@ -31,6 +31,7 @@ const mongoose = require('mongoose');
 const adminRoutes = require('./src/routes/adminRoutes');
 const qaRoutes = require('./src/routes/qaRoutes');
 const aiSupportRoutes = require('./src/routes/aiSupportRoutes');
+const ratingsRoutes = require('./src/routes/ratingsRoutes');
 
 const app = express();
 
@@ -122,10 +123,10 @@ app.use('/api/', limiter);
 
 app.get('/', (req, res) => {
   res.json({
-    name: 'HackLote Chat API',
+    name: 'Zenith Chat API',
     version: '1.0.0',
     status: 'running',
-    description: 'WebSocket-based real-time messaging API for HackLote marketplace',
+    description: 'WebSocket-based real-time messaging API for Zenith marketplace',
     endpoints: {
       health: 'GET /health',
       auth: {
@@ -204,6 +205,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api/ai/support', aiSupportRoutes);
+app.use('/api/ratings', ratingsRoutes);
 // Purchases logger to debug 404 reports
 app.use('/api/purchases', (req, res, next) => {
   try {

@@ -43,7 +43,7 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
     }, {
       headers: {
         'Content-Type': 'application/json',
-        'X-Webhook-Source': 'HackloteChatApi',
+        'X-Webhook-Source': 'ZenithChatApi',
         'Authorization': `Bearer ${process.env.VERCEL_API_SECRET}`
       },
       timeout: 30000
@@ -209,7 +209,7 @@ const processMercadoPagoNotification = async (notification) => {
 
 
 router.post('/mercadopago-webhook', async (req, res) => {
-  logger.info('🔔 Webhook Mercado Pago recebido na HackloteChatApi');
+  logger.info('🔔 Webhook Mercado Pago recebido na ZenithChatApi');
   
   try {
 

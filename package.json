@@ -1,7 +1,7 @@
 {
-  "name": "hacklote-chat-api",
+  "name": "zenith-chat-api",
   "version": "1.0.0",
-  "description": "WebSocket-based real-time chat API for HackLote marketplace",
+  "description": "WebSocket-based real-time chat API for Zenith marketplace",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

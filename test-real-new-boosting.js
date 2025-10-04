@@ -11,7 +11,7 @@ async function testRealNewBoosting() {
   console.log('🎯 Teste final: new_boosting após corrigir preferências...');
   
   console.log('\n📋 CERTIFIQUE-SE:');
-  console.log('1. HackLoteAPI foi reiniciado');
+  console.log('1. ZenithAPI foi reiniciado');
   console.log('2. Frontend está conectado');
   console.log('3. Console do navegador está aberto');
 

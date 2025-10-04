@@ -1,5 +1,5 @@
 /**
- * Teste para simular notificações reais do HackLoteAPI
+ * Teste para simular notificações reais do ZenithAPI
  * (Proposta Aceita, Novo Boosting, etc.)
  */
 
@@ -8,7 +8,7 @@ const axios = require('axios');
 const CHAT_API_URL = 'https://zenith.enrelyugi.com.br/';
 const USER_ID = '6897d82c8cdd40188e08a224';
 
-console.log('🧪 Testando notificações reais do HackLoteAPI...');
+console.log('🧪 Testando notificações reais do ZenithAPI...');
 
 async function testRealNotifications() {
   const notifications = [

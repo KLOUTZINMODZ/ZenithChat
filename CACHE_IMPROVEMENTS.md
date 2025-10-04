@@ -1,4 +1,4 @@
-# 🧠 Sistema de Cache Otimizado - HackloteChatApi
+# 🧠 Sistema de Cache Otimizado - ZenithChatApi
 
 ## ✨ Melhorias Implementadas
 

@@ -1,5 +1,5 @@
 /**
- * Teste para enviar uma notificação real via HackLoteAPI 
+ * Teste para enviar uma notificação real via ZenithAPI 
  * para verificar se chega no frontend via WebSocket
  */
 
@@ -8,7 +8,7 @@ const axios = require('axios');
 const HACK_LOTE_API_URL = 'https://zenithapi-steel.vercel.app';
 const CHAT_API_URL = 'https://zenith.enrelyugi.com.br/';
 
-console.log('🧪 Testando notificação real via HackLoteAPI...');
+console.log('🧪 Testando notificação real via ZenithAPI...');
 
 async function testRealNotification() {
   try {
@@ -36,9 +36,6 @@ async function testRealNotification() {
 
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-
-    console.log('\n📨 Simulando notificação via HackLoteAPI...');
-    
 
     const hackLoteNotification = {
       userIds: 'test_user_123',

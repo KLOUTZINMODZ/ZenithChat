@@ -6,7 +6,7 @@ const mediatorSchema = new mongoose.Schema({
   currency: { type: String, default: 'BRL' },
 
   operationId: { type: String, required: true, unique: true, index: true },
-  source: { type: String, enum: ['HackloteChatApi', 'HackLoteAPI', 'APIAdministrativa', 'Asaas'], required: true },
+  source: { type: String, enum: ['ZenithChatApi', 'ZenithAPI', 'APIAdministrativa', 'Asaas'], required: true },
   occurredAt: { type: Date, required: true, index: true },
 
   reference: {

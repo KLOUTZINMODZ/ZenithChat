@@ -10,7 +10,7 @@ class AsaasService {
       headers: {
         'Content-Type': 'application/json',
         'access_token': this.apiKey || '',
-        'User-Agent': process.env.ASAAS_USER_AGENT || 'HackLoteChatApi/1.0.0'
+        'User-Agent': process.env.ASAAS_USER_AGENT || 'ZenithChatApi/1.0.0'
       },
       timeout: 15000
     });

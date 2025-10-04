@@ -27,7 +27,7 @@ API WebSocket dedicada para mensagens em tempo real do marketplace HackLote.
 
 1. **Instalar dependências:**
 ```bash
-cd HackloteChatApi
+cd ZenithChatApi
 npm install
 ```
 
@@ -180,7 +180,7 @@ CMD ["npm", "start"]
 
 ### PM2
 ```bash
-pm2 start server.js --name hacklote-chat-api
+pm2 start server.js --name zenith-chat-api
 pm2 save
 pm2 startup
 ```

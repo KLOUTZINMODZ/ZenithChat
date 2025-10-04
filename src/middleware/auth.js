@@ -23,7 +23,7 @@ const auth = async (req, res, next) => {
         {
           _id: decoded.id,
           name: decoded.name || 'User',
-          email: decoded.email || `user${decoded.id}@hacklote.com`,
+          email: decoded.email || `user${decoded.id}@zenith.com`,
           lastSeen: new Date()
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }

@@ -125,7 +125,7 @@ class HighlightRetryService {
         {
           headers: {
             'Authorization': `Bearer ${process.env.VERCEL_API_SECRET}`,
-            'X-Webhook-Source': 'HackloteChatApi',
+            'X-Webhook-Source': 'ZenithChatApi',
             'Content-Type': 'application/json'
           },
           timeout: 10000

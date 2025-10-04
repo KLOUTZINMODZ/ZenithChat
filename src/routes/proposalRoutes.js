@@ -166,7 +166,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       }
     });
     
-    console.log(`✅ [Proposal Accept] HackLoteAPI response:`, response.data);
+    console.log(`✅ [Proposal Accept] Zenith response:`, response.data);
     
 
     try {

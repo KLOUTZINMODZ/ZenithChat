@@ -90,7 +90,7 @@ class CompleteSystemTester {
           timestamp: Date.now()
         }, {
           headers: {
-            'X-Cache-Source': 'HackLoteAPI',
+            'X-Cache-Source': 'ZenithAPI',
             'Authorization': `Bearer ${VERCEL_API_SECRET}`,
             'Content-Type': 'application/json'
           }
@@ -120,7 +120,7 @@ class CompleteSystemTester {
     return await this.runTest('Cache System - Retrieve Marketplace Items', async () => {
       const response = await axios.get(`${CHAT_API_URL}/api/cache/marketplace-items/${this.externalReference}`, {
         headers: {
-          'X-Cache-Source': 'HackLoteAPI'
+          'X-Cache-Source': 'ZenithAPI'
         }
       });
 
@@ -208,7 +208,7 @@ class CompleteSystemTester {
     return await this.runTest('Retry System - Force Retry Processing', async () => {
       const response = await axios.post(`${CHAT_API_URL}/api/cache/retry-highlights`, {}, {
         headers: {
-          'X-Cache-Source': 'HackLoteAPI',
+          'X-Cache-Source': 'ZenithAPI',
           'Content-Type': 'application/json'
         }
       });
@@ -228,7 +228,7 @@ class CompleteSystemTester {
     return await this.runTest('Cache System - Get Statistics', async () => {
       const response = await axios.get(`${CHAT_API_URL}/api/cache/stats`, {
         headers: {
-          'X-Cache-Source': 'HackLoteAPI'
+          'X-Cache-Source': 'ZenithAPI'
         }
       });
 
@@ -250,7 +250,7 @@ class CompleteSystemTester {
     return await this.runTest('Cache System - Search User Data', async () => {
       const response = await axios.get(`${CHAT_API_URL}/api/cache/user/${TEST_USER_ID}`, {
         headers: {
-          'X-Cache-Source': 'HackLoteAPI'
+          'X-Cache-Source': 'ZenithAPI'
         }
       });
 

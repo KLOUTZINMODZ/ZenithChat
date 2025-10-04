@@ -413,7 +413,7 @@ class BoostingChatController {
       conversation.deliveryConfirmedAt = new Date();
       
 
-      console.log(`🔒 [DEBUG] Bloqueando conversa ${conversationId} no HackloteChatApi...`);
+      console.log(`🔒 [DEBUG] Bloqueando conversa ${conversationId} no ZenithChatApi...`);
       console.log(`   Estado anterior: isBlocked=${conversation.isBlocked}`);
       
       conversation.isBlocked = true;
@@ -423,7 +423,7 @@ class BoostingChatController {
       
       const savedConversation = await conversation.save();
       
-      console.log(`✅ [DEBUG] Conversa bloqueada no HackloteChatApi:`);
+      console.log(`✅ [DEBUG] Conversa bloqueada no ZenithChatApi:`);
       console.log(`   isBlocked: ${savedConversation.isBlocked}`);
       console.log(`   blockedReason: ${savedConversation.blockedReason}`);
       console.log(`   conversationId: ${savedConversation._id}`);

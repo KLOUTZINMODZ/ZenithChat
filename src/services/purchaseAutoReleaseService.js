@@ -52,7 +52,7 @@ async function runOnce(app) {
               amount: Number(p.sellerReceives),
               currency: 'BRL',
               operationId,
-              source: 'HackloteChatApi',
+              source: 'ZenithChatApi',
               occurredAt: new Date(),
               reference: {
                 purchaseId: p._id,

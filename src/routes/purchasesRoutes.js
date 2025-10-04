@@ -9,6 +9,7 @@ const WalletLedger = require('../models/WalletLedger');
 const Mediator = require('../models/Mediator');
 const MarketItem = require('../models/MarketItem');
 const Report = require('../models/Report');
+const Review = require('../models/Review');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 const axios = require('axios');
@@ -228,6 +229,36 @@ router.get('/list', auth, async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Erro ao listar compras/vendas', error: error.message });
+  }
+});
+
+// GET /api/purchases/:purchaseId/review - get existing review and eligibility for current user
+router.get('/:purchaseId/review', auth, async (req, res) => {
+  try {
+    const { purchaseId } = req.params;
+    const userId = req.user._id.toString();
+    const p = await Purchase.findById(purchaseId);
+    if (!p) return res.status(404).json({ success: false, message: 'Compra não encontrada' });
+    const isParticipant = [p.buyerId?.toString(), p.sellerId?.toString()].includes(userId);
+    if (!isParticipant) return res.status(403).json({ success: false, message: 'Acesso negado' });
+
+    const existing = await Review.findOne({ purchaseId: p._id })
+      .populate('userId', 'name email avatar profileImage')
+      .lean();
+
+    const role = (p.buyerId?.toString() === userId) ? 'buyer' : 'seller';
+    const eligible = role === 'buyer' && String(p.status) === 'completed' && !existing;
+
+    let formatted = null;
+    if (existing) {
+      const helpful = (existing.helpfulVotes || []).filter(v => v.vote === 'helpful').length;
+      const notHelpful = (existing.helpfulVotes || []).filter(v => v.vote === 'not_helpful').length;
+      formatted = { ...existing, isHelpful: helpful, isNotHelpful: notHelpful, orderStatus: 'completed' };
+    }
+
+    return res.json({ success: true, data: { review: formatted, eligible, role } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Erro ao buscar avaliação da compra', error: error.message });
   }
 });
 
@@ -578,7 +609,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
               amount: Number(purchase.sellerReceives),
               currency: 'BRL',
               operationId,
-              source: 'HackloteChatApi',
+              source: 'ZenithChatApi',
               occurredAt: new Date(),
               reference: {
                 purchaseId: purchase._id,
@@ -633,7 +664,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
                 amount: feeAmount,
                 currency: 'BRL',
                 operationId: `purchase_fee:${purchase._id.toString()}`,
-                source: 'HackloteChatApi',
+                source: 'ZenithChatApi',
                 occurredAt: new Date(),
                 reference: {
                   purchaseId: purchase._id,
@@ -1200,7 +1231,7 @@ router.post('/auto-release/run', auth, async (req, res) => {
                   amount: Number(p.sellerReceives),
                   currency: 'BRL',
                   operationId,
-                  source: 'HackloteChatApi',
+                  source: 'ZenithChatApi',
                   occurredAt: new Date(),
                   reference: { purchaseId: p._id, orderId: null, walletLedgerId: release?._id || null, transactionId: null, asaasTransferId: null },
                   metadata: { auto: true, itemId: p.itemId },

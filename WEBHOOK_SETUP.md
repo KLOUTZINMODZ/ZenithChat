@@ -1,18 +1,18 @@
 # Configuração do Sistema de Webhook para Marketplace Highlights
 
 ## 🎯 Visão Geral
-O sistema de webhook foi movido da API principal (Vercel) para a HackloteChatApi devido às limitações do Vercel com WebSockets e webhooks persistentes.
+O sistema de webhook foi movido da API principal (Vercel) para a ZenithChatApi devido às limitações do Vercel com WebSockets e webhooks persistentes.
 
 ## 🔧 Arquitetura da Solução
 
 ### Fluxo do Webhook
-1. **Mercado Pago** → **HackloteChatApi** (webhook)
-2. **HackloteChatApi** → **API Vercel** (comunicação interna)
+1. **Mercado Pago** → **ZenithChatApi** (webhook)
+2. **ZenithChatApi** → **API Vercel** (comunicação interna)
 3. **API Vercel** aplica highlights nos itens do marketplace
 
 ## ⚙️ Configuração das Variáveis de Ambiente
 
-### HackloteChatApi (.env)
+### ZenithChatApi (.env)
 ```env
 # Configuração existente...
 PORT=5000
@@ -38,7 +38,7 @@ CHAT_API_URL=https://zenith.enrelyugi.com.br
 
 ## 🚀 Endpoints Criados
 
-### Na HackloteChatApi
+### Na ZenithChatApi
 - **POST** `/api/marketplace-webhook/mercadopago-webhook`
   - Recebe notificações do Mercado Pago
   - Processa pagamentos aprovados
@@ -54,13 +54,13 @@ CHAT_API_URL=https://zenith.enrelyugi.com.br
 ### Na API Principal (Vercel)
 - **POST** `/api/marketplace-highlights-internal`
   - Endpoint interno para aplicar highlights
-  - Aceita apenas chamadas da HackloteChatApi
+  - Aceita apenas chamadas da ZenithChatApi
   - Autenticado via secret interno
 
 ## 🔐 Segurança
 
 ### Autenticação entre APIs
-- Header `X-Webhook-Source: HackloteChatApi` para identificação
+- Header `X-Webhook-Source: ZenithChatApi` para identificação
 - Header `Authorization: Bearer SECRET` para autenticação
 - Verificação de secret interno compartilhado
 
@@ -111,7 +111,7 @@ curl https://zenith.enrelyugi.com.br/api/marketplace-webhook/health
 
 ## 🔄 Processo de Deploy
 
-### 1. HackloteChatApi
+### 1. ZenithChatApi
 1. Configurar variáveis de ambiente
 2. Garantir que o servidor está rodando
 3. Testar conectividade com a API principal
@@ -122,7 +122,7 @@ curl https://zenith.enrelyugi.com.br/api/marketplace-webhook/health
 3. Atualizar variável `CHAT_API_URL` se necessário
 
 ### 3. Mercado Pago
-1. Atualizar URL de notificação para apontar para HackloteChatApi
+1. Atualizar URL de notificação para apontar para ZenithChatApi
 2. Testar webhook com pagamento real
 
 ## ⚠️ Troubleshooting
@@ -131,7 +131,7 @@ curl https://zenith.enrelyugi.com.br/api/marketplace-webhook/health
 ```
 Erro: ECONNREFUSED ou ETIMEDOUT
 ```
-**Solução**: Verificar se HackloteChatApi está rodando e acessível
+**Solução**: Verificar se ZenithChatApi está rodando e acessível
 
 ### Erro de Autenticação
 ```
@@ -155,7 +155,7 @@ Mercado Pago não está chamando o webhook
 
 ### Monitoramento
 - Status de saúde: `GET /api/marketplace-webhook/health`
-- Logs detalhados no console da HackloteChatApi
+- Logs detalhados no console da ZenithChatApi
 - Métricas de sucesso/falha nos logs
 
 ## 🎉 Benefícios da Nova Arquitetura

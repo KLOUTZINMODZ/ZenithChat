@@ -503,7 +503,7 @@ router.post('/deposits/initiate', auth, async (req, res) => {
       payment = await AsaasService.createPixPayment({
         customerId,
         value: amountNum,
-        description: description || `Depósito HackLote #${tx._id.toString()}`,
+        description: description || `Depósito Zenith #${tx._id.toString()}`,
         externalReference
       });
     } catch (err) {
@@ -516,7 +516,7 @@ router.post('/deposits/initiate', auth, async (req, res) => {
           payment = await AsaasService.createPixPayment({
             customerId,
             value: amountNum,
-            description: description || `Depósito HackLote #${tx._id.toString()}`,
+            description: description || `Depósito Zenith #${tx._id.toString()}`,
             externalReference
           });
         } catch (err2) {
