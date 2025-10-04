@@ -68,55 +68,83 @@ router.post('/', auth, async (req, res) => {
 // GET /api/ratings/user/:userId?page&limit
 router.get('/user/:userId', async (req, res) => {
   try {
-    let targetId = req.params.userId;
+    const mongoose = require('mongoose');
     const emailAlias = String(req.query.email || '').trim();
-    // Prefer resolving by email when provided (maps external profile to Chat user)
-    try {
-      if (emailAlias) {
+    let targetIdRaw = req.params.userId;
+    let targetObjectId = null;
+
+    // Prefer resolving by email when provided
+    if (emailAlias) {
+      try {
         const u = await User.findOne({ email: emailAlias }).select('_id').lean();
-        if (u?._id) targetId = String(u._id);
-      }
-    } catch (_) {}
+        if (u?._id) targetIdRaw = String(u._id);
+      } catch (_) {}
+    }
+
+    if (mongoose.Types.ObjectId.isValid(targetIdRaw)) {
+      try { targetObjectId = new mongoose.Types.ObjectId(targetIdRaw); } catch (_) { targetObjectId = null; }
+    }
+
+    // If after resolving we still don't have a valid ObjectId, return empty payload gracefully
+    if (!targetObjectId) {
+      return res.json({ success: true, data: {
+        ratings: [],
+        stats: { average: 0, count: 0, distribution: { 5:0, 4:0, 3:0, 2:0, 1:0 } },
+        pagination: { total: 0, page: 1, limit: Number(req.query.limit || 10), pages: 0 }
+      }});
+    }
+
     const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '10')) || 10));
     const skip = (page - 1) * limit;
 
-    const [total, ratings] = await Promise.all([
-      Review.countDocuments({ targetId, status: 'approved' }),
-      Review.find({ targetId, status: 'approved' })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate('userId', 'name email avatar profileImage')
-        .lean()
-    ]);
+    const filter = { targetId: targetObjectId, status: 'approved' };
 
-    // Stats
-    const pipeline = [
-      { $match: { targetId: require('mongoose').Types.ObjectId(targetId), status: 'approved' } },
-      { $group: { _id: '$rating', count: { $sum: 1 } } }
-    ];
+    let total = 0, ratings = [];
+    try {
+      [total, ratings] = await Promise.all([
+        Review.countDocuments(filter),
+        Review.find(filter)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .populate('userId', 'name email avatar profileImage')
+          .lean()
+      ]);
+    } catch (e) {
+      // If anything goes wrong, return empty to avoid 500 and help caller degrade gracefully
+      return res.json({ success: true, data: {
+        ratings: [],
+        stats: { average: 0, count: 0, distribution: { 5:0, 4:0, 3:0, 2:0, 1:0 } },
+        pagination: { total: 0, page, limit, pages: 0 }
+      }});
+    }
+
+    // Stats via aggregation (guarded)
     let distributionDocs = [];
-    try { distributionDocs = await Review.aggregate(pipeline); } catch (_) {}
-    const distMap = new Map(distributionDocs.map(d => [String(d._id), d.count]));
+    try {
+      distributionDocs = await Review.aggregate([
+        { $match: { targetId: targetObjectId, status: 'approved' } },
+        { $group: { _id: '$rating', count: { $sum: 1 } } }
+      ]);
+    } catch (_) {}
+
+    const distMap = new Map((distributionDocs || []).map(d => [String(d._id), d.count]));
     const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
     for (let i = 1; i <= 5; i++) distribution[i] = Number(distMap.get(String(i)) || 0);
-    const count = total;
-    const average = count > 0 ? (ratings.reduce((acc, r) => acc + Number(r.rating || 0), 0) + (skip > 0 ? 0 : 0)) / Math.max(1, ratings.length) : 0;
+    const count = Number(total) || 0;
+    const avgFromDist = count > 0
+      ? (distributionDocs.reduce((sum, d) => sum + (Number(d._id) * Number(d.count || 0)), 0) / count)
+      : 0;
 
-    const formatted = ratings.map(r => {
+    const formatted = (ratings || []).map(r => {
       const { helpful, notHelpful } = summarizeVoteCounts(r);
-      return {
-        ...r,
-        isHelpful: helpful,
-        isNotHelpful: notHelpful,
-        orderStatus: 'completed'
-      };
+      return { ...r, isHelpful: helpful, isNotHelpful: notHelpful, orderStatus: 'completed' };
     });
 
     return res.json({ success: true, data: {
       ratings: formatted,
-      stats: { average: Number((distributionDocs.length ? (distributionDocs.reduce((a, d) => a + d._id * d.count, 0) / Math.max(1, count)) : 0).toFixed(2)), count, distribution },
+      stats: { average: Number((avgFromDist || 0).toFixed(2)), count, distribution },
       pagination: { total: count, page, limit, pages: Math.ceil(count / limit) }
     }});
   } catch (error) {
