@@ -68,7 +68,15 @@ router.post('/', auth, async (req, res) => {
 // GET /api/ratings/user/:userId?page&limit
 router.get('/user/:userId', async (req, res) => {
   try {
-    const targetId = req.params.userId;
+    let targetId = req.params.userId;
+    const emailAlias = String(req.query.email || '').trim();
+    // Prefer resolving by email when provided (maps external profile to Chat user)
+    try {
+      if (emailAlias) {
+        const u = await User.findOne({ email: emailAlias }).select('_id').lean();
+        if (u?._id) targetId = String(u._id);
+      }
+    } catch (_) {}
     const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '10')) || 10));
     const skip = (page - 1) * limit;
