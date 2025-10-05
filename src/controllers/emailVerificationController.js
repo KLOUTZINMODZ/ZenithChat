@@ -16,12 +16,22 @@ function generateVerificationCode() {
  */
 exports.sendVerificationCode = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, phone } = req.body;
 
+    // Validar campos obrigatórios
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'Email é obrigatório'
+        message: 'Email é obrigatório',
+        error: 'EMAIL_REQUIRED'
+      });
+    }
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Telefone é obrigatório',
+        error: 'PHONE_REQUIRED'
       });
     }
 
@@ -36,13 +46,75 @@ exports.sendVerificationCode = async (req, res) => {
       });
     }
 
+    // Normalizar telefone (remover caracteres especiais)
+    const phoneNormalized = String(phone).replace(/\D/g, '');
+
+    // Validar formato de telefone brasileiro (10 ou 11 dígitos)
+    if (phoneNormalized.length < 10 || phoneNormalized.length > 11) {
+      return res.status(400).json({
+        success: false,
+        message: 'Telefone inválido. Use o formato brasileiro com DDD (10 ou 11 dígitos)',
+        error: 'INVALID_PHONE_FORMAT'
+      });
+    }
+
+    // Validar DDD brasileiro (códigos válidos)
+    const ddd = phoneNormalized.substring(0, 2);
+    const validDDDs = [
+      '11', '12', '13', '14', '15', '16', '17', '18', '19', // SP
+      '21', '22', '24', // RJ
+      '27', '28', // ES
+      '31', '32', '33', '34', '35', '37', '38', // MG
+      '41', '42', '43', '44', '45', '46', // PR
+      '47', '48', '49', // SC
+      '51', '53', '54', '55', // RS
+      '61', // DF
+      '62', '64', // GO
+      '63', // TO
+      '65', '66', // MT
+      '67', // MS
+      '68', // AC
+      '69', // RO
+      '71', '73', '74', '75', '77', // BA
+      '79', // SE
+      '81', '87', // PE
+      '82', // AL
+      '83', // PB
+      '84', // RN
+      '85', '88', // CE
+      '86', '89', // PI
+      '91', '93', '94', // PA
+      '92', '97', // AM
+      '95', // RR
+      '96', // AP
+      '98', '99'  // MA
+    ];
+
+    if (!validDDDs.includes(ddd)) {
+      return res.status(400).json({
+        success: false,
+        message: 'DDD inválido. Use um código de área brasileiro válido',
+        error: 'INVALID_DDD'
+      });
+    }
+
     // Verificar se email já está cadastrado
-    const existingUser = await User.findOne({ email: emailLower });
-    if (existingUser) {
+    const existingEmail = await User.findOne({ email: emailLower });
+    if (existingEmail) {
       return res.status(400).json({
         success: false,
         message: 'Este email já está cadastrado',
         error: 'EMAIL_ALREADY_EXISTS'
+      });
+    }
+
+    // Verificar se telefone já está cadastrado
+    const existingPhone = await User.findOne({ phoneNormalized });
+    if (existingPhone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Este telefone já está cadastrado',
+        error: 'PHONE_ALREADY_EXISTS'
       });
     }
 
