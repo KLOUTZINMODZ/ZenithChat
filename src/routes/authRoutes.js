@@ -75,4 +75,16 @@ router.get('/ws-token', async (req, res) => {
   }
 });
 
+// Rotas de recuperação de senha
+const passwordResetController = require('../controllers/passwordResetController');
+
+// POST /api/auth/forgot-password - Solicitar código de recuperação
+router.post('/forgot-password', passwordResetController.requestPasswordReset);
+
+// POST /api/auth/verify-reset-code - Verificar código de recuperação
+router.post('/verify-reset-code', passwordResetController.verifyResetCode);
+
+// POST /api/auth/reset-password - Redefinir senha
+router.post('/reset-password', passwordResetController.resetPassword);
+
 module.exports = router;
