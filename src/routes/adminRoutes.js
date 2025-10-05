@@ -81,6 +81,41 @@ router.patch('/market-items/:itemId/seller', requireAdminKey, async (req, res) =
   }
 });
 
+// GET /api/admin/users/lookup
+// Query: q (string), limit (number)
+// Searches by ObjectId, email, name, and username (if present in documents)
+// IMPORTANT: This route MUST be before /users/:id to avoid route conflict
+router.get('/users/lookup', requireAdminKey, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '20')) || 20));
+    if (!q) return res.status(400).json({ success: false, message: 'Parâmetro q é obrigatório' });
+
+    const ors = [];
+    // Exact ObjectId match
+    const maybeId = safeId(q);
+    if (maybeId) ors.push({ _id: maybeId });
+
+    // Case-insensitive partials for name/email/username
+    const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(esc(q), 'i');
+    ors.push({ name: re });
+    ors.push({ email: re });
+    // Username is not in schema but may exist in documents; Mongoose allows querying unknown paths
+    ors.push({ username: re });
+
+    const users = await User.find({ $or: ors })
+      .select('_id name email avatar username')
+      .limit(limit)
+      .lean();
+
+    return res.json({ success: true, data: { users } });
+  } catch (error) {
+    try { logger.error('[ADMIN] users/lookup failed', error); } catch (_) {}
+    return res.status(500).json({ success: false, message: 'Erro ao buscar usuários', error: error?.message });
+  }
+});
+
 // GET /api/admin/users/:id - fetch single user including complaints counters
 router.get('/users/:id', requireAdminKey, async (req, res) => {
   try {
@@ -347,40 +382,6 @@ router.patch('/support/tickets/:id', requireAdminKey, async (req, res) => {
   } catch (error) {
     try { logger.error('[ADMIN][SUPPORT] Error updating ticket', error); } catch (_) {}
     return res.status(500).json({ success: false, message: 'Erro ao atualizar ticket', error: error.message });
-  }
-});
-
-// GET /api/admin/users/lookup
-// Query: q (string), limit (number)
-// Searches by ObjectId, email, name, and username (if present in documents)
-router.get('/users/lookup', requireAdminKey, async (req, res) => {
-  try {
-    const q = String(req.query.q || '').trim();
-    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '20')) || 20));
-    if (!q) return res.status(400).json({ success: false, message: 'Parâmetro q é obrigatório' });
-
-    const ors = [];
-    // Exact ObjectId match
-    const maybeId = safeId(q);
-    if (maybeId) ors.push({ _id: maybeId });
-
-    // Case-insensitive partials for name/email/username
-    const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(esc(q), 'i');
-    ors.push({ name: re });
-    ors.push({ email: re });
-    // Username is not in schema but may exist in documents; Mongoose allows querying unknown paths
-    ors.push({ username: re });
-
-    const users = await User.find({ $or: ors })
-      .select('_id name email avatar username')
-      .limit(limit)
-      .lean();
-
-    return res.json({ success: true, data: { users } });
-  } catch (error) {
-    try { logger.error('[ADMIN] users/lookup failed', error); } catch (_) {}
-    return res.status(500).json({ success: false, message: 'Erro ao buscar usuários', error: error?.message });
   }
 });
 
