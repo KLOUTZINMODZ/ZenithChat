@@ -46,11 +46,11 @@ class EmailService {
 
       const mailOptions = {
         from: {
-          name: 'HackLote - Recuperação de Senha',
+          name: 'Zenith - Recuperação de Senha',
           address: process.env.EMAIL_USER
         },
         to: email,
-        subject: '🔐 Código de Recuperação de Senha',
+        subject: '🎮 Zenith - Código de Recuperação de Senha',
         html: this.getPasswordResetTemplate(code, userName)
       };
 
@@ -77,76 +77,98 @@ class EmailService {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Recuperação de Senha</title>
+        <title>Zenith - Recuperação de Senha</title>
       </head>
-      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #0a0e1a;">
         <table role="presentation" style="width: 100%; border-collapse: collapse;">
           <tr>
             <td align="center" style="padding: 40px 20px;">
-              <table role="presentation" style="max-width: 600px; width: 100%; background: #ffffff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background: #111827; border: 1px solid #1f2937; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;">
                 <!-- Header -->
                 <tr>
-                  <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
-                    <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: bold;">
+                  <td style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 40px 30px; text-align: center; border-bottom: 2px solid #3b82f6; position: relative;">
+                    <!-- Gaming accent lines -->
+                    <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #3b82f6 100%);"></div>
+                    
+                    <div style="display: inline-block; padding: 8px 20px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; margin-bottom: 15px;">
+                      <span style="color: #3b82f6; font-size: 14px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">🎮 Zenith Gaming</span>
+                    </div>
+                    
+                    <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: bold; text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);">
                       🔐 Recuperação de Senha
                     </h1>
-                    <p style="margin: 10px 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">
-                      Seu código de verificação chegou!
+                    <p style="margin: 10px 0 0; color: #94a3b8; font-size: 16px;">
+                      Seu código de acesso está pronto!
                     </p>
                   </td>
                 </tr>
                 
                 <!-- Content -->
                 <tr>
-                  <td style="padding: 40px 30px;">
-                    <p style="margin: 0 0 20px; color: #374151; font-size: 16px; line-height: 1.6;">
-                      Olá <strong>${userName || 'usuário'}</strong>,
+                  <td style="padding: 40px 30px; background: #111827;">
+                    <p style="margin: 0 0 20px; color: #e2e8f0; font-size: 16px; line-height: 1.6;">
+                      Olá <strong style="color: #3b82f6;">${userName || 'Gamer'}</strong>,
                     </p>
-                    <p style="margin: 0 0 30px; color: #374151; font-size: 16px; line-height: 1.6;">
-                      Recebemos uma solicitação para redefinir a senha da sua conta. Use o código abaixo para continuar:
+                    <p style="margin: 0 0 30px; color: #cbd5e1; font-size: 16px; line-height: 1.6;">
+                      Recebemos uma solicitação para redefinir a senha da sua conta Zenith. Use o código abaixo para continuar:
                     </p>
                     
                     <!-- Code Box -->
                     <table role="presentation" style="width: 100%; margin: 0 0 30px;">
                       <tr>
                         <td align="center">
-                          <div style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);">
-                            <p style="margin: 0; color: rgba(255,255,255,0.8); font-size: 12px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600;">
-                              Seu Código
-                            </p>
-                            <p style="margin: 8px 0 0; color: #ffffff; font-size: 36px; font-weight: bold; letter-spacing: 8px; font-family: 'Courier New', monospace;">
-                              ${code}
-                            </p>
+                          <!-- Gaming-style code container -->
+                          <div style="position: relative; display: inline-block; padding: 4px; background: linear-gradient(135deg, #3b82f6, #06b6d4); border-radius: 16px;">
+                            <div style="background: #1e293b; padding: 25px 45px; border-radius: 13px; position: relative;">
+                              <!-- Corner accents -->
+                              <div style="position: absolute; top: 10px; left: 10px; width: 8px; height: 8px; border-top: 2px solid #3b82f6; border-left: 2px solid #3b82f6;"></div>
+                              <div style="position: absolute; top: 10px; right: 10px; width: 8px; height: 8px; border-top: 2px solid #06b6d4; border-right: 2px solid #06b6d4;"></div>
+                              <div style="position: absolute; bottom: 10px; left: 10px; width: 8px; height: 8px; border-bottom: 2px solid #3b82f6; border-left: 2px solid #3b82f6;"></div>
+                              <div style="position: absolute; bottom: 10px; right: 10px; width: 8px; height: 8px; border-bottom: 2px solid #06b6d4; border-right: 2px solid #06b6d4;"></div>
+                              
+                              <p style="margin: 0; color: #06b6d4; font-size: 11px; text-transform: uppercase; letter-spacing: 3px; font-weight: 700;">
+                                ▸ CÓDIGO DE ACESSO
+                              </p>
+                              <p style="margin: 12px 0 0; color: #ffffff; font-size: 42px; font-weight: bold; letter-spacing: 10px; font-family: 'Courier New', monospace; text-shadow: 0 0 20px rgba(59, 130, 246, 0.6);">
+                                ${code}
+                              </p>
+                            </div>
                           </div>
                         </td>
                       </tr>
                     </table>
                     
                     <!-- Security Info -->
-                    <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px 20px; border-radius: 8px; margin: 0 0 30px;">
-                      <p style="margin: 0; color: #92400E; font-size: 14px; line-height: 1.5;">
-                        ⚠️ <strong>Importante:</strong> Este código expira em <strong>15 minutos</strong> e só pode ser usado uma vez. Não compartilhe com ninguém!
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-left: 4px solid #ef4444; padding: 16px 20px; border-radius: 8px; margin: 0 0 30px;">
+                      <p style="margin: 0; color: #fca5a5; font-size: 14px; line-height: 1.5;">
+                        ⚠️ <strong style="color: #fecaca;">Importante:</strong> Este código expira em <strong style="color: #fecaca;">15 minutos</strong> e só pode ser usado uma vez. Não compartilhe com ninguém!
                       </p>
                     </div>
                     
-                    <p style="margin: 0 0 10px; color: #6B7280; font-size: 14px; line-height: 1.6;">
+                    <p style="margin: 0 0 10px; color: #94a3b8; font-size: 14px; line-height: 1.6;">
                       Se você não solicitou a recuperação de senha, ignore este email ou entre em contato com nosso suporte.
                     </p>
-                    <p style="margin: 0; color: #6B7280; font-size: 14px; line-height: 1.6;">
-                      Atenciosamente,<br>
-                      <strong style="color: #667eea;">Equipe HackLote</strong>
+                    <p style="margin: 0; color: #94a3b8; font-size: 14px; line-height: 1.6;">
+                      Boas partidas,<br>
+                      <strong style="color: #3b82f6;">🎮 Equipe Zenith</strong>
                     </p>
                   </td>
                 </tr>
                 
                 <!-- Footer -->
                 <tr>
-                  <td style="background: #F9FAFB; padding: 30px; text-align: center; border-top: 1px solid #E5E7EB;">
-                    <p style="margin: 0 0 10px; color: #9CA3AF; font-size: 13px;">
+                  <td style="background: #0f172a; padding: 30px; text-align: center; border-top: 1px solid #1f2937;">
+                    <!-- Top accent line -->
+                    <div style="margin: 0 auto 20px; width: 50px; height: 2px; background: linear-gradient(90deg, #3b82f6, #06b6d4);"></div>
+                    
+                    <p style="margin: 0 0 10px; color: #64748b; font-size: 13px;">
                       Este é um email automático, por favor não responda.
                     </p>
-                    <p style="margin: 0; color: #9CA3AF; font-size: 13px;">
-                      © ${new Date().getFullYear()} HackLote. Todos os direitos reservados.
+                    <p style="margin: 0; color: #475569; font-size: 13px;">
+                      © ${new Date().getFullYear()} <strong style="color: #3b82f6;">Zenith</strong>. Todos os direitos reservados.
+                    </p>
+                    <p style="margin: 10px 0 0; color: #334155; font-size: 12px;">
+                      Powered by Klouts
                     </p>
                   </td>
                 </tr>
