@@ -4,6 +4,7 @@ const emailService = require('../services/emailService');
 const logger = require('../utils/logger');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const axios = require('axios');
 
 /**
  * Gera código de 8 dígitos aleatório
@@ -258,9 +259,31 @@ exports.resetPassword = async (req, res) => {
     // Hash da nova senha
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Atualizar senha
+    // Atualizar senha no banco do chat
     user.password = hashedPassword;
     await user.save();
+
+    // CRÍTICO: Sincronizar senha com HackLoteAPI (banco principal)
+    try {
+      const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithapi-steel.vercel.app/api/v1';
+      const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
+      
+      await axios.post(`${mainApiUrl}/admin/sync-password`, {
+        email: user.email,
+        hashedPassword: hashedPassword
+      }, {
+        headers: {
+          'X-Admin-Secret': adminSecret
+        },
+        timeout: 5000
+      });
+      
+      logger.info(`Password synced to main API for user: ${user.email}`);
+    } catch (syncError) {
+      logger.error(`Failed to sync password to main API for ${user.email}:`, syncError.message);
+      // NÃO falhar o reset mesmo se sincronização falhar
+      // Usuário pode fazer reset novamente se necessário
+    }
 
     // Marcar código como usado
     resetRequest.used = true;
