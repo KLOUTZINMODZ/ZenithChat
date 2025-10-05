@@ -68,6 +68,131 @@ class EmailService {
   }
 
   /**
+   * Envia email de verificação de conta
+   */
+  async sendVerificationCode(email, code) {
+    try {
+      if (!this.transporter) {
+        throw new Error('Email service not initialized');
+      }
+
+      const mailOptions = {
+        from: {
+          name: 'Zenith Gaming - Verificação',
+          address: process.env.EMAIL_USER
+        },
+        to: email,
+        subject: '🎮 Zenith - Código de Verificação',
+        html: this.getVerificationCodeTemplate(code)
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      logger.info(`Verification email sent to ${email}:`, info.messageId);
+      
+      return {
+        success: true,
+        messageId: info.messageId
+      };
+    } catch (error) {
+      logger.error('Error sending verification email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Template HTML para o email de verificação
+   */
+  getVerificationCodeTemplate(code) {
+    return `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Zenith - Verificação de Email</title>
+      </head>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #0a0e1a;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background: #111827; border: 1px solid #1f2937; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;">
+                <!-- Header -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 40px 30px; text-align: center; border-bottom: 2px solid #3b82f6;">
+                    <div style="display: inline-block; padding: 8px 20px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; margin-bottom: 15px;">
+                      <span style="color: #3b82f6; font-size: 14px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">🎮 Zenith Gaming</span>
+                    </div>
+                    
+                    <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: bold; text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);">
+                      ✉️ Verificação de Email
+                    </h1>
+                    <p style="margin: 10px 0 0; color: #94a3b8; font-size: 16px;">
+                      Seu código de verificação está pronto!
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Body -->
+                <tr>
+                  <td style="padding: 40px 30px; background: #111827;">
+                    <p style="margin: 0 0 20px; color: #e2e8f0; font-size: 16px; line-height: 1.6;">
+                      Olá Gamer,
+                    </p>
+                    
+                    <p style="margin: 0 0 30px; color: #cbd5e1; font-size: 15px; line-height: 1.6;">
+                      Use o código abaixo para verificar seu email e completar o cadastro na plataforma Zenith:
+                    </p>
+
+                    <!-- Code Box -->
+                    <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 2px solid; border-image: linear-gradient(135deg, #3b82f6, #06b6d4) 1; border-radius: 12px; padding: 30px; text-align: center; margin: 30px 0; position: relative;">
+                      <div style="color: #06b6d4; font-size: 12px; font-weight: 600; letter-spacing: 2px; margin-bottom: 15px; text-transform: uppercase;">
+                        ▸ CÓDIGO DE VERIFICAÇÃO
+                      </div>
+                      <div style="font-size: 42px; font-weight: bold; color: #ffffff; letter-spacing: 8px; font-family: 'Courier New', monospace; text-shadow: 0 0 20px rgba(6, 182, 212, 0.6);">
+                        ${code}
+                      </div>
+                      <div style="color: #64748b; font-size: 13px; margin-top: 15px;">
+                        Válido por 15 minutos
+                      </div>
+                    </div>
+
+                    <div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 15px 20px; border-radius: 8px; margin: 30px 0;">
+                      <p style="margin: 0; color: #fca5a5; font-size: 14px; line-height: 1.6;">
+                        <strong style="color: #ef4444;">⚠️ Importante:</strong> Este código expira em 15 minutos. Se você não solicitou este código, ignore este email.
+                      </p>
+                    </div>
+
+                    <p style="margin: 30px 0 0; color: #cbd5e1; font-size: 15px; line-height: 1.6;">
+                      Boas partidas,<br>
+                      <strong style="color: #3b82f6;">🎮 Equipe Zenith</strong>
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background: #0f172a; padding: 30px; text-align: center; border-top: 1px solid #1f2937;">
+                    <div style="height: 2px; background: linear-gradient(90deg, transparent 0%, #3b82f6 50%, transparent 100%); margin-bottom: 20px;"></div>
+                    
+                    <p style="margin: 0 0 10px; color: #64748b; font-size: 13px;">
+                      Este é um email automático, por favor não responda.
+                    </p>
+                    
+                    <p style="margin: 0; color: #475569; font-size: 12px;">
+                      © 2025 <strong style="color: #3b82f6;">Zenith</strong> • Powered by Klouts
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
    * Template HTML para o email de recuperação
    */
   getPasswordResetTemplate(code, userName) {
