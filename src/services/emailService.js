@@ -86,10 +86,7 @@ class EmailService {
               <table role="presentation" style="max-width: 600px; width: 100%; background: #111827; border: 1px solid #1f2937; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;">
                 <!-- Header -->
                 <tr>
-                  <td style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 40px 30px; text-align: center; border-bottom: 2px solid #3b82f6; position: relative;">
-                    <!-- Gaming accent lines -->
-                    <div style="position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 50%, #3b82f6 100%);"></div>
-                    
+                  <td style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 40px 30px; text-align: center; border-bottom: 2px solid #3b82f6;">
                     <div style="display: inline-block; padding: 8px 20px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; margin-bottom: 15px;">
                       <span style="color: #3b82f6; font-size: 14px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">🎮 Zenith Gaming</span>
                     </div>
