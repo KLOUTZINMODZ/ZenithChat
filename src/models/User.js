@@ -88,6 +88,27 @@ const userSchema = new mongoose.Schema({
     }
   },
 
+  // Achievements (Conquistas)
+  achievements: {
+    unlocked: {
+      type: [{
+        achievementId: { type: String, required: true },
+        unlockedAt: { type: Date, default: Date.now },
+        notified: { type: Boolean, default: false }
+      }],
+      default: []
+    },
+    stats: {
+      totalSales: { type: Number, default: 0 },
+      totalPurchases: { type: Number, default: 0 },
+      totalTransactions: { type: Number, default: 0 },
+      averageRating: { type: Number, default: 0 },
+      ratingCount: { type: Number, default: 0 },
+      highestBalance: { type: Number, default: 0 },
+      lastUpdated: { type: Date, default: Date.now }
+    }
+  },
+
   pixKeyType: {
     type: String,
     enum: ['PHONE', 'CPF', 'CNPJ', null],
@@ -145,6 +166,56 @@ userSchema.methods.setOnlineStatus = function(isOnline) {
     this.lastSeen = new Date();
   }
   return this.save();
+};
+
+// Achievement methods
+userSchema.methods.hasAchievement = function(achievementId) {
+  if (!this.achievements || !this.achievements.unlocked) return false;
+  return this.achievements.unlocked.some(a => a.achievementId === achievementId);
+};
+
+userSchema.methods.unlockAchievement = function(achievementId) {
+  if (!this.achievements) {
+    this.achievements = { unlocked: [], stats: {} };
+  }
+  if (!this.achievements.unlocked) {
+    this.achievements.unlocked = [];
+  }
+  
+  // Verificar se já foi desbloqueada
+  if (this.hasAchievement(achievementId)) {
+    return { alreadyUnlocked: true };
+  }
+  
+  // Adicionar nova conquista
+  this.achievements.unlocked.push({
+    achievementId,
+    unlockedAt: new Date(),
+    notified: false
+  });
+  
+  return { alreadyUnlocked: false, achievement: achievementId };
+};
+
+userSchema.methods.updateAchievementStats = function(stats) {
+  if (!this.achievements) {
+    this.achievements = { unlocked: [], stats: {} };
+  }
+  if (!this.achievements.stats) {
+    this.achievements.stats = {};
+  }
+  
+  // Atualizar estatísticas
+  this.achievements.stats = {
+    ...this.achievements.stats,
+    ...stats,
+    lastUpdated: new Date()
+  };
+  
+  // Atualizar highestBalance se necessário
+  if (stats.currentBalance && stats.currentBalance > (this.achievements.stats.highestBalance || 0)) {
+    this.achievements.stats.highestBalance = stats.currentBalance;
+  }
 };
 
 module.exports = mongoose.model('User', userSchema);

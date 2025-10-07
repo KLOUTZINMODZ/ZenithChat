@@ -55,3 +55,21 @@
 {"address":"::","code":"EADDRINUSE","errno":-4091,"level":"error","message":"WebSocket server error: listen EADDRINUSE: address already in use :::5000","port":5000,"service":"chat-api","stack":"Error: listen EADDRINUSE: address already in use :::5000\n    at Server.setupListenHandle [as _listen2] (node:net:1937:16)\n    at listenInCluster (node:net:1994:12)\n    at Server.listen (node:net:2099:7)\n    at C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\server.js:333:12\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","syscall":"listen","timestamp":"2025-10-05 18:09:30"}
 {"level":"info","message":"Email service ready to send emails","service":"chat-api","timestamp":"2025-10-05 18:09:32"}
 {"level":"info","message":"SIGINT signal received: initiating graceful shutdown","service":"chat-api","timestamp":"2025-10-05 18:24:58"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 18:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 18:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 19:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 19:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 20:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 20:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 21:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 21:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 22:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 22:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 23:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 23:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-06 00:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 00:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-06 01:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 01:35:46"}
+{"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-06 02:35:46"}
+{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 02:35:46"}

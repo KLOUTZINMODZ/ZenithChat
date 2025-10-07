@@ -64,27 +64,35 @@ class TemporaryChatCleanupService {
 
       for (const chat of expiredChats) {
         try {
-
+          // Expirar o chat
           await chat.expireTemporaryChat();
-          
 
-          const expirationMessage = new Message({
-            conversation: chat._id,
-            content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
-            type: 'system',
-            metadata: {
-              type: 'chat_expired',
-              expiredAt: new Date(),
-              autoCleanup: true
-            }
-          });
+          // Criar mensagem de sistema informando expiração
+          // Usar o primeiro participante como sender (sistema)
+          const systemSender = chat.participants && chat.participants.length > 0 
+            ? chat.participants[0] 
+            : null;
 
-          await expirationMessage.save();
-          
+          if (systemSender) {
+            const expirationMessage = new Message({
+              conversation: chat._id,
+              sender: systemSender,
+              content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
+              type: 'system',
+              metadata: {
+                type: 'chat_expired',
+                expiredAt: new Date(),
+                autoCleanup: true
+              }
+            });
 
-          chat.lastMessage = expirationMessage._id;
-          chat.lastMessageAt = new Date();
-          await chat.save();
+            await expirationMessage.save();
+            
+            // Atualizar última mensagem
+            chat.lastMessage = expirationMessage._id;
+            chat.lastMessageAt = new Date();
+            await chat.save();
+          }
           
           cleanedCount++;
           logger.info(`✅ Chat ${chat._id} expirado com sucesso`);

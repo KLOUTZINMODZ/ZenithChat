@@ -32,6 +32,7 @@ const adminRoutes = require('./src/routes/adminRoutes');
 const qaRoutes = require('./src/routes/qaRoutes');
 const aiSupportRoutes = require('./src/routes/aiSupportRoutes');
 const ratingsRoutes = require('./src/routes/ratingsRoutes');
+const achievementRoutes = require('./src/routes/achievementRoutes');
 
 const app = express();
 
@@ -206,6 +207,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api/ai/support', aiSupportRoutes);
 app.use('/api/ratings', ratingsRoutes);
+app.use('/api/achievements', achievementRoutes);
 // Purchases logger to debug 404 reports
 app.use('/api/purchases', (req, res, next) => {
   try {
