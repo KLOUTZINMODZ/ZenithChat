@@ -38,6 +38,32 @@ class MessageHandler {
 
   async handleSendMessage(userId, payload) {
     try {
+      // ✅ VERIFICAR BANIMENTO ANTES DE PROCESSAR MENSAGEM
+      const user = await User.findById(userId).select('banned bannedAt bannedReason bannedUntil');
+      
+      if (user && user.isBanned()) {
+        logger.warn(`🚫 Usuário banido tentou enviar mensagem: ${userId}`);
+        
+        // Desconectar usuário imediatamente
+        const connections = this.connectionManager.getUserConnections(userId);
+        if (connections) {
+          connections.forEach(ws => {
+            if (ws.readyState === 1) {
+              ws.send(JSON.stringify({
+                type: 'error',
+                error: 'Account banned',
+                banned: true,
+                bannedReason: user.bannedReason || 'Violação dos termos de uso',
+                timestamp: new Date().toISOString()
+              }));
+              ws.close(1008, 'Account banned');
+            }
+          });
+        }
+        
+        throw new Error('Account banned');
+      }
+      
       const { conversationId, content, type, messageType, attachments = [], tempId } = payload.data;
       const finalType = type || messageType || 'text';
 

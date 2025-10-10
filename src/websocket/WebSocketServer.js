@@ -32,7 +32,7 @@ class WebSocketServer {
     this.startHeartbeat();
   }
 
-  verifyClient(info, cb) {
+  async verifyClient(info, cb) {
     try {
 
       const url = new URL(info.req.url, `http://${info.req.headers.host}`);
@@ -49,9 +49,23 @@ class WebSocketServer {
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const possibleId = decoded.id || decoded._id || decoded.userid || decoded.userId || decoded.user?.id || decoded.user?._id;
-      info.req.userId = (possibleId && possibleId.toString) ? possibleId.toString() : String(possibleId || '');
-      info.req.userToken = token;
+      const userId = (possibleId && possibleId.toString) ? possibleId.toString() : String(possibleId || '');
       
+      // ✅ VERIFICAR BANIMENTO ANTES DE ACEITAR CONEXÃO
+      const authResult = await authenticateWebSocket(token);
+      
+      if (!authResult.success) {
+        if (authResult.banned) {
+          logger.warn(`🚫 Usuário banido tentou conectar via WebSocket: ${userId}`);
+          cb(false, 403, 'Account banned');
+        } else {
+          cb(false, 401, authResult.error || 'Authentication failed');
+        }
+        return;
+      }
+      
+      info.req.userId = userId;
+      info.req.userToken = token;
       
       cb(true);
     } catch (error) {
@@ -393,6 +407,45 @@ class WebSocketServer {
         }
       }
     });
+  }
+
+  /**
+   * ✅ DESCONECTAR USUÁRIO BANIDO
+   * Usado quando um usuário é banido enquanto está conectado
+   */
+  disconnectUser(userId, reason = 'Account banned') {
+    const connections = this.connectionManager.getUserConnections(userId);
+    
+    if (connections.length === 0) {
+      logger.info(`No active connections for user ${userId}`);
+      return;
+    }
+    
+    logger.warn(`🚫 Desconectando usuário banido: ${userId}`);
+    
+    connections.forEach((ws) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          // Enviar mensagem de erro antes de desconectar
+          ws.send(JSON.stringify({
+            type: 'error',
+            error: reason,
+            banned: true,
+            forceLogout: true,
+            timestamp: new Date().toISOString()
+          }));
+          
+          // Fechar conexão com código 1008 (Policy Violation)
+          ws.close(1008, reason);
+        } catch (error) {
+          logger.error(`Error disconnecting user ${userId}:`, error);
+          ws.terminate();
+        }
+      }
+    });
+    
+    // Remover todas as conexões do gerenciador
+    this.connectionManager.removeUser(userId);
   }
 
   close() {
