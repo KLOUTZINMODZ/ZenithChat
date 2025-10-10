@@ -4,7 +4,7 @@ const User = require('../../models/User');
 const logger = require('../../utils/logger');
 const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 const messageBuffer = new Map();
 const deliveryTimeouts = new Map();
@@ -595,7 +595,7 @@ class MessageHandler {
    * Stores message in buffer until delivery is confirmed
    */
   async sendMessageWithDelivery(userId, message, recipients) {
-    const messageId = message._id || uuidv4();
+    const messageId = message._id || crypto.randomUUID();
     const timestamp = Date.now();
 
 
