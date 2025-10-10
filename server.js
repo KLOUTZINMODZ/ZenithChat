@@ -33,6 +33,7 @@ const qaRoutes = require('./src/routes/qaRoutes');
 const aiSupportRoutes = require('./src/routes/aiSupportRoutes');
 const ratingsRoutes = require('./src/routes/ratingsRoutes');
 const achievementRoutes = require('./src/routes/achievementRoutes');
+const imageServeMiddleware = require('./src/middleware/imageServeMiddleware');
 
 const app = express();
 
@@ -89,7 +90,10 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
+// Middleware para servir imagens do banco de dados (com fallback para disco)
+app.use('/uploads', imageServeMiddleware);
 
+// Fallback: servir imagens do disco
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   maxAge: '7d',
   extensions: ['avif', 'png', 'jpg', 'jpeg'],
