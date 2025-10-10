@@ -302,6 +302,11 @@ app.locals.notificationService = wsServer.notificationService;
 
 app.set('webSocketServer', wsServer);
 
+// ✅ Inicializar BanService com WebSocket Server
+const banService = require('./src/services/BanService');
+banService.setWebSocketServer(wsServer);
+app.set('banService', banService);
+
 
 function gracefulShutdown(signal = 'SIGTERM') {
   const start = Date.now();

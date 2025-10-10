@@ -385,4 +385,164 @@ router.patch('/support/tickets/:id', requireAdminKey, async (req, res) => {
   }
 });
 
+// ✅ ==================== ROTAS DE BANIMENTO ====================
+
+/**
+ * @route   POST /api/admin/users/:userId/ban
+ * @desc    Banir usuário e desconectar imediatamente
+ * @access  Admin
+ */
+router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason, duration } = req.body;
+    const adminName = req.headers['x-admin-name'] || 'Admin';
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de usuário inválido'
+      });
+    }
+
+    const banService = req.app.get('banService');
+    
+    if (!banService) {
+      return res.status(500).json({
+        success: false,
+        message: 'BanService não disponível'
+      });
+    }
+
+    const result = await banService.banUser(
+      userId,
+      reason || 'Violação dos termos de uso',
+      null, // bannedBy (pode ser implementado com autenticação admin)
+      duration ? parseInt(duration) : null
+    );
+
+    logger.info(`🚫 [ADMIN] Usuário banido por ${adminName}:`, {
+      userId,
+      reason,
+      duration,
+      ...result
+    });
+
+    return res.json(result);
+
+  } catch (error) {
+    logger.error('[ADMIN] Erro ao banir usuário:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao banir usuário',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   POST /api/admin/users/:userId/unban
+ * @desc    Desbanir usuário
+ * @access  Admin
+ */
+router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const adminName = req.headers['x-admin-name'] || 'Admin';
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de usuário inválido'
+      });
+    }
+
+    const banService = req.app.get('banService');
+    
+    if (!banService) {
+      return res.status(500).json({
+        success: false,
+        message: 'BanService não disponível'
+      });
+    }
+
+    const result = await banService.unbanUser(userId);
+
+    logger.info(`✅ [ADMIN] Usuário desbanido por ${adminName}:`, {
+      userId,
+      ...result
+    });
+
+    return res.json(result);
+
+  } catch (error) {
+    logger.error('[ADMIN] Erro ao desbanir usuário:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao desbanir usuário',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/admin/users/:userId/ban-status
+ * @desc    Verificar status de banimento
+ * @access  Admin
+ */
+router.get('/users/:userId/ban-status', requireAdminKey, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID de usuário inválido'
+      });
+    }
+
+    const banService = req.app.get('banService');
+    const status = await banService.isUserBanned(userId);
+
+    return res.json({
+      success: true,
+      ...status
+    });
+
+  } catch (error) {
+    logger.error('[ADMIN] Erro ao verificar banimento:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao verificar banimento',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/admin/users/banned
+ * @desc    Listar usuários banidos
+ * @access  Admin
+ */
+router.get('/users/banned', requireAdminKey, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const page = parseInt(req.query.page) || 1;
+    const skip = (page - 1) * limit;
+
+    const banService = req.app.get('banService');
+    const result = await banService.listBannedUsers(limit, skip);
+
+    return res.json(result);
+
+  } catch (error) {
+    logger.error('[ADMIN] Erro ao listar banidos:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao listar usuários banidos',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
