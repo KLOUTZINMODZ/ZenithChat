@@ -67,31 +67,39 @@ class TemporaryChatCleanupService {
           // Expirar o chat
           await chat.expireTemporaryChat();
 
-          // Criar mensagem de sistema informando expiração
-          // Usar o primeiro participante como sender (sistema)
-          const systemSender = chat.participants && chat.participants.length > 0 
-            ? chat.participants[0] 
-            : null;
-
-          if (systemSender) {
-            const expirationMessage = new Message({
-              conversation: chat._id,
-              sender: systemSender,
-              content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
-              type: 'system',
-              metadata: {
-                type: 'chat_expired',
-                expiredAt: new Date(),
-                autoCleanup: true
-              }
-            });
-
-            await expirationMessage.save();
+          // ✅ CORREÇÃO: Criar mensagem de sistema informando expiração
+          // Garantir que temos um participante válido
+          if (chat.participants && chat.participants.length > 0) {
+            // Extrair ObjectId do participante (pode ser objeto ou ObjectId)
+            const systemSenderId = chat.participants[0]._id || chat.participants[0];
             
-            // Atualizar última mensagem
-            chat.lastMessage = expirationMessage._id;
-            chat.lastMessageAt = new Date();
-            await chat.save();
+            // Validar que temos um ID válido
+            if (!systemSenderId) {
+              logger.warn(`⚠️ Chat ${chat._id} não tem participante válido, pulando mensagem de expiração`);
+            } else {
+              const expirationMessage = new Message({
+                conversation: chat._id,
+                sender: systemSenderId,
+                content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
+                type: 'system',
+                metadata: {
+                  type: 'chat_expired',
+                  expiredAt: new Date(),
+                  autoCleanup: true
+                }
+              });
+
+              await expirationMessage.save();
+              
+              // Atualizar última mensagem
+              chat.lastMessage = expirationMessage._id;
+              chat.lastMessageAt = new Date();
+              await chat.save();
+              
+              logger.info(`📨 Mensagem de expiração criada para chat ${chat._id}`);
+            }
+          } else {
+            logger.warn(`⚠️ Chat ${chat._id} não tem participantes, pulando mensagem de expiração`);
           }
           
           cleanedCount++;
@@ -100,6 +108,12 @@ class TemporaryChatCleanupService {
         } catch (error) {
           errorCount++;
           logger.error(`❌ Erro ao expirar chat ${chat._id}:`, error);
+          // Log detalhado do erro para debug
+          if (error.errors) {
+            Object.keys(error.errors).forEach(key => {
+              logger.error(`  - Campo ${key}: ${error.errors[key].message}`);
+            });
+          }
         }
       }
 

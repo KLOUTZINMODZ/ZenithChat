@@ -136,6 +136,30 @@ const userSchema = new mongoose.Schema({
   pixKeyFirstWithdrawAt: {
     type: Date,
     default: null
+  },
+  
+  // ✅ Sistema de Banimento
+  banned: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  bannedAt: {
+    type: Date,
+    default: null
+  },
+  bannedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  bannedReason: {
+    type: String,
+    default: null
+  },
+  bannedUntil: {
+    type: Date,
+    default: null // null = banimento permanente
   }
 }, {
   timestamps: true
@@ -216,6 +240,47 @@ userSchema.methods.updateAchievementStats = function(stats) {
   if (stats.currentBalance && stats.currentBalance > (this.achievements.stats.highestBalance || 0)) {
     this.achievements.stats.highestBalance = stats.currentBalance;
   }
+};
+
+// ✅ Métodos de Banimento
+userSchema.methods.isBanned = function() {
+  if (!this.banned) return false;
+  
+  // Se tem data de expiração, verificar se ainda está banido
+  if (this.bannedUntil) {
+    const now = new Date();
+    if (now > this.bannedUntil) {
+      // Banimento expirou, desbanir automaticamente
+      this.banned = false;
+      this.bannedUntil = null;
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+userSchema.methods.banUser = function(reason, bannedBy, duration = null) {
+  this.banned = true;
+  this.bannedAt = new Date();
+  this.bannedReason = reason;
+  this.bannedBy = bannedBy;
+  
+  if (duration) {
+    // Banimento temporário (duration em dias)
+    this.bannedUntil = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
+  } else {
+    // Banimento permanente
+    this.bannedUntil = null;
+  }
+  
+  return this.save();
+};
+
+userSchema.methods.unbanUser = function() {
+  this.banned = false;
+  this.bannedUntil = null;
+  return this.save();
 };
 
 module.exports = mongoose.model('User', userSchema);

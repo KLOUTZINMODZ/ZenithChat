@@ -904,9 +904,25 @@ class TemporaryChatController {
         try {
           await chat.expireTemporaryChat();
           
+          // ✅ CORREÇÃO: Garantir que sender seja fornecido
+          if (!chat.participants || chat.participants.length === 0) {
+            console.warn(`⚠️ Chat ${chat._id} não tem participantes, pulando mensagem de expiração`);
+            cleanedCount++;
+            continue;
+          }
+
+          // Extrair ObjectId do participante (pode ser objeto ou ObjectId)
+          const systemSenderId = chat.participants[0]._id || chat.participants[0];
+          
+          if (!systemSenderId) {
+            console.warn(`⚠️ Chat ${chat._id} não tem participante válido, pulando mensagem de expiração`);
+            cleanedCount++;
+            continue;
+          }
 
           const expirationMessage = new Message({
             conversation: chat._id,
+            sender: systemSenderId, // ✅ Campo obrigatório adicionado
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
             type: 'system',
             metadata: {
