@@ -88,4 +88,19 @@ const imageServeMiddleware = async (req, res, next) => {
   }
 };
 
+// Middleware para adicionar headers CORS em erros 404 de imagens
+const imageNotFoundHandler = (req, res, next) => {
+  // Só aplicar para requisições de imagem
+  if (req.path.match(/^\/uploads\/.*\.(avif|jpg|jpeg|png)$/i)) {
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Cross-Origin-Resource-Policy': 'cross-origin'
+    });
+  }
+  next();
+};
+
 module.exports = imageServeMiddleware;
+module.exports.imageNotFoundHandler = imageNotFoundHandler;
