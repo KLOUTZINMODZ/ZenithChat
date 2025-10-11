@@ -12,7 +12,9 @@ const controller = new BoostingChatController();
 
 
 
+// ✅ Rotas de proposta/conversação
 router.get('/conversation/:conversationId/proposal', auth, AgreementMigrationMiddleware.autoMigrate(), controller.getAcceptedProposal);
+router.get('/conversations/:conversationId', auth, AgreementMigrationMiddleware.autoMigrate(), controller.getConversation);
 router.post('/conversation/:conversationId/renegotiate', auth, checkChatStatus, AgreementMigrationMiddleware.dualCompatibility(), controller.renegotiateProposal);
 router.post('/conversation/:conversationId/cancel', auth, AgreementMigrationMiddleware.dualCompatibility(), controller.cancelService);
 router.post('/conversation/:conversationId/confirm-delivery', auth, AgreementMigrationMiddleware.dualCompatibility(), controller.confirmDelivery);

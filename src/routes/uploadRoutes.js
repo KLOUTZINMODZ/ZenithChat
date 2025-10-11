@@ -9,7 +9,7 @@ const UploadedImage = require('../models/UploadedImage');
 
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/avif']);
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+const MAX_FILE_SIZE = 25 * 1024 * 1024; 
 
 const storage = multer.memoryStorage();
 const upload = multer({

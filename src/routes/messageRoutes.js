@@ -455,6 +455,43 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
   }
 });
 
+// ✅ NOVA ROTA: Obter conversa individual por ID
+router.get('/conversations/:conversationId', auth, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id || req.userId;
+
+    const conversation = await Conversation.findById(conversationId)
+      .populate('participants', 'name email avatar')
+      .populate('lastMessage');
+
+    if (!conversation) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Conversa não encontrada' 
+      });
+    }
+
+    if (!conversation.isParticipant(userId)) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Acesso negado' 
+      });
+    }
+
+    return res.json({ 
+      success: true, 
+      conversation: conversation.toObject() 
+    });
+  } catch (error) {
+    logger.error('[MSG:REST] Erro ao obter conversa:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao buscar conversa',
+      error: error.message 
+    });
+  }
+});
 
 router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300), async (req, res) => {
   try {

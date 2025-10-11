@@ -9,6 +9,42 @@ const { sendSupportTicketNotification } = require('../services/TelegramService')
 
 class BoostingChatController {
 
+  // ✅ NOVO: Obter conversa individual
+  async getConversation(req, res) {
+    try {
+      const { conversationId } = req.params;
+      const userId = req.user?.id || req.user?._id;
+
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
+      }
+
+      const conversation = await Conversation.findById(conversationId)
+        .populate('participants', 'name email avatar')
+        .populate('lastMessage');
+
+      if (!conversation) {
+        return res.status(404).json({ success: false, message: 'Conversa não encontrada' });
+      }
+
+      if (!conversation.isParticipant(userId)) {
+        return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
+      }
+
+      return res.json({ 
+        success: true, 
+        conversation: conversation.toObject() 
+      });
+    } catch (error) {
+      console.error('[BoostingChatController] Erro ao obter conversa:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro ao buscar conversa',
+        error: error.message 
+      });
+    }
+  }
+
   async getAcceptedProposal(req, res) {
     try {
       const { conversationId } = req.params;
