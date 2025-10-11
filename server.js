@@ -87,8 +87,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+app.use(express.json({ limit: '30mb' })); // Aumentado para suportar uploads de até 25 MB
+app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
 // Middleware para servir imagens do banco de dados (com fallback para disco)
 app.use('/uploads', imageServeMiddleware);

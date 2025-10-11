@@ -9,7 +9,7 @@ const UploadedImage = require('../models/UploadedImage');
 
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/avif']);
-const MAX_FILE_SIZE = 8 * 1024 * 1024;
+const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -222,7 +222,7 @@ router.post('/image-base64', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Empty image data' });
     }
     if (decoded.buffer.length > MAX_FILE_SIZE) {
-      return res.status(400).json({ success: false, message: 'File too large. Max 8MB' });
+      return res.status(400).json({ success: false, message: 'File too large. Max 25MB' });
     }
 
 
