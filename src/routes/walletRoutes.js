@@ -6,10 +6,12 @@ const AsaasService = require('../services/AsaasService');
 const WalletTransaction = require('../models/WalletTransaction');
 const User = require('../models/User');
 const WalletLedger = require('../models/WalletLedger');
+const Mediator = require('../models/Mediator');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 
 const FEE_PERCENT = 0;
+const WITHDRAW_FEE = 5.00; // Taxa fixa de saque em R$
 
 function round2(v) {
   return Math.round(Number(v) * 100) / 100;
@@ -1293,7 +1295,16 @@ router.post('/withdraw', auth, async (req, res) => {
     const idemHeader = req.headers['idempotency-key'] || req.headers['x-idempotency-key'];
     const idempotencyKey = String(req.body?.idempotencyKey || idemHeader || '').trim() || undefined;
     const amountNum = Number(amount);
-    if (!amountNum || amountNum <= 0) return res.status(400).json({ success: false, message: 'Valor inválido' });
+    
+    // Validação de valor mínimo (deve ser maior que a taxa)
+    if (!amountNum || amountNum <= WITHDRAW_FEE) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Valor inválido. O valor mínimo de saque é R$ ${(WITHDRAW_FEE + 0.01).toFixed(2)} (taxa de R$ ${WITHDRAW_FEE.toFixed(2)} + valor líquido)`,
+        error: 'INVALID_AMOUNT',
+        data: { minAmount: WITHDRAW_FEE + 0.01, withdrawFee: WITHDRAW_FEE }
+      });
+    }
 
     if ((!pixKey || !pixKeyType) && user.pixKeyLinkedAt) {
 
@@ -1387,21 +1398,35 @@ router.post('/withdraw', auth, async (req, res) => {
       } catch (_) {}
     }
 
+    // Calcular valores com taxa de saque
+    const feeAmount = round2(WITHDRAW_FEE);
+    const amountNet = round2(amountNum - feeAmount);
+    
+    if (amountNet <= 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Valor insuficiente após taxa de saque. Taxa: R$ ${feeAmount.toFixed(2)}`,
+        error: 'INSUFFICIENT_AFTER_FEE',
+        data: { withdrawFee: feeAmount }
+      });
+    }
+
     const tx = await WalletTransaction.create({
       userId: user._id,
       type: 'withdraw',
       amountGross: amountNum,
       feePercent: 0,
-      feeAmount: 0,
-      amountNet: amountNum,
+      feeAmount: feeAmount,
+      amountNet: amountNet,
       status: 'withdraw_pending',
       withdrawPixKey: digits,
       withdrawPixKeyType: normalizedPixKeyType,
       idempotencyKey,
-      logs: [{ level: 'info', message: 'Withdraw requested' }]
+      logs: [{ level: 'info', message: 'Withdraw requested', data: { amountGross: amountNum, feeAmount, amountNet } }]
     });
 
 
+    // Reservar o valor TOTAL (amountGross) do saldo do usuário
     let reserveRes;
     try {
       reserveRes = await applyLedgerDebitReserve(req.app, user._id, tx, amountNum);
@@ -1419,6 +1444,72 @@ router.post('/withdraw', auth, async (req, res) => {
     tx.logs.push({ level: 'info', message: 'Wallet debited', data: { newBalance }, at: new Date().toISOString() });
     await tx.save();
 
+    // Creditar taxa de saque ao mediador
+    try {
+      const mediatorUser = await User.findOne({ email: process.env.MEDIATOR_EMAIL || 'mediador@zenith.com' });
+      if (mediatorUser) {
+        await runWithTransactionOrFallback(async (session) => {
+          const medBefore = round2(mediatorUser.walletBalance || 0);
+          const medAfter = round2(medBefore + feeAmount);
+          mediatorUser.walletBalance = medAfter;
+          await mediatorUser.save({ session });
+
+          const created = await WalletLedger.create([{
+            userId: mediatorUser._id,
+            txId: tx._id,
+            direction: 'credit',
+            reason: 'withdraw_fee',
+            amount: feeAmount,
+            operationId: `withdraw_fee:${tx._id.toString()}`,
+            balanceBefore: medBefore,
+            balanceAfter: medAfter,
+            metadata: { 
+              source: 'withdraw', 
+              transactionId: tx._id.toString(), 
+              userId: user._id.toString(),
+              withdrawAmount: amountNum,
+              feeAmount: feeAmount,
+              netAmount: amountNet
+            }
+          }], { session });
+
+          // Registrar evento no Mediator
+          try {
+            const medLedgerDoc = Array.isArray(created) ? created[0] : created;
+            await Mediator.create([{
+              eventType: 'fee',
+              amount: feeAmount,
+              currency: 'BRL',
+              operationId: `withdraw_fee:${tx._id.toString()}`,
+              source: 'ZenithChatApi',
+              occurredAt: new Date(),
+              reference: {
+                walletLedgerId: medLedgerDoc?._id || null,
+                transactionId: tx._id,
+                asaasTransferId: null
+              },
+              metadata: { 
+                withdrawAmount: amountNum, 
+                feeAmount: feeAmount, 
+                netAmount: amountNet,
+                userId: user._id.toString()
+              },
+              description: `Taxa de saque (R$ ${feeAmount.toFixed(2)}) creditada ao mediador`
+            }], { session });
+          } catch (medErr) {
+            logger?.warn?.('[WITHDRAW] Failed to log mediator fee event', { error: medErr?.message });
+          }
+        });
+
+        tx.logs.push({ level: 'info', message: 'Withdraw fee credited to mediator', data: { feeAmount, mediatorBalance: mediatorUser.walletBalance } });
+        await tx.save();
+      } else {
+        logger?.warn?.('[WITHDRAW] Mediator user not found; fee not credited', { transactionId: String(tx._id), feeAmount });
+      }
+    } catch (feeErr) {
+      logger?.error?.('[WITHDRAW] Failed to credit mediator fee', { error: feeErr?.message, transactionId: String(tx._id) });
+    }
+
 
     afterResponse(res, () => {
       sendWalletNotification(req.app, user._id, {
@@ -1430,14 +1521,15 @@ router.post('/withdraw', auth, async (req, res) => {
     });
 
 
+    // Criar transferência PIX com o valor LÍQUIDO (após taxa)
     let transfer;
     try {
       const externalReference = `wallet_tx_${tx._id.toString()}`;
       transfer = await AsaasService.createPixTransferWithRetry({
-        value: amountNum,
+        value: amountNet, // Transferir apenas o valor líquido
         pixAddressKey: digits,
         pixAddressKeyType: normalizedPixKeyType,
-        description: `Saque usuário ${user._id.toString()} tx ${tx._id.toString()}`,
+        description: `Saque usuário ${user._id.toString()} tx ${tx._id.toString()} (líquido: R$ ${amountNet.toFixed(2)}, taxa: R$ ${feeAmount.toFixed(2)})`,
         externalReference
       }, { attempts: 1, delayMs: 800, timeoutMs: 6000 });
 
