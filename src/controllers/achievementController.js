@@ -261,3 +261,43 @@ exports.getUnnotified = async (req, res) => {
     });
   }
 };
+
+/**
+ * Obtém conquistas de um usuário específico por ID
+ * GET /api/achievements/user/:userId
+ */
+exports.getUserAchievementsById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID do usuário é obrigatório'
+      });
+    }
+
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuário não encontrado'
+      });
+    }
+
+    const achievements = achievementService.getUserAchievements(user);
+
+    return res.status(200).json({
+      success: true,
+      data: achievements
+    });
+  } catch (error) {
+    console.error('Error getting user achievements by id:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar conquistas do usuário',
+      error: error.message
+    });
+  }
+};

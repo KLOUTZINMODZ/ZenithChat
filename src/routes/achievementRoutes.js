@@ -35,6 +35,13 @@ router.post('/check', achievementController.forceCheck);
 router.get('/unnotified', achievementController.getUnnotified);
 
 /**
+ * @route   GET /api/achievements/user/:userId
+ * @desc    Obtém conquistas de um usuário específico
+ * @access  Private
+ */
+router.get('/user/:userId', achievementController.getUserAchievementsById);
+
+/**
  * @route   PUT /api/achievements/:achievementId/notified
  * @desc    Marca conquista como notificada
  * @access  Private
