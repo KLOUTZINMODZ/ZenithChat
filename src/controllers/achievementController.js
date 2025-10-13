@@ -286,6 +286,64 @@ exports.getUserAchievementsById = async (req, res) => {
       });
     }
 
+    // Buscar dados reais do usuário para calcular conquistas
+    const Purchase = require('../models/Purchase');
+    const Review = require('../models/Review');
+
+    try {
+      // Contar vendas completadas
+      const totalSales = await Purchase.countDocuments({
+        sellerId: userId,
+        status: 'completed'
+      });
+
+      // Contar compras completadas
+      const totalPurchases = await Purchase.countDocuments({
+        buyerId: userId,
+        status: 'completed'
+      });
+
+      // Buscar rating médio (reviews recebidas)
+      const reviews = await Review.aggregate([
+        { $match: { targetUserId: userId } },
+        { $group: {
+          _id: null,
+          averageRating: { $avg: '$rating' },
+          count: { $sum: 1 }
+        }}
+      ]);
+
+      const averageRating = reviews.length > 0 ? reviews[0].averageRating : 0;
+      const ratingCount = reviews.length > 0 ? reviews[0].count : 0;
+
+      console.log('[getUserAchievementsById] Stats calculadas:', {
+        userId,
+        totalSales,
+        totalPurchases,
+        averageRating,
+        ratingCount
+      });
+
+      // Processar conquistas com os dados reais
+      const stats = {
+        totalSales,
+        totalPurchases,
+        totalTransactions: totalSales + totalPurchases,
+        averageRating,
+        ratingCount,
+        currentBalance: user.walletBalance || 0,
+        joinDate: user.createdAt
+      };
+
+      // Processar conquistas automaticamente
+      await achievementService.processAchievements(user, stats);
+
+    } catch (calcError) {
+      console.error('Error calculating user stats:', calcError);
+      // Continuar com dados salvos se o cálculo falhar
+    }
+
+    // Retornar conquistas (agora atualizadas)
     const achievements = achievementService.getUserAchievements(user);
 
     return res.status(200).json({
