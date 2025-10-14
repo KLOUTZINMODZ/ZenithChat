@@ -59,16 +59,23 @@ const imageServeMiddleware = async (req, res, next) => {
         }
       }
 
-      // Verificar se o buffer existe
-      if (!buffer || buffer.length === 0) {
-        console.warn('[IMAGE_SERVE] Buffer vazio no banco de dados:', imageId);
+      // Verificar se o buffer existe e é válido
+      if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+        console.warn('[IMAGE_SERVE] Buffer inválido ou vazio no banco de dados:', imageId);
+        return next(); // Tentar buscar no disco
+      }
+
+      // Garantir que buffer.length seja um número válido
+      const bufferSize = Number(buffer.length);
+      if (!bufferSize || isNaN(bufferSize)) {
+        console.warn('[IMAGE_SERVE] Tamanho de buffer inválido:', imageId);
         return next(); // Tentar buscar no disco
       }
 
       // Headers de cache agressivo
       res.set({
         'Content-Type': contentType,
-        'Content-Length': buffer.length,
+        'Content-Length': String(bufferSize), // Converter para string explicitamente
         'Cache-Control': 'public, max-age=31536000, immutable', // 1 ano
         'ETag': `"${imageId}"`,
         'Last-Modified': uploadedImage.uploadedAt.toUTCString(),

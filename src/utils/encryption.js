@@ -30,14 +30,44 @@ function encryptMessage(text) {
 
 function decryptMessage(encryptedText) {
   try {
-    // If plaintext (feature flag disabled or legacy plaintext), passthrough
-    const parts = String(encryptedText || '').split(':');
-    if (parts.length !== 3) {
+    // Validação inicial
+    if (!encryptedText || typeof encryptedText !== 'string') {
       return encryptedText;
     }
+
+    // If plaintext (feature flag disabled or legacy plaintext), passthrough
+    const parts = String(encryptedText).split(':');
+    if (parts.length !== 3) {
+      return encryptedText; // Provavelmente texto plano
+    }
     
-    const iv = Buffer.from(parts[0], 'hex');
-    const authTag = Buffer.from(parts[1], 'hex');
+    // Validar que as partes existem e têm conteúdo
+    if (!parts[0] || !parts[1] || !parts[2]) {
+      console.warn('[ENCRYPTION] Partes de criptografia vazias, retornando texto original');
+      return encryptedText;
+    }
+
+    // Tentar converter IV e authTag
+    let iv, authTag;
+    try {
+      iv = Buffer.from(parts[0], 'hex');
+      authTag = Buffer.from(parts[1], 'hex');
+    } catch (err) {
+      console.warn('[ENCRYPTION] Erro ao converter IV/authTag de hex:', err.message);
+      return encryptedText;
+    }
+
+    // Validar tamanhos
+    if (iv.length !== 16) {
+      console.warn('[ENCRYPTION] IV inválido (tamanho !== 16):', iv.length);
+      return encryptedText;
+    }
+
+    if (authTag.length !== 16) {
+      console.warn('[ENCRYPTION] AuthTag inválido (tamanho !== 16):', authTag.length);
+      return encryptedText;
+    }
+
     const encrypted = parts[2];
     
     const decipher = crypto.createDecipheriv(algorithm, key, iv);
@@ -48,7 +78,7 @@ function decryptMessage(encryptedText) {
     
     return decrypted;
   } catch (error) {
-    console.error('Decryption error:', error);
+    console.warn('[ENCRYPTION] Erro na descriptografia, retornando texto original:', error.message);
     return encryptedText;
   }
 }
