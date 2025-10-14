@@ -261,21 +261,22 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             const boosterUser = await require('../models/User').findById(boosterId);
             
             if (clientUser && boosterUser) {
-              // Extrai preço do metadata ou usa valor padrão
-              const proposalPrice = metadata?.price || metadata?.proposedPrice || 0;
+              // Extrai dados da proposta (pode estar em metadata.proposalData ou direto no metadata)
+              const proposalData = metadata?.proposalData || {};
+              const proposalPrice = proposalData.price || metadata?.price || metadata?.proposedPrice || 0;
               
               const agreement = new Agreement({
                 conversationId,
                 proposalId: actualProposalId,
                 proposalSnapshot: {
-                  game: metadata?.game || 'N/A',
-                  category: metadata?.category || metadata?.boostingCategory || 'Boosting',
-                  currentRank: metadata?.currentRank || 'N/A',
-                  desiredRank: metadata?.desiredRank || 'N/A',
-                  description: metadata?.description || '',
+                  game: proposalData.game || metadata?.game || 'N/A',
+                  category: proposalData.category || metadata?.category || metadata?.boostingCategory || 'Boosting',
+                  currentRank: proposalData.currentRank || metadata?.currentRank || 'N/A',
+                  desiredRank: proposalData.desiredRank || metadata?.desiredRank || 'N/A',
+                  description: proposalData.description || metadata?.description || '',
                   price: proposalPrice,
                   originalPrice: proposalPrice,
-                  estimatedTime: metadata?.estimatedTime || ''
+                  estimatedTime: proposalData.estimatedTime || metadata?.estimatedTime || ''
                 },
                 parties: {
                   client: {
