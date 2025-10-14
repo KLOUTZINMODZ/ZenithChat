@@ -137,146 +137,157 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
 
 
-    // PRODUÇÃO: Busca ID real da proposta se for formato composto
-    let realProposalId = actualProposalId;
-    
+    // Se proposalId contém underscore, é o formato composto (boostingId_boosterId_timestamp)
+    // Precisamos buscar o ID real da proposta na API principal
     if (proposalId.includes('_')) {
-      console.log(`🔍 [Proposal Accept] Composite ID detected, searching for real proposal ID`);
+      console.log(`🔍 [Proposal Accept] ProposalId is composite format, need to find real proposal ID`);
       
       try {
-        // Busca boosting request para pegar propostas
-        const boostingUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}`;
-        console.log(`🔗 [Proposal Accept] Fetching boosting: ${boostingUrl}`);
+        // Busca todas as propostas deste boosting request
+        const proposalsUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals`;
+        console.log(`🔗 [Proposal Accept] Fetching proposals from: ${proposalsUrl}`);
         
-        const boostingResponse = await axios.get(boostingUrl, {
-          headers: { Authorization: req.headers.authorization },
-          timeout: 10000
+        const proposalsResponse = await axios.get(proposalsUrl, {
+          headers: { Authorization: req.headers.authorization }
         });
         
-        const boostingData = boostingResponse.data.data || boostingResponse.data.boostingRequest || boostingResponse.data;
-        const proposals = boostingData.proposals || [];
+        const proposals = proposalsResponse.data.data || proposalsResponse.data.proposals || [];
+        console.log(`✅ [Proposal Accept] Found ${proposals.length} proposals for boosting ${boostingId}`);
         
-        console.log(`📊 [Proposal Accept] Found ${proposals.length} proposals in boosting`);
+        // Encontra a proposta do booster correto (boosterId já normalizado no início)
+        const boosterIdStr = String(boosterId);
+        console.log(`🔍 [Proposal Accept] Looking for proposal from booster: ${boosterIdStr}`);
         
-        if (!Array.isArray(proposals) || proposals.length === 0) {
-          console.error(`❌ [Proposal Accept] No proposals found in boosting ${boostingId}`);
-          return res.status(404).json({
-            success: false,
-            message: 'Nenhuma proposta encontrada neste boosting',
-            details: { boostingId, boostingUrl }
-          });
-        }
-        
-        // Busca proposta do booster
-        const normalizedBoosterId = String(boosterId);
         const matchingProposal = proposals.find(p => {
-          const pBoosterId = String(p.boosterId?._id || p.boosterId || p.userId?._id || p.userId || '');
-          return pBoosterId === normalizedBoosterId;
+          const proposalBoosterId = String(p.boosterId?._id || p.boosterId || p.booster?._id || p.booster);
+          console.log(`🔍 [Proposal Accept] Comparing ${proposalBoosterId} === ${boosterIdStr}`);
+          return proposalBoosterId === boosterIdStr;
         });
         
-        if (!matchingProposal) {
-          console.error(`❌ [Proposal Accept] No proposal found for booster ${normalizedBoosterId}`);
-          console.log(`📋 [Proposal Accept] Available proposals:`, proposals.map(p => ({
+        if (matchingProposal) {
+          actualProposalId = String(matchingProposal._id || matchingProposal.id);
+          console.log(`✅ [Proposal Accept] Found matching proposal ID: ${actualProposalId} for booster ${boosterIdStr}`);
+        } else {
+          console.error(`❌ [Proposal Accept] No matching proposal found for booster ${boosterIdStr}`);
+          console.log(`🔍 [Proposal Accept] Available proposals:`, proposals.map(p => ({
             id: p._id || p.id,
-            boosterId: String(p.boosterId?._id || p.boosterId || p.userId?._id || p.userId || 'N/A'),
+            boosterId: p.boosterId?._id || p.boosterId || p.booster?._id || p.booster,
             status: p.status
           })));
           
+          // Se não encontrou, retorna erro ao invés de continuar
           return res.status(404).json({
             success: false,
-            message: 'Proposta do booster não encontrada',
+            message: 'Proposta não encontrada para este booster',
             details: {
-              boosterId: normalizedBoosterId,
               boostingId,
+              boosterId: boosterIdStr,
               availableProposals: proposals.map(p => ({
                 id: p._id || p.id,
-                boosterId: String(p.boosterId?._id || p.boosterId || 'N/A')
+                boosterId: p.boosterId?._id || p.boosterId,
+                status: p.status
               }))
             }
           });
         }
-        
-        realProposalId = String(matchingProposal._id || matchingProposal.id);
-        console.log(`✅ [Proposal Accept] Found real proposal ID: ${realProposalId}`);
-        
       } catch (error) {
-        console.error(`❌ [Proposal Accept] Failed to fetch boosting:`, {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data
+        console.log('❌ [Proposal Accept] Error fetching proposals:', error.message);
+        console.log('❌ [Proposal Accept] Error details:', error.response?.data);
+      }
+    }
+    
+    // Se ainda não temos actualProposalId, verifica conversation metadata
+    if (!actualProposalId || actualProposalId.includes('_')) {
+      console.log(`🔍 [Proposal Accept] Checking conversation metadata for proposal ID`);
+      
+      try {
+        const conversationResponse = await axios.get(`https://zenith.enrelyugi.com.br/api/conversations/${conversationId}`, {
+          headers: { Authorization: req.headers.authorization }
         });
         
-        // Se boosting não existe, tenta criar proposta diretamente na API
-        console.log(`⚠️ [Proposal Accept] Boosting not found, will try to create proposal directly`);
+        const conversationData = conversationResponse.data;
+        console.log('🔍 [Proposal Accept] Conversation metadata:', JSON.stringify(conversationData?.metadata, null, 2));
         
-        try {
-          // Tenta criar/aceitar proposta diretamente
-          const directUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/create-and-accept`;
-          console.log(`🔗 [Proposal Accept] Trying direct creation: ${directUrl}`);
-          
-          const directResponse = await axios.post(directUrl, {
-            boostingId,
-            boosterId,
-            clientId,
-            conversationId,
-            proposalData: metadata.proposalData,
-            metadata
-          }, {
-            headers: {
-              'Authorization': req.headers.authorization,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          console.log(`✅ [Proposal Accept] Direct creation successful`);
-          return res.json(directResponse.data);
-          
-        } catch (directError) {
-          console.error(`❌ [Proposal Accept] Direct creation also failed:`, directError.message);
-          
-          // Último recurso: retorna erro explicativo
-          return res.status(404).json({
-            success: false,
-            message: 'Boosting request não encontrado na API principal',
-            error: 'O pedido de boosting não existe mais ou foi removido',
-            details: {
-              boostingId,
-              reason: error.response?.data?.message || error.message,
-              suggestion: 'Este boosting pode ter sido cancelado ou removido. Por favor, crie um novo pedido de boosting.'
-            }
-          });
+        // Não usa metadata.proposalId se for formato composto
+        if (conversationData?.metadata?.actualProposalId) {
+          actualProposalId = conversationData.metadata.actualProposalId;
+          console.log('✅ [Proposal Accept] Found actualProposalId from conversation:', actualProposalId);
         }
+      } catch (error) {
+        console.log('❌ [Proposal Accept] Error fetching conversation metadata:', error.message);
       }
     }
     
-    // Validação final
-    if (realProposalId.includes('_')) {
-      console.error(`❌ [Proposal Accept] Invalid proposal ID: ${realProposalId}`);
-      return res.status(400).json({
-        success: false,
-        message: 'ID da proposta inválido',
-        details: { proposalId: realProposalId }
+    // Aceita proposta localmente primeiro (sistema híbrido)
+    console.log('📝 [Proposal Accept] Accepting proposal locally in Chat API...');
+    
+    let acceptedConv = null;
+    try {
+      if (conversationId) {
+        acceptedConv = await Conversation.findById(conversationId);
+      }
+      if (!acceptedConv) {
+        acceptedConv = await Conversation.findOne({
+          isTemporary: true,
+          $or: [
+            { 'metadata.proposalId': proposalId },
+            { 'metadata.proposalId': actualProposalId },
+            { proposal: proposalId },
+            { proposal: actualProposalId }
+          ]
+        });
+      }
+
+      if (acceptedConv) {
+        acceptedConv.isTemporary = false;
+        acceptedConv.status = 'accepted';
+        acceptedConv.expiresAt = null;
+        acceptedConv.boostingStatus = 'active';
+        await acceptedConv.save();
+        console.log('✅ [Proposal Accept] Conversation accepted locally:', acceptedConv._id);
+      } else {
+        console.warn('⚠️ [Proposal Accept] Conversation not found for local update');
+      }
+    } catch (localError) {
+      console.error('❌ [Proposal Accept] Error accepting locally:', localError.message);
+    }
+    
+    // Tenta sincronizar com API principal (não-bloqueante)
+    let apiResponse = null;
+    let apiSyncSuccess = false;
+    
+    // Se proposalId ainda está no formato composto, usa o boostingId
+    const finalProposalId = actualProposalId.includes('_') ? boostingId : actualProposalId;
+    
+    try {
+      const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${finalProposalId}/accept`;
+      
+      console.log(`🔗 [Proposal Accept] Attempting sync with main API: ${forwardUrl}`);
+      console.log(`🔗 [Proposal Accept] Final IDs: boostingId=${boostingId}, proposalId=${finalProposalId}`);
+      
+      apiResponse = await axios.post(forwardUrl, {
+        conversationId,
+        boosterId,
+        clientId,
+        metadata
+      }, {
+        headers: {
+          'Authorization': req.headers.authorization,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000 // 10s timeout
       });
-    }
-    
-    // Encaminha para endpoint correto
-    const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${realProposalId}/accept`;
-    
-    console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
-    
-    const response = await axios.post(forwardUrl, {
-      conversationId,
-      boosterId,
-      clientId,
-      metadata
-    }, {
-      headers: {
-        'Authorization': req.headers.authorization,
-        'Content-Type': 'application/json'
+      
+      console.log(`✅ [Proposal Accept] Main API sync successful:`, apiResponse.data);
+      apiSyncSuccess = true;
+      
+    } catch (apiError) {
+      console.warn('⚠️ [Proposal Accept] Main API sync failed (continuing anyway):', apiError.message);
+      if (apiError.response) {
+        console.warn('⚠️ [Proposal Accept] API Error:', apiError.response.status, apiError.response.data);
       }
-    });
-    
-    console.log(`✅ [Proposal Accept] Zenith response:`, response.data);
+      // Continua mesmo com erro na API principal
+    }
     
 
     try {
