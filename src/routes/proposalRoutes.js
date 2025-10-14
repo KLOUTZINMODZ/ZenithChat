@@ -6,6 +6,8 @@ const { auth } = require('../middleware/auth');
 const axios = require('axios');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const Agreement = require('../models/Agreement');
+const AcceptedProposal = require('../models/AcceptedProposal');
 
 
 router.get('/', (req, res) => {
@@ -245,6 +247,88 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         acceptedConv.boostingStatus = 'active';
         await acceptedConv.save();
         console.log('✅ [Proposal Accept] Conversation accepted locally:', acceptedConv._id);
+        
+        // ✅ CRÍTICO: Criar Agreement para permitir confirmação de entrega
+        try {
+          console.log('📝 [Proposal Accept] Creating Agreement for conversation...');
+          
+          // Verifica se já existe Agreement
+          const existingAgreement = await Agreement.findOne({ conversationId });
+          
+          if (!existingAgreement) {
+            // Busca dados do cliente e booster
+            const clientUser = await require('../models/User').findById(clientId);
+            const boosterUser = await require('../models/User').findById(boosterId);
+            
+            if (clientUser && boosterUser) {
+              // Extrai preço do metadata ou usa valor padrão
+              const proposalPrice = metadata?.price || metadata?.proposedPrice || 0;
+              
+              const agreement = new Agreement({
+                conversationId,
+                proposalId: actualProposalId,
+                proposalSnapshot: {
+                  game: metadata?.game || 'N/A',
+                  category: metadata?.category || metadata?.boostingCategory || 'Boosting',
+                  currentRank: metadata?.currentRank || 'N/A',
+                  desiredRank: metadata?.desiredRank || 'N/A',
+                  description: metadata?.description || '',
+                  price: proposalPrice,
+                  originalPrice: proposalPrice,
+                  estimatedTime: metadata?.estimatedTime || ''
+                },
+                parties: {
+                  client: {
+                    userid: clientId,
+                    name: clientUser.name || clientUser.username,
+                    email: clientUser.email,
+                    avatar: clientUser.avatar,
+                    metadata: new Map([
+                      ['isVerified', clientUser.isVerified || false],
+                      ['totalOrders', clientUser.totalOrders || 0],
+                      ['rating', clientUser.rating || 0]
+                    ])
+                  },
+                  booster: {
+                    userid: boosterId,
+                    name: boosterUser.name || boosterUser.username,
+                    email: boosterUser.email,
+                    avatar: boosterUser.avatar,
+                    rating: boosterUser.rating || 0,
+                    metadata: new Map([
+                      ['isVerified', boosterUser.isVerified || false],
+                      ['totalBoosts', boosterUser.totalBoosts || 0],
+                      ['completedBoosts', boosterUser.completedBoosts || 0]
+                    ])
+                  }
+                },
+                financial: {
+                  totalAmount: proposalPrice,
+                  currency: 'BRL',
+                  paymentStatus: 'pending'
+                },
+                status: 'active'
+              });
+              
+              agreement.addAction('created', clientId, { proposalId: actualProposalId });
+              await agreement.save();
+              
+              // Atualiza conversa com agreementId
+              acceptedConv.metadata = acceptedConv.metadata || new Map();
+              acceptedConv.metadata.set('latestAgreementId', agreement.agreementId);
+              await acceptedConv.save();
+              
+              console.log(`✅ [Proposal Accept] Agreement created: ${agreement.agreementId}`);
+            } else {
+              console.warn('⚠️ [Proposal Accept] Client or Booster user not found for Agreement creation');
+            }
+          } else {
+            console.log(`ℹ️ [Proposal Accept] Agreement already exists: ${existingAgreement.agreementId}`);
+          }
+        } catch (agreementError) {
+          console.error('❌ [Proposal Accept] Error creating Agreement:', agreementError.message);
+          // Não bloqueia o fluxo mesmo se Agreement falhar
+        }
       } else {
         console.warn('⚠️ [Proposal Accept] Conversation not found for local update');
       }
