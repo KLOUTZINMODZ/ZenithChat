@@ -527,7 +527,7 @@ class MessageHandler {
         }
       }
 
-      logger.info(`✅ CACHE: Completed sending pending messages for user ${userId}`);
+      // Log de sucesso removido para evitar consumo excessivo de memória
 
     } catch (error) {
       logger.error('Error sending pending messages:', error);

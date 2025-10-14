@@ -246,8 +246,7 @@ class ConversationHandler {
       const userId = socket.userId;
       const { lastCheck } = data || {};
 
-      logger.info(`🔄 Starting conversation polling for user ${userId}`, { lastCheck });
-
+      // Log removido para evitar consumo excessivo de memória
 
       if (lastCheck) {
         this.userLastCheck.set(userId, parseInt(lastCheck));
@@ -301,7 +300,7 @@ class ConversationHandler {
       const userId = socket.userId;
       const { lastCheck } = data || {};
 
-      logger.info(`📋 Getting conversations for user ${userId}`);
+      // Log removido para evitar consumo excessivo de memória
 
       const conversations = await this.getConversationsData(userId, lastCheck);
 

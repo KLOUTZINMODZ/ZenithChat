@@ -9,10 +9,18 @@ const uploadedImageSchema = new mongoose.Schema({
     index: true
   },
   
-  // Conversação associada
+  // Conversação associada (opcional para imagens de marketplace)
   conversationId: {
     type: String,
-    required: true,
+    required: false,
+    index: true
+  },
+  
+  // Tipo de imagem: 'conversation' ou 'marketplace'
+  imageType: {
+    type: String,
+    enum: ['conversation', 'marketplace'],
+    default: 'conversation',
     index: true
   },
   

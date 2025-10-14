@@ -77,15 +77,8 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  if (req.url.includes('boosting-chat')) {
-    console.log('🔍 Boosting chat request:', req.method, req.url);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  }
-  next();
-});
+// Middleware de log removido para evitar consumo excessivo de memória
+// Apenas erros são logados via winston logger
 
 app.use(express.json({ limit: '30mb' })); // Aumentado para suportar uploads de até 25 MB
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));

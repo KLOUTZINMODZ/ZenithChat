@@ -4,12 +4,13 @@ const path = require('path');
 /**
  * Middleware para servir imagens do banco de dados primeiro, depois do disco
  * Mantém compatibilidade total com URLs existentes
+ * Suporta imagens de conversação e marketplace
  */
 const imageServeMiddleware = async (req, res, next) => {
   try {
     // Extrair informações da URL
-    // Exemplo: /uploads/conversationId/2024/1/12345_abc.avif
-    // Exemplo: /uploads/conversationId/2024/1/12345_abc_thumb.jpg
+    // Exemplo: /uploads/conversationId/2024/1/12345_abc.avif (conversa)
+    // Exemplo: /uploads/marketplace/2025/10/12345_abc.avif (marketplace)
     const urlPath = req.path;
     
     // Verificar se é uma requisição de imagem
@@ -28,6 +29,9 @@ const imageServeMiddleware = async (req, res, next) => {
     const imageId = match[1];
     const isThumb = fileName.includes('_thumb');
     const isJpeg = fileName.match(/\.jpe?g$/i);
+    
+    // Detectar se é imagem de marketplace ou conversa
+    const isMarketplace = urlPath.includes('/marketplace/');
 
     // Tentar buscar no banco de dados
     const uploadedImage = await UploadedImage.findOne({ imageId }).lean();
@@ -73,12 +77,14 @@ const imageServeMiddleware = async (req, res, next) => {
         'Access-Control-Allow-Origin': '*'
       });
 
-      console.log('[IMAGE_SERVE] Servindo do banco de dados:', imageId, `(${(buffer.length / 1024).toFixed(2)}KB)`);
+      const imageTypeLabel = isMarketplace ? 'marketplace' : 'conversation';
+      console.log('[IMAGE_SERVE] Servindo do banco de dados:', imageId, `(${(buffer.length / 1024).toFixed(2)}KB)`, `[${imageTypeLabel}]`);
       return res.send(buffer);
     }
 
     // Se não encontrou no banco, deixa o express.static servir do disco
-    console.log('[IMAGE_SERVE] Não encontrado no BD, tentando disco:', imageId);
+    const imageTypeLabel = isMarketplace ? 'marketplace' : 'conversation';
+    console.log('[IMAGE_SERVE] Não encontrado no BD, tentando disco:', imageId, `[${imageTypeLabel}]`);
     next();
     
   } catch (error) {

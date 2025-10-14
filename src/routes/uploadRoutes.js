@@ -115,6 +115,7 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
       await UploadedImage.create({
         imageId: baseName,
         conversationId: conversationId.toString(),
+        imageType: 'conversation',
         fullImage: fullBuffer,
         thumbImage: thumbBuffer,
         fullImageJpeg: fullJpegBuffer,
@@ -284,6 +285,7 @@ router.post('/image-base64', auth, async (req, res) => {
       await UploadedImage.create({
         imageId: baseName,
         conversationId: conversationId.toString(),
+        imageType: 'conversation',
         fullImage: fullBuffer,
         thumbImage: thumbBuffer,
         fullImageJpeg: fullJpegBuffer,
@@ -400,6 +402,139 @@ router.get('/serve/:imageId/:variant', async (req, res) => {
       success: false, 
       message: 'Error serving image' 
     });
+  }
+});
+
+// Nova rota para upload de imagens de marketplace
+router.post('/marketplace-image', auth, upload.single('file'), async (req, res) => {
+  console.log('[UPLOAD:MARKETPLACE] Handler start', {
+    method: req.method,
+    url: req.originalUrl || req.url,
+    contentType: req.headers['content-type']
+  });
+  try {
+    if (!req.file) {
+      console.warn('[UPLOAD:MARKETPLACE] No file uploaded');
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const originalMime = req.file.mimetype;
+    console.log('[UPLOAD:MARKETPLACE] Input received', {
+      file: {
+        name: req.file.originalname,
+        size: req.file.size,
+        mime: req.file.mimetype
+      }
+    });
+
+    const uploadsRoot = path.join(__dirname, '..', '..', 'uploads');
+    const now = new Date();
+    const subPath = path.join('marketplace', String(now.getUTCFullYear()), String(now.getUTCMonth() + 1));
+    const targetDir = path.join(uploadsRoot, subPath);
+    ensureDirSync(targetDir);
+
+    const baseName = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const fullPath = path.join(targetDir, `${baseName}.avif`);
+    const thumbPath = path.join(targetDir, `${baseName}_thumb.avif`);
+    const fullJpegPath = path.join(targetDir, `${baseName}.jpg`);
+    const thumbJpegPath = path.join(targetDir, `${baseName}_thumb.jpg`);
+
+    const image = sharp(req.file.buffer, { failOnError: false });
+    const metadata = await image.metadata();
+
+    const fullBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
+      .avif({ quality: 45 })
+      .toBuffer();
+
+    const fullJpegBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80, progressive: true, mozjpeg: true })
+      .toBuffer();
+
+    const thumbBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+      .avif({ quality: 40 })
+      .toBuffer();
+
+    const thumbJpegBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 78, progressive: true, mozjpeg: true })
+      .toBuffer();
+
+    // Salvar no disco (para compatibilidade)
+    fs.writeFileSync(fullPath, fullBuffer);
+    fs.writeFileSync(thumbPath, thumbBuffer);
+    fs.writeFileSync(fullJpegPath, fullJpegBuffer);
+    fs.writeFileSync(thumbJpegPath, thumbJpegBuffer);
+
+    const publicFull = `/uploads/${subPath.replace(/\\/g, '/')}/${baseName}.avif`;
+    const publicThumb = `/uploads/${subPath.replace(/\\/g, '/')}/${baseName}_thumb.avif`;
+    const publicFullJpeg = `/uploads/${subPath.replace(/\\/g, '/')}/${baseName}.jpg`;
+    const publicThumbJpeg = `/uploads/${subPath.replace(/\\/g, '/')}/${baseName}_thumb.jpg`;
+
+    // Salvar no banco de dados (permanente)
+    try {
+      await UploadedImage.create({
+        imageId: baseName,
+        conversationId: null, // Marketplace não tem conversationId
+        imageType: 'marketplace',
+        fullImage: fullBuffer,
+        thumbImage: thumbBuffer,
+        fullImageJpeg: fullJpegBuffer,
+        thumbImageJpeg: thumbJpegBuffer,
+        metadata: {
+          originalName: req.file.originalname,
+          originalSize: req.file.size,
+          originalMimeType: originalMime,
+          width: metadata.width,
+          height: metadata.height
+        },
+        urls: {
+          full: publicFull,
+          thumb: publicThumb,
+          fullJpeg: publicFullJpeg,
+          thumbJpeg: publicThumbJpeg
+        },
+        uploadedBy: req.user?._id || req.user?.id,
+        permanent: true
+      });
+      console.log('[UPLOAD:MARKETPLACE] Image saved to database:', baseName);
+    } catch (dbError) {
+      console.error('[UPLOAD:MARKETPLACE] Error saving to database:', dbError.message);
+      // Continua mesmo se falhar, pois já salvou no disco
+    }
+
+    console.log('[UPLOAD:MARKETPLACE] Success', {
+      publicFull,
+      publicThumb,
+      publicFullJpeg,
+      publicThumbJpeg,
+      size: req.file.size
+    });
+    return res.status(201).json({
+      success: true,
+      data: {
+        url: publicFull,
+        thumbUrl: publicThumb,
+        urlJpeg: publicFullJpeg,
+        thumbUrlJpeg: publicThumbJpeg,
+        name: req.file.originalname,
+        size: req.file.size,
+        mimeType: 'image/avif',
+        originalMimeType: originalMime,
+        width: metadata.width,
+        height: metadata.height,
+        uploadedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('[UPLOAD:MARKETPLACE] Error', { message: error?.message, stack: error?.stack });
+    return res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
 
