@@ -62,6 +62,15 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log(`🔍 [Proposal Accept] Metadata boostingId exists: ${!!metadata?.boostingId}`);
     console.log(`🔍 [Proposal Accept] Metadata proposalId: ${metadata?.proposalId}`);
     
+    // Se proposalId tem formato "boostingId_boosterId_timestamp", extrai o boostingId
+    if (proposalId && typeof proposalId === 'string' && proposalId.includes('_')) {
+      const parts = proposalId.split('_');
+      if (parts.length === 3 && !boostingId) {
+        boostingId = parts[0];
+        console.log(`✅ [Proposal Accept] Extracted boostingId from composite proposalId: ${boostingId}`);
+      }
+    }
+    
 
     if (metadata?.proposalId) {
       actualProposalId = metadata.proposalId;
