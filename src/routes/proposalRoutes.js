@@ -137,39 +137,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
 
 
-    // PRODUÇÃO: Aceita proposta diretamente pelo boostingId
-    // Formato composto: boostingId_boosterId_timestamp
-    if (proposalId.includes('_')) {
-      console.log(`🔍 [Proposal Accept] Composite format detected: ${proposalId}`);
-      console.log(`📊 [Proposal Accept] Extracted IDs:`, { boostingId, boosterId });
-      
-      // Usa o boostingId como proposalId (API aceita boosting request diretamente)
-      // O endpoint da API principal aceita tanto ID da proposta quanto ID do boosting
-      actualProposalId = boostingId;
-      console.log(`✅ [Proposal Accept] Using boostingId as proposalId: ${actualProposalId}`);
-    }
+    // PRODUÇÃO: Aceita proposta usando boostingId + boosterId
+    // API principal vai buscar a proposta correta do booster neste boosting
+    console.log(`🔗 [Proposal Accept] Using simplified endpoint`);
+    console.log(`📊 [Proposal Accept] IDs:`, { boostingId, boosterId, clientId });
     
-    // Validação final: proposalId não pode ser formato composto
-    if (actualProposalId.includes('_')) {
-      console.error(`❌ [Proposal Accept] Invalid proposalId format: ${actualProposalId}`);
-      return res.status(400).json({
-        success: false,
-        message: 'Formato de proposalId inválido',
-        details: {
-          originalProposalId: proposalId,
-          boostingId,
-          boosterId
-        }
-      });
-    }
-    
-    const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${actualProposalId}/accept`;
+    const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/accept-proposal`;
     
     console.log(`🔗 [Proposal Accept] Forwarding to: ${forwardUrl}`);
     
     const response = await axios.post(forwardUrl, {
       conversationId,
-      boosterId,
+      boosterId,  // API usa isso para identificar qual proposta aceitar
       clientId,
       metadata
     }, {
