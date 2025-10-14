@@ -288,53 +288,51 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       }
       // Continua mesmo com erro na API principal
     }
-    
-
+    // Emite eventos WebSocket para atualização em tempo real
     try {
       const webSocketServer = req.app.get('webSocketServer');
       if (webSocketServer) {
         console.log('📡 [Proposal Accept] Emitting WebSocket events for real-time updates...');
         
-        if (clientId) {
-          const clientEvent = {
-            type: 'proposal:accepted',
-            data: {
-              conversationId,
+        // Dados da proposta aceita
+        const acceptedProposalData = apiSyncSuccess && apiResponse?.data?.acceptedProposal 
+          ? apiResponse.data.acceptedProposal 
+          : {
               proposalId: actualProposalId,
-              boostingId,
-              acceptedProposal: response.data.acceptedProposal,
+              boostingId: boostingId,
+              boosterId: boosterId,
+              clientId: clientId,
               status: 'accepted',
-              acceptedAt: new Date().toISOString(),
-              acceptedBy: 'client',
-              clientId,
-              boosterId
-            }
-          };
-          
-          webSocketServer.sendToUser(clientId, clientEvent);
-          console.log(`✅ [Proposal Accept] WebSocket event sent to client: ${clientId}`);
+              acceptedAt: new Date().toISOString()
+            };
+        
+        // Evento 1: proposal:accepted
+        const proposalAcceptedEvent = {
+          type: 'proposal:accepted',
+          data: {
+            conversationId,
+            proposalId: actualProposalId,
+            boostingId,
+            acceptedProposal: acceptedProposalData,
+            status: 'accepted',
+            acceptedAt: new Date().toISOString(),
+            acceptedBy: 'client',
+            clientId,
+            boosterId
+          }
+        };
+        
+        if (clientId) {
+          webSocketServer.sendToUser(clientId, proposalAcceptedEvent);
+          console.log(`✅ [Proposal Accept] 'proposal:accepted' sent to client: ${clientId}`);
         }
         
         if (boosterId) {
-          const boosterEvent = {
-            type: 'proposal:accepted',
-            data: {
-              conversationId,
-              proposalId: actualProposalId,
-              boostingId,
-              acceptedProposal: response.data.acceptedProposal,
-              status: 'accepted',
-              acceptedAt: new Date().toISOString(),
-              acceptedBy: 'client',
-              clientId,
-              boosterId
-            }
-          };
-          
-          webSocketServer.sendToUser(boosterId, boosterEvent);
-          console.log(`✅ [Proposal Accept] WebSocket event sent to booster: ${boosterId}`);
+          webSocketServer.sendToUser(boosterId, proposalAcceptedEvent);
+          console.log(`✅ [Proposal Accept] 'proposal:accepted' sent to booster: ${boosterId}`);
         }
         
+        // Evento 2: conversation:updated (atualiza UI)
         const conversationUpdateEvent = {
           type: 'conversation:updated',
           data: {
@@ -342,12 +340,26 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             status: 'accepted',
             isTemporary: false,
             boostingStatus: 'active',
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            conversation: acceptedConv ? {
+              _id: acceptedConv._id,
+              status: acceptedConv.status,
+              isTemporary: acceptedConv.isTemporary,
+              boostingStatus: acceptedConv.boostingStatus,
+              participants: acceptedConv.participants
+            } : null
           }
         };
         
-        if (clientId) webSocketServer.sendToUser(clientId, conversationUpdateEvent);
-        if (boosterId) webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
+        if (clientId) {
+          webSocketServer.sendToUser(clientId, conversationUpdateEvent);
+          console.log(`✅ [Proposal Accept] 'conversation:updated' sent to client: ${clientId}`);
+        }
+        
+        if (boosterId) {
+          webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
+          console.log(`✅ [Proposal Accept] 'conversation:updated' sent to booster: ${boosterId}`);
+        }
         
         console.log('✅ [Proposal Accept] All WebSocket events emitted successfully');
       } else {
@@ -355,7 +367,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       }
     } catch (wsError) {
       console.error('❌ [Proposal Accept] Error emitting WebSocket events:', wsError);
-
+      console.error('❌ [Proposal Accept] WebSocket error stack:', wsError.stack);
     }
     
 
