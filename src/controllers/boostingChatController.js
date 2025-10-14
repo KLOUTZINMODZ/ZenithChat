@@ -692,7 +692,38 @@ class BoostingChatController {
           }
         }
 
-        // 3. Atualizar Agreement
+        // 3. Criar registro no WalletLedger para o cliente (amount 0, para histórico)
+        try {
+          const client = await User.findById(clientUserId).session(session);
+          const clientBalanceBefore = round2(client?.walletBalance || 0);
+          await WalletLedger.create([{
+            userId: clientUserId,
+            txId: null,
+            direction: 'debit',
+            reason: 'boosting_settle',
+            amount: 0,
+            operationId: `boosting_settle:${agreement?._id || acceptedProposal?._id}`,
+            balanceBefore: clientBalanceBefore,
+            balanceAfter: clientBalanceBefore,
+            metadata: {
+              source: 'boosting',
+              agreementId: agreement?._id?.toString() || null,
+              conversationId: conversationId,
+              boosterId: boosterUserId?.toString(),
+              price: price
+            }
+          }], { session });
+          
+          console.log('[BOOSTING] Registro de histórico criado para o cliente:', {
+            clientId: clientUserId?.toString(),
+            amount: 0,
+            reason: 'boosting_settle'
+          });
+        } catch (e) {
+          console.warn('[BOOSTING] Falha ao criar registro de histórico do cliente:', e.message);
+        }
+
+        // 4. Atualizar Agreement
         if (agreement) {
           if (agreement.status === 'active') {
             agreement.status = 'completed';
@@ -706,7 +737,7 @@ class BoostingChatController {
           }
         }
 
-        // 4. Atualizar Conversation
+        // 5. Atualizar Conversation
         conversation.lastMessageAt = new Date();
         conversation.boostingStatus = 'completed';
         conversation.metadata.set('status', 'delivery_confirmed');
@@ -806,13 +837,33 @@ class BoostingChatController {
         });
       }
 
-      // Atualizar saldos em tempo real via WebSocket
+      // Atualizar saldos em tempo real via WebSocket (igual ao marketplace)
       await sendBalanceUpdate(req.app, boosterUserId);
+      await sendBalanceUpdate(req.app, clientUserId); // Também notificar cliente para atualizar UI
       
       // Enviar atualização ao mediador também (se existir)
       try {
         const envId = process.env.MEDIATOR_USER_ID;
         if (envId) await sendBalanceUpdate(req.app, envId);
+      } catch (_) {}
+      
+      // Notificações de sucesso via WebSocket (igual ao marketplace)
+      try {
+        const notificationService = req.app?.locals?.notificationService;
+        if (notificationService) {
+          notificationService.sendNotification(String(boosterUserId), {
+            type: 'boosting:completed',
+            title: 'Pagamento liberado',
+            message: 'O cliente confirmou a entrega. Valor liberado na sua carteira.',
+            data: { conversationId, agreementId: agreement?._id || agreement?.agreementId }
+          });
+          notificationService.sendNotification(String(clientUserId), {
+            type: 'boosting:completed',
+            title: 'Pedido concluído',
+            message: 'Obrigado por confirmar. Pedido concluído com sucesso.',
+            data: { conversationId, agreementId: agreement?._id || agreement?.agreementId }
+          });
+        }
       } catch (_) {}
 
       console.log('[BOOSTING] Confirmação de entrega concluída com sucesso');
