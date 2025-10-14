@@ -206,15 +206,46 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           data: error.response?.data
         });
         
-        return res.status(500).json({
-          success: false,
-          message: 'Erro ao buscar dados do boosting',
-          error: error.message,
-          details: {
+        // Se boosting não existe, tenta criar proposta diretamente na API
+        console.log(`⚠️ [Proposal Accept] Boosting not found, will try to create proposal directly`);
+        
+        try {
+          // Tenta criar/aceitar proposta diretamente
+          const directUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/create-and-accept`;
+          console.log(`🔗 [Proposal Accept] Trying direct creation: ${directUrl}`);
+          
+          const directResponse = await axios.post(directUrl, {
             boostingId,
-            apiStatus: error.response?.status
-          }
-        });
+            boosterId,
+            clientId,
+            conversationId,
+            proposalData: metadata.proposalData,
+            metadata
+          }, {
+            headers: {
+              'Authorization': req.headers.authorization,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          console.log(`✅ [Proposal Accept] Direct creation successful`);
+          return res.json(directResponse.data);
+          
+        } catch (directError) {
+          console.error(`❌ [Proposal Accept] Direct creation also failed:`, directError.message);
+          
+          // Último recurso: retorna erro explicativo
+          return res.status(404).json({
+            success: false,
+            message: 'Boosting request não encontrado na API principal',
+            error: 'O pedido de boosting não existe mais ou foi removido',
+            details: {
+              boostingId,
+              reason: error.response?.data?.message || error.message,
+              suggestion: 'Este boosting pode ter sido cancelado ou removido. Por favor, crie um novo pedido de boosting.'
+            }
+          });
+        }
       }
     }
     
