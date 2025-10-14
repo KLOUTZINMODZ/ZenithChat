@@ -211,7 +211,7 @@ class BoostingChatController {
       await conversation.save();
 
 
-      const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+      const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
       
       try {
         await axios.post(`${apiUrl}/api/boosting-proposals/${conversation.proposal}/renegotiate`, {
@@ -299,7 +299,7 @@ class BoostingChatController {
       await conversation.save();
 
 
-      const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+      const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
       
       // Tenta notificar a API principal (não-bloqueante)
       try {
@@ -757,7 +757,7 @@ class BoostingChatController {
       }
 
       // Notificar Main API
-      const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+      const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
       try {
         const itemId = conversation.marketplaceItem || conversation.proposal;
         if (itemId) {
@@ -908,7 +908,7 @@ class BoostingChatController {
       let reportedData = null;
 
       try {
-        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
         
 
         try {
@@ -1016,7 +1016,7 @@ class BoostingChatController {
 
       // Envia notificação ao Telegram com dados do cliente
       try {
-        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
 
         // Prioriza cliente do acceptedProposal; fallback para conversation.client; se não houver, usa o reporter
         let clientUserId = null;
@@ -1120,7 +1120,7 @@ class BoostingChatController {
 
 
       try {
-        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
         const itemId = conversation.marketplaceItem || conversation.proposal;
         
         if (itemId) {

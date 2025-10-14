@@ -80,7 +80,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       
       try {
 
-        const proposalLookupUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/${proposalId}/boosting-id`;
+        const proposalLookupUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/proposals/${proposalId}/boosting-id`;
         console.log(`🔍 [Proposal Accept] Looking up boostingId at: ${proposalLookupUrl}`);
         
         const lookupResponse = await axios.get(proposalLookupUrl, {
@@ -112,7 +112,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             message: 'Não foi possível encontrar o boostingId para esta proposta',
             details: {
               proposalId: proposalId,
-              lookupUrl: `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/proposals/${proposalId}/boosting-id`,
+              lookupUrl: `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/proposals/${proposalId}/boosting-id`,
               originalError: lookupError.response?.data || lookupError.message
             }
           });
@@ -144,7 +144,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       
       try {
         // Busca todas as propostas deste boosting request
-        const proposalsUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals`;
+        const proposalsUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals`;
         console.log(`🔗 [Proposal Accept] Fetching proposals from: ${proposalsUrl}`);
         
         const proposalsResponse = await axios.get(proposalsUrl, {
@@ -260,7 +260,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     const finalProposalId = actualProposalId.includes('_') ? boostingId : actualProposalId;
     
     try {
-      const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${finalProposalId}/accept`;
+      const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${finalProposalId}/accept`;
       
       console.log(`🔗 [Proposal Accept] Attempting sync with main API: ${forwardUrl}`);
       console.log(`🔗 [Proposal Accept] Final IDs: boostingId=${boostingId}, proposalId=${finalProposalId}`);
@@ -359,51 +359,37 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
     
 
-
-    try {
-      let acceptedConv = null;
-      if (conversationId) {
-        acceptedConv = await Conversation.findById(conversationId);
-      }
-      if (!acceptedConv) {
-        acceptedConv = await Conversation.findOne({
-          isTemporary: true,
-          $or: [
-            { 'metadata.proposalId': actualProposalId },
-            { proposal: actualProposalId }
-          ]
-        });
-      }
-
-      if (acceptedConv) {
-        acceptedConv.isTemporary = false;
-        acceptedConv.status = 'accepted';
-        acceptedConv.expiresAt = null;
-        acceptedConv.boostingStatus = 'active';
-        await acceptedConv.save();
-
-        const wsServer = req.app.get('webSocketServer');
-        if (wsServer) {
-          const participants = acceptedConv.participants.map(p => p.toString ? p.toString() : p);
-          participants.forEach(pid => {
-            wsServer.sendToUser(pid, {
-              type: 'conversation:updated',
-              data: {
-                conversationId: acceptedConv._id,
-                status: 'accepted',
-                isTemporary: false,
-                boostingStatus: 'active',
-                updatedAt: new Date().toISOString()
-              }
-            });
-          });
+    // Retorna resposta apropriada
+    if (apiSyncSuccess && apiResponse) {
+      console.log('✅ [Proposal Accept] Returning API response');
+      return res.json(apiResponse.data);
+    } else {
+      console.log('✅ [Proposal Accept] Returning local acceptance response');
+      return res.json({
+        success: true,
+        message: 'Proposta aceita com sucesso',
+        acceptedProposal: {
+          proposalId: proposalId,
+          actualProposalId: actualProposalId,
+          boostingId: boostingId,
+          status: 'accepted',
+          acceptedAt: new Date().toISOString(),
+          conversationId: conversationId,
+          boosterId: boosterId,
+          clientId: clientId
+        },
+        conversation: acceptedConv ? {
+          _id: acceptedConv._id,
+          status: acceptedConv.status,
+          isTemporary: acceptedConv.isTemporary,
+          boostingStatus: acceptedConv.boostingStatus
+        } : null,
+        sync: {
+          mainApi: apiSyncSuccess,
+          warning: !apiSyncSuccess ? 'Main API sync failed, but proposal was accepted locally' : null
         }
-      }
-    } catch (cleanupError) {
-      console.error('❌ Error updating accepted conversation:', cleanupError);
+      });
     }
-
-    return res.json(response.data);
     
   } catch (error) {
     console.error('❌ [Proposal Accept] Error:', error.message);

@@ -30,7 +30,7 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
     logger.info('📋 Dados extraídos do pagamento:', { userId, timestamp, externalReference });
     
 
-    const vercelApiUrl = process.env.VERCEL_API_URL || 'https://zenithapi-steel.vercel.app';
+    const vercelApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
     
 
     const cachedItems = paymentCacheService.getMarketplaceItems(externalReference);

@@ -4,7 +4,7 @@
 
 **Erro:** `AxiosError: Request failed with status code 405`
 
-**Causa:** A API principal (`zenithapi-steel.vercel.app`) não aceita o método `POST` na rota:
+**Causa:** A API principal (`zenithggapi.vercel.app`) não aceita o método `POST` na rota:
 ```
 POST /api/boosting-requests/{itemId}/cancel
 ```
@@ -70,7 +70,7 @@ Agora os logs mostram claramente o que está acontecendo:
   status: 405,
   statusText: 'Method Not Allowed',
   message: 'Request failed with status code 405',
-  url: 'https://zenithapi-steel.vercel.app/api/boosting-requests/.../cancel',
+  url: 'https://zenithggapi.vercel.app/api/boosting-requests/.../cancel',
   method: 'patch'
 }
 ```

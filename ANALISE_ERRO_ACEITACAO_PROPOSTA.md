@@ -63,7 +63,7 @@
 # Substitua {BOOSTING_ID} pelo ID do boosting
 
 curl -X GET \
-  "https://zenithapi-steel.vercel.app/api/boosting-requests/68ee950477bab05ae3f000d0" \
+  "https://zenithggapi.vercel.app/api/boosting-requests/68ee950477bab05ae3f000d0" \
   -H "Authorization: Bearer {TOKEN}"
 ```
 
@@ -77,7 +77,7 @@ curl -X GET \
 
 ```bash
 curl -X GET \
-  "https://zenithapi-steel.vercel.app/api/boosting-requests/68ee950477bab05ae3f000d0/proposals" \
+  "https://zenithggapi.vercel.app/api/boosting-requests/68ee950477bab05ae3f000d0/proposals" \
   -H "Authorization: Bearer {TOKEN}"
 ```
 
@@ -92,7 +92,7 @@ curl -X GET \
 
 ```bash
 curl -X POST \
-  "https://zenithapi-steel.vercel.app/api/boosting-requests/68ee950477bab05ae3f000d0/proposals/teste123/accept" \
+  "https://zenithggapi.vercel.app/api/boosting-requests/68ee950477bab05ae3f000d0/proposals/teste123/accept" \
   -H "Authorization: Bearer {TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -181,7 +181,7 @@ await axios.post(
 **Solução:** Implementar rota na API principal:
 
 ```javascript
-// zenithapi-steel.vercel.app
+// zenithggapi.vercel.app
 // src/routes/boostingRoutes.js
 
 router.post('/:boostingId/proposals/:proposalId/accept', async (req, res) => {

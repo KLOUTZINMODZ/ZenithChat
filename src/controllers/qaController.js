@@ -289,7 +289,7 @@ module.exports = {
 
       // Notify via Telegram (best-effort)
       try {
-        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
         let clientApi = null;
         try {
           const resp = await axios.get(`${apiUrl}/api/users/${userId}`, {

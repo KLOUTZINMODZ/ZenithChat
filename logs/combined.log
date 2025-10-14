@@ -6,7 +6,7 @@
 {"level":"info","message":"🚀 Chat API Server running on port 5000","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"info","message":"🔌 WebSocket server ready for connections","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"info","message":"📝 Environment: development","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
-{"level":"info","message":"🔗 Allowed origins: http://localhost:5173,http://localhost:5174,https://hacklote.vercel.app,https://hacklotesite.vercel.app,https://zenithgg.com.br,https://zenithapi-steel.vercel.app,https://zenith.enrelyugi.com.br,https://zenithpaineladm.vercel.app,https://apizenithadmin-byzenith.vercel.app","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
+{"level":"info","message":"🔗 Allowed origins: http://localhost:5173,http://localhost:5174,https://hacklote.vercel.app,https://hacklotesite.vercel.app,https://zenithgg.com.br,https://zenithggapi.vercel.app,https://zenith.enrelyugi.com.br,https://zenithpaineladm.vercel.app,https://apizenithadmin-byzenith.vercel.app","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"info","message":"✅ Serviço de limpeza de chats temporários iniciado (executa a cada hora)","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"info","message":"✅ Purchase auto-release service started","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
@@ -21,7 +21,7 @@
 {"level":"info","message":"🚀 Chat API Server running on port 5000","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"🔌 WebSocket server ready for connections","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"📝 Environment: development","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
-{"level":"info","message":"🔗 Allowed origins: http://localhost:5173,http://localhost:5174,https://hacklote.vercel.app,https://hacklotesite.vercel.app,https://zenithgg.com.br,https://zenithapi-steel.vercel.app,https://zenith.enrelyugi.com.br,https://zenithpaineladm.vercel.app,https://apizenithadmin-byzenith.vercel.app","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
+{"level":"info","message":"🔗 Allowed origins: http://localhost:5173,http://localhost:5174,https://hacklote.vercel.app,https://hacklotesite.vercel.app,https://zenithgg.com.br,https://zenithggapi.vercel.app,https://zenith.enrelyugi.com.br,https://zenithpaineladm.vercel.app,https://apizenithadmin-byzenith.vercel.app","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"✅ Serviço de limpeza de chats temporários iniciado (executa a cada hora)","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"✅ Purchase auto-release service started","service":"chat-api","timestamp":"2025-10-05 11:35:46"}

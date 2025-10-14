@@ -31,11 +31,11 @@ Status: 404 (Not Found)
 
 ### **3. PUT /api/v1/conversations/:id/read - 405 Method Not Allowed**
 ```
-PUT https://zenithapi-steel.vercel.app/api/v1/conversations/68e2486c77f86d42b1e4d0fb/read
+PUT https://zenithggapi.vercel.app/api/v1/conversations/68e2486c77f86d42b1e4d0fb/read
 Status: 405 (Method Not Allowed)
 ```
 
-**Causa:** Frontend está enviando requisição para API errada (zenithapi-steel.vercel.app)
+**Causa:** Frontend está enviando requisição para API errada (zenithggapi.vercel.app)
 
 **Solução:** ✅ **Não precisa alterar URLs** - A rota correta já existe em `zenith.enrelyugi.com.br`
 
@@ -43,11 +43,11 @@ Status: 405 (Method Not Allowed)
 
 ### **4. GET /api/v1/messages/conversations/:id/messages - 500 Internal Server Error**
 ```
-GET https://zenithapi-steel.vercel.app/api/v1/messages/conversations/68e2486c77f86d42b1e4d0fb/messages
+GET https://zenithggapi.vercel.app/api/v1/messages/conversations/68e2486c77f86d42b1e4d0fb/messages
 Status: 500 (Internal Server Error)
 ```
 
-**Causa:** Frontend está enviando requisição para API errada (zenithapi-steel.vercel.app)
+**Causa:** Frontend está enviando requisição para API errada (zenithggapi.vercel.app)
 
 **Solução:** ✅ **Não precisa alterar URLs** - A rota correta já existe em `zenith.enrelyugi.com.br`
 
@@ -241,7 +241,7 @@ curl -X PUT \
 
 ### **1. APIs Diferentes com Propósitos Distintos**
 
-#### **zenithapi-steel.vercel.app** (API Principal)
+#### **zenithggapi.vercel.app** (API Principal)
 - ✅ Autenticação (login, registro, JWT)
 - ✅ Usuários
 - ✅ Notificações
@@ -259,7 +259,7 @@ curl -X PUT \
 O erro 405 e 500 acontecem porque o frontend está tentando:
 ```javascript
 // ❌ ERRADO (API Principal não tem rotas de chat)
-PUT https://zenithapi-steel.vercel.app/api/v1/conversations/:id/read
+PUT https://zenithggapi.vercel.app/api/v1/conversations/:id/read
 
 // ✅ CORRETO (API de Chat)
 PUT https://zenith.enrelyugi.com.br/api/messages/conversations/:id/read

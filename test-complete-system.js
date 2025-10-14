@@ -2,7 +2,7 @@ const axios = require('axios');
 
 
 const CHAT_API_URL = 'https://zenith.enrelyugi.com.br';
-const MAIN_API_URL = 'https://zenithapi-steel.vercel.app';
+const MAIN_API_URL = 'https://zenithggapi.vercel.app';
 const VERCEL_API_SECRET = 'Kl0u7s2llaHu';
 
 

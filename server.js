@@ -48,7 +48,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
       'http://localhost:5173',
-      'https://zenithapi-steel.vercel.app',
+      'https://zenithggapi.vercel.app',
       'https://hacklotesite.vercel.app',
       'https://zenithgg.com.br',
       'https://zenith.enrelyugi.com.br',

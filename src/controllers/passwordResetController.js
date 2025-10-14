@@ -265,7 +265,7 @@ exports.resetPassword = async (req, res) => {
 
     // CRÍTICO: Sincronizar senha com HackLoteAPI (banco principal)
     try {
-      const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithapi-steel.vercel.app';
+      const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
       const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
       
       console.log(`[SYNC] Tentando sincronizar senha para ${user.email} com ${mainApiUrl}/api/v1/admin/sync-password`);

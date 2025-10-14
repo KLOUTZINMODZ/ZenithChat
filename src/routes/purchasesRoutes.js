@@ -828,7 +828,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
 
       // Envia notificação ao Telegram com dados do cliente (comprador)
       try {
-        const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+        const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
         let clientApi = null;
         try {
           const resp = await axios.get(`${apiUrl}/api/users/${buyerId}`, {
@@ -1018,7 +1018,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
 
     // Envia notificação ao Telegram com dados do cliente (comprador)
     try {
-      const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
+      const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
       const clientUserId = purchase?.buyerId?.toString?.() || purchase.buyerId;
       let clientApi = null;
       try {
