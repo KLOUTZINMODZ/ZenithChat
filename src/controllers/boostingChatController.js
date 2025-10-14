@@ -301,25 +301,87 @@ class BoostingChatController {
 
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
       
+      // Tenta notificar a API principal (não-bloqueante)
       try {
-
         const itemId = conversation.marketplaceItem || conversation.proposal;
         
         if (itemId) {
-          await axios.post(`${apiUrl}/api/boosting-requests/${itemId}/cancel`, {
-            reason,
-            conversationId,
-            cancelledBy: userId
-          }, {
-            headers: {
-              'Authorization': req.headers.authorization
+          console.log(`🔔 Tentando notificar API principal - itemId: ${itemId}`);
+          
+          // Tenta métodos HTTP diferentes
+          let notificationSuccess = false;
+          
+          // Tentativa 1: PATCH (mais comum para atualizações parciais)
+          try {
+            await axios.patch(`${apiUrl}/api/boosting-requests/${itemId}/cancel`, {
+              reason,
+              conversationId,
+              cancelledBy: userId
+            }, {
+              headers: {
+                'Authorization': req.headers.authorization
+              }
+            });
+            notificationSuccess = true;
+            console.log('✅ API principal notificada com sucesso (PATCH)');
+          } catch (patchError) {
+            if (patchError.response?.status === 405) {
+              // Tentativa 2: PUT
+              try {
+                await axios.put(`${apiUrl}/api/boosting-requests/${itemId}/cancel`, {
+                  reason,
+                  conversationId,
+                  cancelledBy: userId
+                }, {
+                  headers: {
+                    'Authorization': req.headers.authorization
+                  }
+                });
+                notificationSuccess = true;
+                console.log('✅ API principal notificada com sucesso (PUT)');
+              } catch (putError) {
+                if (putError.response?.status === 405) {
+                  // Tentativa 3: DELETE com body (alguns endpoints usam isso)
+                  try {
+                    await axios.delete(`${apiUrl}/api/boosting-requests/${itemId}/cancel`, {
+                      data: {
+                        reason,
+                        conversationId,
+                        cancelledBy: userId
+                      },
+                      headers: {
+                        'Authorization': req.headers.authorization
+                      }
+                    });
+                    notificationSuccess = true;
+                    console.log('✅ API principal notificada com sucesso (DELETE)');
+                  } catch (deleteError) {
+                    throw deleteError; // Se DELETE também falhou, lança erro
+                  }
+                } else {
+                  throw putError;
+                }
+              }
+            } else {
+              throw patchError;
             }
-          });
+          }
+          
+          if (!notificationSuccess) {
+            console.warn('⚠️ Não foi possível notificar a API principal, mas o cancelamento local foi efetuado');
+          }
         } else {
-          console.log('Nenhum marketplaceItem ou proposal encontrado na conversa para notificar backend');
+          console.log('ℹ️ Nenhum marketplaceItem ou proposal encontrado - notificação ignorada');
         }
       } catch (apiError) {
-        console.error('Erro ao notificar cancelamento:', apiError);
+        // Log detalhado do erro, mas não bloqueia o cancelamento
+        console.error('❌ Erro ao notificar API principal (cancelamento local mantido):', {
+          status: apiError.response?.status,
+          statusText: apiError.response?.statusText,
+          message: apiError.message,
+          url: apiError.config?.url,
+          method: apiError.config?.method
+        });
       }
 
 
