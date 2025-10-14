@@ -18,7 +18,10 @@ const walletLedgerSchema = new mongoose.Schema({
     'purchase_reserve',
     'purchase_refund',
     'purchase_release',
-    'purchase_fee'
+    'purchase_fee',
+    'purchase_settle',
+    'boosting_release',
+    'boosting_fee'
   ], required: true },
 
   amount: { type: Number, required: true },

@@ -3,9 +3,53 @@ const Message = require('../models/Message');
 const AcceptedProposal = require('../models/AcceptedProposal');
 const Agreement = require('../models/Agreement');
 const Report = require('../models/Report');
+const User = require('../models/User');
+const WalletLedger = require('../models/WalletLedger');
+const Mediator = require('../models/Mediator');
+const mongoose = require('mongoose');
 const axios = require('axios');
 
 const { sendSupportTicketNotification } = require('../services/TelegramService');
+
+// Helper functions
+function round2(v) { 
+  return Math.round(Number(v) * 100) / 100; 
+}
+
+async function sendBalanceUpdate(app, userId) {
+  try {
+    const u = await User.findById(userId);
+    const notificationService = app?.locals?.notificationService;
+    if (notificationService) {
+      notificationService.sendToUser(String(userId), {
+        type: 'wallet:balance_updated',
+        data: { 
+          userId: String(userId), 
+          balance: round2(u?.walletBalance || 0), 
+          timestamp: new Date().toISOString() 
+        }
+      });
+    }
+  } catch (_) {}
+}
+
+async function runTx(executor) {
+  let session;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+    const res = await executor(session);
+    await session.commitTransaction();
+    session.endSession();
+    return res;
+  } catch (err) {
+    if (session) { 
+      try { await session.abortTransaction(); } catch (_) {} 
+      session.endSession(); 
+    }
+    throw err;
+  }
+}
 
 class BoostingChatController {
 
@@ -370,17 +414,17 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-
+      // Buscar conversa e validar participação
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-
+      // Buscar Agreement e AcceptedProposal
       let agreement = await Agreement.findOne({ conversationId });
       let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
       
-
+      // Migração automática se necessário
       if (acceptedProposal && !agreement) {
         try {
           const AgreementMigration = require('../middleware/agreementMigrationMiddleware');
@@ -390,182 +434,346 @@ class BoostingChatController {
         }
       }
 
+      // Validar que existe proposta
+      if (!agreement && !acceptedProposal) {
+        return res.status(404).json({ success: false, message: 'Nenhum acordo encontrado para esta conversa' });
+      }
 
-      const boosterUserId = acceptedProposal?.booster?.userid || 
-                           agreement?.boosterUserId || 
-                           conversation.participants.find(p => p.toString() !== userId);
+      // Identificar cliente e booster
+      const clientUserId = agreement?.parties?.client?.userid || acceptedProposal?.client?.userid;
+      const boosterUserId = agreement?.parties?.booster?.userid || acceptedProposal?.booster?.userid;
 
+      // Validar que apenas o cliente pode confirmar
+      if (userId.toString() !== clientUserId?.toString()) {
+        return res.status(403).json({ success: false, message: 'Apenas o cliente pode confirmar a entrega' });
+      }
 
-      const rawPriceForFinalization = agreement?.proposalSnapshot?.price ?? acceptedProposal?.price ?? null;
-      const numericPriceFinal = typeof rawPriceForFinalization === 'string'
-        ? parseFloat(rawPriceForFinalization.replace(/\./g, '').replace(',', '.'))
-        : (rawPriceForFinalization != null ? Number(rawPriceForFinalization) : null);
-      const formattedPriceFinal = (numericPriceFinal != null && !isNaN(numericPriceFinal))
-        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numericPriceFinal)
-        : null;
+      // Extrair preço
+      const rawPrice = agreement?.proposalSnapshot?.price ?? acceptedProposal?.price ?? null;
+      let price = typeof rawPrice === 'string'
+        ? parseFloat(rawPrice.replace(/\./g, '').replace(',', '.'))
+        : (rawPrice != null ? Number(rawPrice) : null);
 
+      if (!price || isNaN(price) || price <= 0) {
+        return res.status(400).json({ success: false, message: 'Preço inválido no acordo' });
+      }
+
+      price = round2(price);
+      const feePercent = 0.05;
+      const feeAmount = round2(price * feePercent);
+      const boosterReceives = round2(price - feeAmount);
+
+      const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
+      const formattedBoosterReceives = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boosterReceives);
+
+      console.log('[BOOSTING] Iniciando confirmação de entrega:', {
+        conversationId,
+        agreementId: agreement?.agreementId || agreement?._id,
+        clientId: clientUserId?.toString(),
+        boosterId: boosterUserId?.toString(),
+        price,
+        feeAmount,
+        boosterReceives
+      });
+
+      // Idempotência: verificar se já completado
+      if (agreement && agreement.status === 'completed') {
+        console.log(`✅ Agreement ${agreement.agreementId} já está completado - operação idempotente`);
+        return res.json({
+          success: true,
+          message: 'Entrega já foi confirmada anteriormente',
+          blocked: true,
+          idempotent: true
+        });
+      }
+
+      // TRANSAÇÃO ATÔMICA: Transferir saldo ao booster e ao mediador
+      await runTx(async (session) => {
+        // 1. Transferir saldo ao booster
+        const booster = await User.findById(boosterUserId).session(session);
+        if (!booster) {
+          throw new Error('Booster não encontrado');
+        }
+
+        const boosterBalanceBefore = round2(booster.walletBalance || 0);
+        const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
+        booster.walletBalance = boosterBalanceAfter;
+        await booster.save({ session });
+
+        // Criar registro no WalletLedger (booster)
+        const boosterLedger = await WalletLedger.create([{
+          userId: boosterUserId,
+          txId: null,
+          direction: 'credit',
+          reason: 'boosting_release',
+          amount: boosterReceives,
+          operationId: `boosting_release:${agreement?._id || acceptedProposal?._id}`,
+          balanceBefore: boosterBalanceBefore,
+          balanceAfter: boosterBalanceAfter,
+          metadata: {
+            source: 'boosting',
+            agreementId: agreement?._id?.toString() || null,
+            conversationId: conversationId,
+            clientId: clientUserId?.toString(),
+            price: price,
+            feeAmount: feeAmount,
+            boosterReceives: boosterReceives
+          }
+        }], { session });
+
+        console.log('[BOOSTING] Saldo transferido ao booster:', {
+          boosterId: boosterUserId?.toString(),
+          amount: boosterReceives,
+          balanceBefore: boosterBalanceBefore,
+          balanceAfter: boosterBalanceAfter
+        });
+
+        // Criar log no Mediator (release)
+        try {
+          await Mediator.create([{
+            eventType: 'release',
+            amount: boosterReceives,
+            currency: 'BRL',
+            operationId: `boosting_release:${agreement?._id || acceptedProposal?._id}`,
+            source: 'ZenithChatApi',
+            occurredAt: new Date(),
+            reference: {
+              agreementId: agreement?._id || null,
+              conversationId: conversationId,
+              walletLedgerId: boosterLedger[0]?._id || null
+            },
+            metadata: {
+              price: price,
+              feeAmount: feeAmount,
+              boosterReceives: boosterReceives,
+              clientId: clientUserId?.toString(),
+              boosterId: boosterUserId?.toString()
+            },
+            description: 'Liberação de pagamento ao booster'
+          }], { session });
+        } catch (_) {}
+
+        // 2. Transferir taxa ao mediador (5%)
+        if (feeAmount > 0) {
+          let mediatorUser = null;
+          const envId = process.env.MEDIATOR_USER_ID;
+          const envEmail = process.env.MEDIATOR_EMAIL;
+
+          if (envId) {
+            try { mediatorUser = await User.findById(envId).session(session); } catch (_) {}
+          }
+          if (!mediatorUser && envEmail) {
+            try { mediatorUser = await User.findOne({ email: envEmail }).session(session); } catch (_) {}
+          }
+
+          if (mediatorUser) {
+            const mediatorBalanceBefore = round2(mediatorUser.walletBalance || 0);
+            const mediatorBalanceAfter = round2(mediatorBalanceBefore + feeAmount);
+            mediatorUser.walletBalance = mediatorBalanceAfter;
+            await mediatorUser.save({ session });
+
+            // Criar registro no WalletLedger (mediador)
+            const mediatorLedger = await WalletLedger.create([{
+              userId: mediatorUser._id,
+              txId: null,
+              direction: 'credit',
+              reason: 'boosting_fee',
+              amount: feeAmount,
+              operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
+              balanceBefore: mediatorBalanceBefore,
+              balanceAfter: mediatorBalanceAfter,
+              metadata: {
+                source: 'boosting',
+                agreementId: agreement?._id?.toString() || null,
+                conversationId: conversationId,
+                boosterId: boosterUserId?.toString(),
+                clientId: clientUserId?.toString(),
+                price: price,
+                feeAmount: feeAmount,
+                boosterReceives: boosterReceives
+              }
+            }], { session });
+
+            console.log('[BOOSTING] Taxa transferida ao mediador:', {
+              mediatorId: mediatorUser._id?.toString(),
+              amount: feeAmount,
+              balanceBefore: mediatorBalanceBefore,
+              balanceAfter: mediatorBalanceAfter
+            });
+
+            // Criar log no Mediator (fee)
+            try {
+              await Mediator.create([{
+                eventType: 'fee',
+                amount: feeAmount,
+                currency: 'BRL',
+                operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
+                source: 'ZenithChatApi',
+                occurredAt: new Date(),
+                reference: {
+                  agreementId: agreement?._id || null,
+                  conversationId: conversationId,
+                  walletLedgerId: mediatorLedger[0]?._id || null
+                },
+                metadata: {
+                  price: price,
+                  feeAmount: feeAmount,
+                  boosterReceives: boosterReceives,
+                  boosterId: boosterUserId?.toString(),
+                  clientId: clientUserId?.toString()
+                },
+                description: 'Taxa de mediação (5%) - Boosting'
+              }], { session });
+            } catch (_) {}
+          } else {
+            console.warn('[BOOSTING] Mediator user not found; fee not credited');
+          }
+        }
+
+        // 3. Atualizar Agreement
+        if (agreement) {
+          if (agreement.status === 'active') {
+            agreement.status = 'completed';
+            agreement.completedAt = new Date();
+            agreement.addAction('completed', userId, { completedVia: 'confirmDelivery' }, `delivery_${conversationId}_${Date.now()}`);
+            await agreement.save({ session });
+          }
+        } else if (acceptedProposal) {
+          if (acceptedProposal.status !== 'completed') {
+            await acceptedProposal.complete();
+          }
+        }
+
+        // 4. Atualizar Conversation
+        conversation.lastMessageAt = new Date();
+        conversation.boostingStatus = 'completed';
+        conversation.metadata.set('status', 'delivery_confirmed');
+        conversation.deliveryConfirmedAt = new Date();
+        conversation.isBlocked = true;
+        conversation.blockedReason = 'pedido_finalizado';
+        conversation.blockedAt = new Date();
+        conversation.blockedBy = userId;
+        await conversation.save({ session });
+      });
+
+      // Criar mensagens do sistema (fora da transação)
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
-        content: formattedPriceFinal
-          ? `✅ Entrega confirmada pelo cliente\n💰 Valor: ${formattedPriceFinal}\n🔒 Chat finalizado`
-          : `✅ Entrega confirmada pelo cliente\n🔒 Chat finalizado`,
+        content: `✅ Entrega confirmada pelo cliente\n💰 Valor total: ${formattedPrice}\n💵 Booster recebeu: ${formattedBoosterReceives} (95%)\n💰 Taxa da plataforma: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(feeAmount)} (5%)\n🔒 Chat finalizado`,
         type: 'system',
         metadata: {
           type: 'delivery_confirmed',
           systemType: 'order_finalized',
           confirmedBy: userId,
           closedAt: new Date(),
-          price: (numericPriceFinal != null && !isNaN(numericPriceFinal)) ? numericPriceFinal : undefined,
-          priceFormatted: formattedPriceFinal || undefined
+          price: price,
+          priceFormatted: formattedPrice,
+          boosterReceives: boosterReceives,
+          feeAmount: feeAmount
         }
       });
-
       await systemMessage.save();
+      conversation.lastMessage = systemMessage._id;
+      await conversation.save();
 
-
+      // Mensagem para o booster
       if (boosterUserId) {
         const boosterMessage = new Message({
           conversation: conversationId,
           sender: userId,
-          content: `🎉 Parabéns! O cliente confirmou a entrega do seu serviço.\n\n💰 O pagamento será processado em breve.\n🔒 Este chat foi finalizado.\n\nObrigado por usar nossa plataforma!`,
+          content: `🎉 Parabéns! O cliente confirmou a entrega do seu serviço.\n\n💰 Você recebeu: ${formattedBoosterReceives}\n💵 Taxa da plataforma: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(feeAmount)} (5%)\n\n🔒 Este chat foi finalizado.\n\nObrigado por usar nossa plataforma!`,
           type: 'system',
           metadata: {
             type: 'booster_notification',
             targetUser: boosterUserId,
-            confirmedBy: userId
+            confirmedBy: userId,
+            amountReceived: boosterReceives
           }
         });
-
         await boosterMessage.save();
-        console.log(`✅ Mensagem para booster ${boosterUserId} criada`);
       }
 
-
-      conversation.lastMessage = systemMessage._id;
-      conversation.lastMessageAt = new Date();
-      conversation.boostingStatus = 'completed';
-      conversation.metadata.set('status', 'delivery_confirmed');
-      conversation.deliveryConfirmedAt = new Date();
-      
-
-      console.log(`🔒 [DEBUG] Bloqueando conversa ${conversationId} no ZenithChatApi...`);
-      console.log(`   Estado anterior: isBlocked=${conversation.isBlocked}`);
-      
-      conversation.isBlocked = true;
-      conversation.blockedReason = 'pedido_finalizado';
-      conversation.blockedAt = new Date();
-      conversation.blockedBy = userId;
-      
-      const savedConversation = await conversation.save();
-      
-      console.log(`✅ [DEBUG] Conversa bloqueada no ZenithChatApi:`);
-      console.log(`   isBlocked: ${savedConversation.isBlocked}`);
-      console.log(`   blockedReason: ${savedConversation.blockedReason}`);
-      console.log(`   conversationId: ${savedConversation._id}`);
-
-
-      if (agreement) {
-        if (agreement.status === 'completed') {
-          console.log(`✅ Agreement ${agreement.agreementId} já está completado - operação idempotente`);
-        } else if (agreement.status === 'active') {
-          await agreement.complete(userId, { completedVia: 'confirmDelivery' }, `delivery_${conversationId}_${Date.now()}`);
-        } else {
-          console.warn(`⚠️ Agreement ${agreement.agreementId} está em status ${agreement.status} - não pode ser completado`);
-        }
-      } else if (acceptedProposal) {
-        if (acceptedProposal.status === 'completed') {
-          console.log(`✅ AcceptedProposal já está completado - operação idempotente`);
-        } else {
-          await acceptedProposal.complete();
-        }
-      }
-
-
+      // Notificar Main API
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithapi-steel.vercel.app';
-      
       try {
-
         const itemId = conversation.marketplaceItem || conversation.proposal;
-        
         if (itemId) {
           await axios.post(`${apiUrl}/api/boosting-proposals/${itemId}/confirm-delivery`, {
             conversationId,
             confirmedBy: userId
           }, {
-            headers: {
-              'Authorization': req.headers.authorization
-            }
+            headers: { 'Authorization': req.headers.authorization }
           });
-        } else {
-          console.log('Nenhum marketplaceItem ou proposal encontrado na conversa para notificar backend');
         }
       } catch (apiError) {
-        console.error('Erro ao notificar confirmação de entrega:', apiError);
-
-        if (apiError.response?.status >= 400) {
-          console.error('❌ Main API failed - rolling back conversation status');
-          conversation.boostingStatus = 'active';
-          conversation.isBlocked = false;
-          conversation.blockedReason = null;
-          conversation.blockedAt = null;
-          conversation.blockedBy = null;
-          await conversation.save();
-          
-          return res.status(500).json({
-            success: false,
-            message: 'Erro ao processar confirmação no sistema principal',
-            details: apiError.message
-          });
-        }
+        console.error('Erro ao notificar Main API:', apiError.message);
+        // Não faz rollback pois a transação já foi commitada com sucesso
       }
 
-
+      // Emitir eventos WebSocket
       const webSocketServer = req.app.get('webSocketServer');
       if (webSocketServer) {
-        const participants = savedConversation.participants?.map?.(p => p.toString ? p.toString() : p) || [];
+        const participants = conversation.participants?.map?.(p => p.toString ? p.toString() : p) || [];
         participants.forEach(participantId => {
           webSocketServer.sendToUser(participantId, {
-            type: 'delivery_confirmed',
+            type: 'boosting:delivery_confirmed',
             data: {
               conversationId,
               boostingStatus: 'completed',
               confirmedBy: userId,
               confirmedAt: new Date(),
               blocked: true,
-
-              orderId: (savedConversation.marketplaceItem || savedConversation.proposal) || null,
-              price: (numericPriceFinal != null && !isNaN(numericPriceFinal)) ? numericPriceFinal : null,
-              priceFormatted: formattedPriceFinal || null
+              price: price,
+              priceFormatted: formattedPrice,
+              boosterReceives: boosterReceives,
+              feeAmount: feeAmount
             },
             timestamp: new Date().toISOString()
           });
-        });
 
-        try {
-          const messageToSend = { ...systemMessage.toObject(), content: systemMessage.content };
-          participants.forEach(participantId => {
+          // Mensagem nova
+          try {
+            const messageToSend = { ...systemMessage.toObject(), content: systemMessage.content };
             webSocketServer.sendToUser(participantId, {
               type: 'message:new',
-              data: {
-                message: messageToSend,
-                conversationId
-              },
+              data: { message: messageToSend, conversationId },
               timestamp: new Date().toISOString()
             });
-          });
-        } catch (_) {}
+          } catch (_) {}
+        });
       }
 
-      res.json({
+      // Atualizar saldos em tempo real via WebSocket
+      await sendBalanceUpdate(req.app, boosterUserId);
+      
+      // Enviar atualização ao mediador também (se existir)
+      try {
+        const envId = process.env.MEDIATOR_USER_ID;
+        if (envId) await sendBalanceUpdate(req.app, envId);
+      } catch (_) {}
+
+      console.log('[BOOSTING] Confirmação de entrega concluída com sucesso');
+
+      return res.json({
         success: true,
-        message: 'Entrega confirmada com sucesso',
-        systemMessage,
-        blocked: true
+        message: 'Entrega confirmada e pagamento liberado com sucesso',
+        blocked: true,
+        data: {
+          price: price,
+          boosterReceives: boosterReceives,
+          feeAmount: feeAmount,
+          priceFormatted: formattedPrice,
+          boosterReceivesFormatted: formattedBoosterReceives
+        }
       });
     } catch (error) {
-      console.error('Erro ao confirmar entrega:', error);
-      res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+      console.error('[BOOSTING] Erro ao confirmar entrega:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Erro interno do servidor ao processar confirmação',
+        error: error.message 
+      });
     }
   }
 
