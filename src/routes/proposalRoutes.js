@@ -251,46 +251,55 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         // ✅ CRÍTICO: Criar Agreement para permitir confirmação de entrega
         try {
           console.log('📝 [Proposal Accept] Creating Agreement for conversation...');
-          console.log('📝 [Proposal Accept] ConversationId:', conversationId);
-          console.log('📝 [Proposal Accept] ClientId:', clientId);
-          console.log('📝 [Proposal Accept] BoosterId:', boosterId);
-          console.log('📝 [Proposal Accept] Metadata:', JSON.stringify(metadata, null, 2));
           
           // Verifica se já existe Agreement
           const existingAgreement = await Agreement.findOne({ conversationId });
           
-          if (existingAgreement) {
-            console.log(`ℹ️ [Proposal Accept] Agreement already exists: ${existingAgreement.agreementId}`);
-          } else {
-            console.log('🔍 [Proposal Accept] No existing Agreement, creating new one...');
+          if (!existingAgreement) {
+            console.log('🔍 [Proposal Accept] Agreement does not exist, creating new one...');
+            console.log('🔍 [Proposal Accept] Creating Agreement with:', {
+              conversationId,
+              actualProposalId,
+              clientId,
+              boosterId,
+              hasMetadata: !!metadata,
+              hasProposalData: !!metadata?.proposalData
+            });
             
             // Busca dados do cliente e booster
-            const User = require('../models/User');
-            const clientUser = await User.findById(clientId);
-            const boosterUser = await User.findById(boosterId);
+            const clientUser = await require('../models/User').findById(clientId);
+            const boosterUser = await require('../models/User').findById(boosterId);
             
-            console.log('🔍 [Proposal Accept] Client found:', !!clientUser, clientUser ? clientUser.name : 'N/A');
-            console.log('🔍 [Proposal Accept] Booster found:', !!boosterUser, boosterUser ? boosterUser.name : 'N/A');
+            console.log('🔍 [Proposal Accept] Users found:', {
+              clientUser: !!clientUser,
+              boosterUser: !!boosterUser,
+              clientName: clientUser?.name,
+              boosterName: boosterUser?.name
+            });
             
             if (!clientUser) {
-              throw new Error(`Cliente não encontrado: ${clientId}`);
+              throw new Error(`Client user not found: ${clientId}`);
             }
             if (!boosterUser) {
-              throw new Error(`Booster não encontrado: ${boosterId}`);
+              throw new Error(`Booster user not found: ${boosterId}`);
             }
             
-            // Extrai dados da proposta (pode estar em metadata.proposalData ou direto no metadata)
-            const proposalData = metadata?.proposalData || {};
-            const proposalPrice = proposalData.price || metadata?.price || metadata?.proposedPrice || 0;
-            
-            console.log('💰 [Proposal Accept] Extracted price:', proposalPrice);
-            console.log('📊 [Proposal Accept] ProposalData:', proposalData);
-            
-            if (!proposalPrice || proposalPrice <= 0) {
-              throw new Error(`Preço inválido: ${proposalPrice}`);
-            }
-            
-            const agreement = new Agreement({
+            if (clientUser && boosterUser) {
+              // Extrai dados da proposta (pode estar em metadata.proposalData ou direto no metadata)
+              const proposalData = metadata?.proposalData || {};
+              const proposalPrice = proposalData.price || metadata?.price || metadata?.proposedPrice || 0;
+              
+              console.log('🔍 [Proposal Accept] Proposal data extracted:', {
+                proposalPrice,
+                game: proposalData.game || metadata?.game,
+                category: proposalData.category || metadata?.category
+              });
+              
+              if (!proposalPrice || proposalPrice <= 0) {
+                throw new Error(`Invalid proposal price: ${proposalPrice}`);
+              }
+              
+              const agreement = new Agreement({
                 conversationId,
                 proposalId: actualProposalId,
                 proposalSnapshot: {
@@ -345,11 +354,30 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               await acceptedConv.save();
               
               console.log(`✅ [Proposal Accept] Agreement created: ${agreement.agreementId}`);
+              console.log('✅ [Proposal Accept] Agreement saved successfully with conversationId:', conversationId);
+            } else {
+              console.warn('⚠️ [Proposal Accept] Client or Booster user not found for Agreement creation');
+            }
+          } else {
+            console.log(`ℹ️ [Proposal Accept] Agreement already exists: ${existingAgreement.agreementId}`);
           }
         } catch (agreementError) {
-          console.error('❌ [Proposal Accept] Error creating Agreement:', agreementError.message);
-          console.error('❌ [Proposal Accept] Stack:', agreementError.stack);
-          // Não bloqueia o fluxo mesmo se Agreement falhar
+          console.error('❌ [Proposal Accept] CRITICAL ERROR creating Agreement:', agreementError.message);
+          console.error('❌ [Proposal Accept] Stack trace:', agreementError.stack);
+          console.error('❌ [Proposal Accept] This will prevent delivery confirmation!');
+          
+          // Log dados detalhados para debug
+          console.error('❌ [Proposal Accept] Failed with data:', {
+            conversationId,
+            actualProposalId,
+            clientId,
+            boosterId,
+            metadata: JSON.stringify(metadata, null, 2)
+          });
+          
+          // ⚠️ IMPORTANTE: Agreement é CRÍTICO para confirmação de entrega
+          // Se falhar, retornar erro para o cliente tentar novamente
+          throw new Error(`Falha crítica ao criar Agreement: ${agreementError.message}`);
         }
       } else {
         console.warn('⚠️ [Proposal Accept] Conversation not found for local update');
