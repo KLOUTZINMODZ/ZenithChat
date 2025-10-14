@@ -47,16 +47,23 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
 router.post('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
-    const { conversationId, boosterId, clientId, metadata = {} } = req.body;
+    let { conversationId, boosterId, clientId, metadata = {} } = req.body;
     let actualProposalId = proposalId;
     let boostingId = metadata?.boostingId;
     let lookupData = null;
+    
+    // Normaliza IDs que podem vir como objetos
+    if (typeof boosterId === 'object' && boosterId) {
+      boosterId = boosterId._id || boosterId.id;
+    }
+    if (typeof clientId === 'object' && clientId) {
+      clientId = clientId._id || clientId.id;
+    }
 
     console.log(`🔍 [Proposal Accept] Received request for proposal: ${proposalId}`);
     console.log(`🔍 [Proposal Accept] ConversationId: ${conversationId}`);
-    console.log(`🔍 [Proposal Accept] BoosterId: ${boosterId}`);
-    console.log(`🔍 [Proposal Accept] ClientId: ${clientId}`);
-    console.log(`🔍 [Proposal Accept] Full request body:`, JSON.stringify(req.body, null, 2));
+    console.log(`🔍 [Proposal Accept] BoosterId (normalized): ${boosterId}`);
+    console.log(`🔍 [Proposal Accept] ClientId (normalized): ${clientId}`);
     console.log(`🔍 [Proposal Accept] Metadata:`, metadata);
     console.log(`🔍 [Proposal Accept] Checking boostingId: ${boostingId} (type: ${typeof boostingId})`);
     console.log(`🔍 [Proposal Accept] Metadata boostingId exists: ${!!metadata?.boostingId}`);
@@ -130,8 +137,49 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
 
 
-    if (boostingId === proposalId && !lookupData?.actualProposalId) {
-      console.log(`🔍 [Proposal Accept] ProposalId matches boostingId, need to find actual proposal from conversation`);
+    // Se proposalId contém underscore, é o formato composto (boostingId_boosterId_timestamp)
+    // Precisamos buscar o ID real da proposta na API principal
+    if (proposalId.includes('_')) {
+      console.log(`🔍 [Proposal Accept] ProposalId is composite format, need to find real proposal ID`);
+      
+      try {
+        // Busca todas as propostas deste boosting request
+        const proposalsUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithapi-steel.vercel.app/api'}/boosting-requests/${boostingId}/proposals`;
+        console.log(`🔗 [Proposal Accept] Fetching proposals from: ${proposalsUrl}`);
+        
+        const proposalsResponse = await axios.get(proposalsUrl, {
+          headers: { Authorization: req.headers.authorization }
+        });
+        
+        const proposals = proposalsResponse.data.data || proposalsResponse.data.proposals || [];
+        console.log(`✅ [Proposal Accept] Found ${proposals.length} proposals for boosting ${boostingId}`);
+        
+        // Encontra a proposta do booster correto
+        const boosterIdStr = String(boosterId?._id || boosterId);
+        const matchingProposal = proposals.find(p => {
+          const proposalBoosterId = String(p.boosterId?._id || p.boosterId || p.booster?._id || p.booster);
+          return proposalBoosterId === boosterIdStr;
+        });
+        
+        if (matchingProposal) {
+          actualProposalId = String(matchingProposal._id || matchingProposal.id);
+          console.log(`✅ [Proposal Accept] Found matching proposal ID: ${actualProposalId} for booster ${boosterIdStr}`);
+        } else {
+          console.log(`⚠️ [Proposal Accept] No matching proposal found for booster ${boosterIdStr}`);
+          console.log(`🔍 [Proposal Accept] Available proposals:`, proposals.map(p => ({
+            id: p._id || p.id,
+            boosterId: p.boosterId?._id || p.boosterId || p.booster?._id || p.booster
+          })));
+        }
+      } catch (error) {
+        console.log('❌ [Proposal Accept] Error fetching proposals:', error.message);
+        console.log('❌ [Proposal Accept] Error details:', error.response?.data);
+      }
+    }
+    
+    // Se ainda não temos actualProposalId, verifica conversation metadata
+    if (!actualProposalId || actualProposalId.includes('_')) {
+      console.log(`🔍 [Proposal Accept] Checking conversation metadata for proposal ID`);
       
       try {
         const conversationResponse = await axios.get(`https://zenith.enrelyugi.com.br/api/conversations/${conversationId}`, {
@@ -141,9 +189,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         const conversationData = conversationResponse.data;
         console.log('🔍 [Proposal Accept] Conversation metadata:', JSON.stringify(conversationData?.metadata, null, 2));
         
-        if (conversationData?.metadata?.proposalId) {
-          actualProposalId = conversationData.metadata.proposalId;
-          console.log('✅ [Proposal Accept] Found actual proposalId from conversation metadata:', actualProposalId);
+        // Não usa metadata.proposalId se for formato composto
+        if (conversationData?.metadata?.actualProposalId) {
+          actualProposalId = conversationData.metadata.actualProposalId;
+          console.log('✅ [Proposal Accept] Found actualProposalId from conversation:', actualProposalId);
         }
       } catch (error) {
         console.log('❌ [Proposal Accept] Error fetching conversation metadata:', error.message);
