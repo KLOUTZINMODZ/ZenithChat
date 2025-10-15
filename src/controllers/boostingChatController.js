@@ -551,52 +551,108 @@ class BoostingChatController {
 
       // TRANSAÇÃO ATÔMICA: Transferir saldo
       await runTx(async (session) => {
-        // 1. DEBITAR o cliente (100% do preço)
-        const clientUser = await User.findById(clientUserId).session(session);
-        const clientBalanceBefore = round2(clientUser.walletBalance || 0);
+        // 1. VERIFICAR se cliente já foi debitado (escrow) ao aceitar proposta
+        // Se já foi debitado, apenas registrar a liberação do escrow
+        // Se não foi (boostings antigos), debitar agora
         
-        // Verificar se cliente tem saldo suficiente
-        if (clientBalanceBefore < price) {
-          throw new Error(`Saldo insuficiente. Necessário: R$ ${price.toFixed(2)}, Disponível: R$ ${clientBalanceBefore.toFixed(2)}`);
-        }
-        
-        const clientBalanceAfter = round2(clientBalanceBefore - price);
-        clientUser.walletBalance = clientBalanceAfter;
-        await clientUser.save({ session });
-
-        // Criar registro no WalletLedger (cliente - débito) - Formato idêntico ao marketplace
-        await WalletLedger.create([{
+        const existingEscrow = await WalletLedger.findOne({
           userId: clientUserId,
-          txId: null,
-          direction: 'debit',
-          reason: 'boosting_payment',
-          amount: price,
-          operationId: `boosting_payment:${agreement?._id || acceptedProposal?._id}`,
-          balanceBefore: clientBalanceBefore,
-          balanceAfter: clientBalanceAfter,
-          metadata: {
-            source: 'boosting',
-            agreementId: agreement?._id?.toString() || null,
-            conversationId: conversationId,
-            boosterId: boosterUserId?.toString(),
-            price: Number(price),
-            feeAmount: Number(feeAmount),
-            boosterReceives: Number(boosterReceives),
-            // ✅ Adicionar campos extras para compatibilidade com marketplace
-            feePercent: 0.05,
-            type: 'boosting_service',
-            // Informação útil para o cliente ver no histórico
-            serviceName: 'Serviço de Boosting',
-            providerName: 'Booster' // Pode ser substituído pelo nome real do booster se disponível
+          reason: 'boosting_escrow',
+          'metadata.agreementId': agreement?._id?.toString() || acceptedProposal?._id?.toString()
+        }).session(session);
+        
+        let clientBalanceBefore, clientBalanceAfter;
+        
+        if (existingEscrow) {
+          // ✅ Cliente JÁ FOI DEBITADO ao aceitar proposta (novo fluxo)
+          console.log('[BOOSTING] Cliente já foi debitado no escrow:', {
+            escrowId: existingEscrow._id,
+            amount: existingEscrow.amount,
+            date: existingEscrow.createdAt
+          });
+          
+          // Apenas registrar a liberação do escrow (não altera saldo)
+          const clientUser = await User.findById(clientUserId).session(session);
+          clientBalanceBefore = round2(clientUser.walletBalance || 0);
+          clientBalanceAfter = clientBalanceBefore; // Saldo não muda
+          
+          // Criar registro de liberação do escrow
+          await WalletLedger.create([{
+            userId: clientUserId,
+            txId: null,
+            direction: 'debit',
+            reason: 'boosting_escrow_release',
+            amount: 0, // ✅ Zero porque já foi debitado no escrow
+            operationId: `boosting_escrow_release:${agreement?._id || acceptedProposal?._id}`,
+            balanceBefore: clientBalanceBefore,
+            balanceAfter: clientBalanceAfter,
+            metadata: {
+              source: 'boosting',
+              agreementId: agreement?._id?.toString() || null,
+              conversationId: conversationId,
+              boosterId: boosterUserId?.toString(),
+              price: Number(price),
+              feeAmount: Number(feeAmount),
+              boosterReceives: Number(boosterReceives),
+              feePercent: 0.05,
+              type: 'boosting_service',
+              serviceName: 'Serviço de Boosting',
+              providerName: 'Booster',
+              status: 'released', // ✅ Escrow liberado
+              originalEscrowId: existingEscrow._id.toString()
+            }
+          }], { session });
+          
+          console.log('[BOOSTING] Escrow liberado (saldo não alterado)');
+        } else {
+          // ⚠️ Cliente NÃO FOI DEBITADO no escrow (boostings antigos ou fluxo legado)
+          // Debitar agora
+          console.warn('[BOOSTING] Cliente NÃO foi debitado no escrow, debitando agora (fluxo legado)');
+          
+          const clientUser = await User.findById(clientUserId).session(session);
+          clientBalanceBefore = round2(clientUser.walletBalance || 0);
+          
+          // Verificar se cliente tem saldo suficiente
+          if (clientBalanceBefore < price) {
+            throw new Error(`Saldo insuficiente. Necessário: R$ ${price.toFixed(2)}, Disponível: R$ ${clientBalanceBefore.toFixed(2)}`);
           }
-        }], { session });
+          
+          clientBalanceAfter = round2(clientBalanceBefore - price);
+          clientUser.walletBalance = clientBalanceAfter;
+          await clientUser.save({ session });
 
-        console.log('[BOOSTING] Cliente debitado:', {
-          clientId: clientUserId?.toString(),
-          amount: price,
-          balanceBefore: clientBalanceBefore,
-          balanceAfter: clientBalanceAfter
-        });
+          // Criar registro no WalletLedger (cliente - débito)
+          await WalletLedger.create([{
+            userId: clientUserId,
+            txId: null,
+            direction: 'debit',
+            reason: 'boosting_payment',
+            amount: price,
+            operationId: `boosting_payment:${agreement?._id || acceptedProposal?._id}`,
+            balanceBefore: clientBalanceBefore,
+            balanceAfter: clientBalanceAfter,
+            metadata: {
+              source: 'boosting',
+              agreementId: agreement?._id?.toString() || null,
+              conversationId: conversationId,
+              boosterId: boosterUserId?.toString(),
+              price: Number(price),
+              feeAmount: Number(feeAmount),
+              boosterReceives: Number(boosterReceives),
+              feePercent: 0.05,
+              type: 'boosting_service',
+              serviceName: 'Serviço de Boosting',
+              providerName: 'Booster'
+            }
+          }], { session });
+
+          console.log('[BOOSTING] Cliente debitado (fluxo legado):', {
+            clientId: clientUserId?.toString(),
+            amount: price,
+            balanceBefore: clientBalanceBefore,
+            balanceAfter: clientBalanceAfter
+          });
+        }
 
         // 2. Transferir 95% ao booster
         const boosterUser = await User.findById(boosterUserId).session(session);

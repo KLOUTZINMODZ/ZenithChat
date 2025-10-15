@@ -372,6 +372,71 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               console.log(`✅ [Proposal Accept] Agreement created: ${agreement.agreementId}`);
               console.log('✅ [Proposal Accept] Agreement saved successfully with conversationId:', conversationId);
               
+              // ✅ NOVO: DEBITAR cliente imediatamente (ESCROW) ao aceitar proposta
+              try {
+                console.log('💰 [Proposal Accept] Debitando cliente (escrow)...');
+                
+                const User = require('../models/User');
+                const WalletLedger = require('../models/WalletLedger');
+                const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+                
+                // Buscar cliente novamente para ter saldo atualizado
+                const clientForDebit = await User.findById(clientId);
+                const clientBalanceBefore = round2(clientForDebit.walletBalance || 0);
+                
+                // Verificar saldo suficiente
+                if (clientBalanceBefore < proposalPrice) {
+                  throw new Error(`Saldo insuficiente. Necessário: R$ ${proposalPrice.toFixed(2)}, Disponível: R$ ${clientBalanceBefore.toFixed(2)}`);
+                }
+                
+                const clientBalanceAfter = round2(clientBalanceBefore - proposalPrice);
+                clientForDebit.walletBalance = clientBalanceAfter;
+                await clientForDebit.save();
+                
+                // Criar registro no WalletLedger (cliente - débito escrow)
+                await WalletLedger.create({
+                  userId: clientId,
+                  txId: null,
+                  direction: 'debit',
+                  reason: 'boosting_escrow',
+                  amount: proposalPrice,
+                  operationId: `boosting_escrow:${agreement._id}`,
+                  balanceBefore: clientBalanceBefore,
+                  balanceAfter: clientBalanceAfter,
+                  metadata: {
+                    source: 'boosting',
+                    agreementId: agreement._id.toString(),
+                    conversationId: conversationId,
+                    boosterId: boosterId.toString(),
+                    price: Number(proposalPrice),
+                    feePercent: 0.05,
+                    type: 'boosting_service',
+                    serviceName: 'Serviço de Boosting',
+                    providerName: boosterUser.name || 'Booster',
+                    status: 'escrowed' // ✅ Indica que está em escrow
+                  }
+                });
+                
+                // Atualizar Agreement para indicar que pagamento foi reservado
+                agreement.financial.paymentStatus = 'escrowed';
+                await agreement.save();
+                
+                console.log('✅ [Proposal Accept] Cliente debitado (escrow):', {
+                  clientId: clientId.toString(),
+                  amount: proposalPrice,
+                  balanceBefore: clientBalanceBefore,
+                  balanceAfter: clientBalanceAfter,
+                  status: 'escrowed'
+                });
+              } catch (escrowError) {
+                console.error('❌ [Proposal Accept] Erro ao debitar cliente (escrow):', escrowError.message);
+                
+                // Reverter Agreement se débito falhou
+                await Agreement.deleteOne({ _id: agreement._id });
+                
+                throw new Error(`Erro ao processar pagamento: ${escrowError.message}`);
+              }
+              
               agreementCreated = agreement;
             } else {
               console.warn('⚠️ [Proposal Accept] Client or Booster user not found for Agreement creation');

@@ -20,6 +20,9 @@ const walletLedgerSchema = new mongoose.Schema({
     'purchase_release',
     'purchase_fee',
     'purchase_settle',
+    'boosting_escrow',         // ✅ NOVO: Cliente debitado ao aceitar proposta
+    'boosting_escrow_release',  // ✅ NOVO: Escrow liberado ao confirmar entrega
+    'boosting_payment',         // ✅ NOVO: Fluxo legado (sem escrow)
     'boosting_release',
     'boosting_fee'
   ], required: true },
