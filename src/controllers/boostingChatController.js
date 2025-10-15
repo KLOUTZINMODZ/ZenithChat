@@ -549,18 +549,55 @@ class BoostingChatController {
         });
       }
 
-      // TRANSAÇÃO ATÔMICA: Transferir saldo ao booster e ao mediador
+      // TRANSAÇÃO ATÔMICA: Transferir saldo
       await runTx(async (session) => {
-        // 1. Transferir saldo ao booster
-        const booster = await User.findById(boosterUserId).session(session);
-        if (!booster) {
-          throw new Error('Booster não encontrado');
+        // 1. DEBITAR o cliente (100% do preço)
+        const clientUser = await User.findById(clientUserId).session(session);
+        const clientBalanceBefore = round2(clientUser.walletBalance || 0);
+        
+        // Verificar se cliente tem saldo suficiente
+        if (clientBalanceBefore < price) {
+          throw new Error(`Saldo insuficiente. Necessário: R$ ${price.toFixed(2)}, Disponível: R$ ${clientBalanceBefore.toFixed(2)}`);
         }
+        
+        const clientBalanceAfter = round2(clientBalanceBefore - price);
+        clientUser.walletBalance = clientBalanceAfter;
+        await clientUser.save({ session });
 
-        const boosterBalanceBefore = round2(booster.walletBalance || 0);
+        // Criar registro no WalletLedger (cliente - débito)
+        await WalletLedger.create([{
+          userId: clientUserId,
+          txId: null,
+          direction: 'debit',
+          reason: 'boosting_payment',
+          amount: price,
+          operationId: `boosting_payment:${agreement?._id || acceptedProposal?._id}`,
+          balanceBefore: clientBalanceBefore,
+          balanceAfter: clientBalanceAfter,
+          metadata: {
+            source: 'boosting',
+            agreementId: agreement?._id?.toString() || null,
+            conversationId: conversationId,
+            boosterId: boosterUserId?.toString(),
+            price: price,
+            feeAmount: feeAmount,
+            boosterReceives: boosterReceives
+          }
+        }], { session });
+
+        console.log('[BOOSTING] Cliente debitado:', {
+          clientId: clientUserId?.toString(),
+          amount: price,
+          balanceBefore: clientBalanceBefore,
+          balanceAfter: clientBalanceAfter
+        });
+
+        // 2. Transferir 95% ao booster
+        const boosterUser = await User.findById(boosterUserId).session(session);
+        const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
-        booster.walletBalance = boosterBalanceAfter;
-        await booster.save({ session });
+        boosterUser.walletBalance = boosterBalanceAfter;
+        await boosterUser.save({ session });
 
         // Criar registro no WalletLedger (booster)
         const boosterLedger = await WalletLedger.create([{
@@ -615,7 +652,7 @@ class BoostingChatController {
           }], { session });
         } catch (_) {}
 
-        // 2. Transferir taxa ao mediador (5%)
+        // 3. Transferir taxa ao mediador (5%)
         if (feeAmount > 0) {
           let mediatorUser = null;
           const envId = process.env.MEDIATOR_USER_ID;
@@ -690,37 +727,6 @@ class BoostingChatController {
           } else {
             console.warn('[BOOSTING] Mediator user not found; fee not credited');
           }
-        }
-
-        // 3. Criar registro no WalletLedger para o cliente (amount 0, para histórico)
-        try {
-          const client = await User.findById(clientUserId).session(session);
-          const clientBalanceBefore = round2(client?.walletBalance || 0);
-          await WalletLedger.create([{
-            userId: clientUserId,
-            txId: null,
-            direction: 'debit',
-            reason: 'boosting_settle',
-            amount: 0,
-            operationId: `boosting_settle:${agreement?._id || acceptedProposal?._id}`,
-            balanceBefore: clientBalanceBefore,
-            balanceAfter: clientBalanceBefore,
-            metadata: {
-              source: 'boosting',
-              agreementId: agreement?._id?.toString() || null,
-              conversationId: conversationId,
-              boosterId: boosterUserId?.toString(),
-              price: price
-            }
-          }], { session });
-          
-          console.log('[BOOSTING] Registro de histórico criado para o cliente:', {
-            clientId: clientUserId?.toString(),
-            amount: 0,
-            reason: 'boosting_settle'
-          });
-        } catch (e) {
-          console.warn('[BOOSTING] Falha ao criar registro de histórico do cliente:', e.message);
         }
 
         // 4. Atualizar Agreement

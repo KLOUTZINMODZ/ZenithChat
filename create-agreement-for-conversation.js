@@ -100,11 +100,27 @@ async function createAgreementForConversation() {
     
     // Extrair dados da proposta (pode estar em metadata.proposalData)
     const proposalData = metadata.proposalData || {};
-    const proposalId = metadata.proposalId || metadata.actualProposalId || conv.proposal || conv._id;
+    const rawProposalId = metadata.proposalId || metadata.actualProposalId || conv.proposal;
+    const boostingId = metadata.boostingId;
     const proposalPrice = proposalData.price || acceptedProposal?.price || metadata.price || metadata.proposedPrice || 300;
     
+    // Validar e converter proposalId para ObjectId válido
+    let validProposalId;
+    
+    if (mongoose.Types.ObjectId.isValid(rawProposalId) && !String(rawProposalId).includes('_')) {
+      validProposalId = rawProposalId;
+      console.log('✅ Using rawProposalId as ObjectId:', validProposalId);
+    } else if (mongoose.Types.ObjectId.isValid(boostingId)) {
+      validProposalId = boostingId;
+      console.log('✅ ProposalId is composite, using boostingId:', validProposalId);
+    } else {
+      validProposalId = conv._id;
+      console.log('⚠️ Using conversationId as fallback:', validProposalId);
+    }
+    
     console.log('📋 Dados da proposta:');
-    console.log(`   proposalId: ${proposalId}`);
+    console.log(`   rawProposalId: ${rawProposalId}`);
+    console.log(`   validProposalId (ObjectId): ${validProposalId}`);
     console.log(`   price: R$ ${proposalPrice}`);
     console.log(`   game: ${proposalData.game || metadata.game || 'N/A'}`);
     console.log(`   category: ${proposalData.category || metadata.category || 'Boosting'}`);
@@ -122,7 +138,7 @@ async function createAgreementForConversation() {
     
     const agreement = new Agreement({
       conversationId: conv._id,
-      proposalId: mongoose.Types.ObjectId.isValid(proposalId) ? proposalId : conv._id,
+      proposalId: validProposalId,
       proposalSnapshot: {
         game: proposalData.game || metadata.game || 'N/A',
         category: proposalData.category || metadata.category || metadata.boostingCategory || 'Boosting',
