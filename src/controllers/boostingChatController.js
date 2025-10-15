@@ -564,7 +564,7 @@ class BoostingChatController {
         clientUser.walletBalance = clientBalanceAfter;
         await clientUser.save({ session });
 
-        // Criar registro no WalletLedger (cliente - débito)
+        // Criar registro no WalletLedger (cliente - débito) - Formato idêntico ao marketplace
         await WalletLedger.create([{
           userId: clientUserId,
           txId: null,
@@ -579,9 +579,15 @@ class BoostingChatController {
             agreementId: agreement?._id?.toString() || null,
             conversationId: conversationId,
             boosterId: boosterUserId?.toString(),
-            price: price,
-            feeAmount: feeAmount,
-            boosterReceives: boosterReceives
+            price: Number(price),
+            feeAmount: Number(feeAmount),
+            boosterReceives: Number(boosterReceives),
+            // ✅ Adicionar campos extras para compatibilidade com marketplace
+            feePercent: 0.05,
+            type: 'boosting_service',
+            // Informação útil para o cliente ver no histórico
+            serviceName: 'Serviço de Boosting',
+            providerName: 'Booster' // Pode ser substituído pelo nome real do booster se disponível
           }
         }], { session });
 
@@ -599,7 +605,7 @@ class BoostingChatController {
         boosterUser.walletBalance = boosterBalanceAfter;
         await boosterUser.save({ session });
 
-        // Criar registro no WalletLedger (booster)
+        // Criar registro no WalletLedger (booster) - Formato idêntico ao marketplace
         const boosterLedger = await WalletLedger.create([{
           userId: boosterUserId,
           txId: null,
@@ -614,9 +620,12 @@ class BoostingChatController {
             agreementId: agreement?._id?.toString() || null,
             conversationId: conversationId,
             clientId: clientUserId?.toString(),
-            price: price,
-            feeAmount: feeAmount,
-            boosterReceives: boosterReceives
+            price: Number(price),
+            feeAmount: Number(feeAmount),
+            boosterReceives: Number(boosterReceives),
+            // ✅ Adicionar campos extras para compatibilidade com marketplace
+            feePercent: 0.05,
+            type: 'boosting_service'
           }
         }], { session });
 
@@ -627,7 +636,7 @@ class BoostingChatController {
           balanceAfter: boosterBalanceAfter
         });
 
-        // Criar log no Mediator (release)
+        // Criar log no Mediator (release) - Formato idêntico ao marketplace
         try {
           await Mediator.create([{
             eventType: 'release',
@@ -639,14 +648,20 @@ class BoostingChatController {
             reference: {
               agreementId: agreement?._id || null,
               conversationId: conversationId,
-              walletLedgerId: boosterLedger[0]?._id || null
+              walletLedgerId: boosterLedger[0]?._id || null,
+              // ✅ Adicionar campos de referência similares ao marketplace
+              transactionId: null,
+              asaasTransferId: null
             },
             metadata: {
-              price: price,
-              feeAmount: feeAmount,
-              boosterReceives: boosterReceives,
+              price: Number(price),
+              feeAmount: Number(feeAmount),
+              boosterReceives: Number(boosterReceives),
               clientId: clientUserId?.toString(),
-              boosterId: boosterUserId?.toString()
+              boosterId: boosterUserId?.toString(),
+              // ✅ Adicionar campos extras para compatibilidade
+              feePercent: 0.05,
+              serviceType: 'boosting'
             },
             description: 'Liberação de pagamento ao booster'
           }], { session });
@@ -671,7 +686,7 @@ class BoostingChatController {
             mediatorUser.walletBalance = mediatorBalanceAfter;
             await mediatorUser.save({ session });
 
-            // Criar registro no WalletLedger (mediador)
+            // Criar registro no WalletLedger (mediador) - Formato idêntico ao marketplace
             const mediatorLedger = await WalletLedger.create([{
               userId: mediatorUser._id,
               txId: null,
@@ -687,9 +702,12 @@ class BoostingChatController {
                 conversationId: conversationId,
                 boosterId: boosterUserId?.toString(),
                 clientId: clientUserId?.toString(),
-                price: price,
-                feeAmount: feeAmount,
-                boosterReceives: boosterReceives
+                price: Number(price),
+                feeAmount: Number(feeAmount),
+                boosterReceives: Number(boosterReceives),
+                // ✅ Adicionar campos extras para compatibilidade com marketplace
+                feePercent: 0.05,
+                type: 'boosting_service'
               }
             }], { session });
 
@@ -700,7 +718,7 @@ class BoostingChatController {
               balanceAfter: mediatorBalanceAfter
             });
 
-            // Criar log no Mediator (fee)
+            // Criar log no Mediator (fee) - Formato idêntico ao marketplace
             try {
               await Mediator.create([{
                 eventType: 'fee',
@@ -712,16 +730,22 @@ class BoostingChatController {
                 reference: {
                   agreementId: agreement?._id || null,
                   conversationId: conversationId,
-                  walletLedgerId: mediatorLedger[0]?._id || null
+                  walletLedgerId: mediatorLedger[0]?._id || null,
+                  // ✅ Adicionar campos de referência similares ao marketplace
+                  transactionId: null,
+                  asaasTransferId: null
                 },
                 metadata: {
-                  price: price,
-                  feeAmount: feeAmount,
-                  boosterReceives: boosterReceives,
+                  price: Number(price),
+                  feeAmount: Number(feeAmount),
+                  boosterReceives: Number(boosterReceives),
                   boosterId: boosterUserId?.toString(),
-                  clientId: clientUserId?.toString()
+                  clientId: clientUserId?.toString(),
+                  // ✅ Adicionar campos extras para compatibilidade
+                  feePercent: 0.05,
+                  serviceType: 'boosting'
                 },
-                description: 'Taxa de mediação (5%) - Boosting'
+                description: 'Taxa de mediação (5%) creditada ao mediador - Boosting'
               }], { session });
             } catch (_) {}
           } else {
