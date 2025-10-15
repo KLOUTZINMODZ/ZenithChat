@@ -125,7 +125,7 @@ const agreementSchema = new mongoose.Schema({
     currency: { type: String, default: 'BRL' },
     paymentStatus: {
       type: String,
-      enum: ['pending', 'paid', 'refunded', 'partial_refund'],
+      enum: ['pending', 'escrowed', 'paid', 'refunded', 'partial_refund'],
       default: 'pending'
     }
   },
