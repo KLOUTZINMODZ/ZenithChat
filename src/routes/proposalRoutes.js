@@ -224,7 +224,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     console.log('📝 [Proposal Accept] Accepting proposal locally in Chat API...');
     
     let acceptedConv = null;
+    let agreementCreated = null;
+    
     try {
+      // 1. Buscar conversa
       if (conversationId) {
         acceptedConv = await Conversation.findById(conversationId);
       }
@@ -240,16 +243,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         });
       }
 
-      if (acceptedConv) {
-        acceptedConv.isTemporary = false;
-        acceptedConv.status = 'accepted';
-        acceptedConv.expiresAt = null;
-        acceptedConv.boostingStatus = 'active';
-        await acceptedConv.save();
-        console.log('✅ [Proposal Accept] Conversation accepted locally:', acceptedConv._id);
-        
-        // ✅ CRÍTICO: Criar Agreement para permitir confirmação de entrega
-        try {
+      if (!acceptedConv) {
+        throw new Error('Conversa não encontrada para aceitar proposta');
+      }
+
+      console.log('✅ [Proposal Accept] Conversation found:', acceptedConv._id);
+      
+      // 2. ✅ CRÍTICO: Criar Agreement ANTES de aceitar a conversa
+      try {
           console.log('📝 [Proposal Accept] Creating Agreement for conversation...');
           
           // Verifica se já existe Agreement
@@ -355,35 +356,53 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               
               console.log(`✅ [Proposal Accept] Agreement created: ${agreement.agreementId}`);
               console.log('✅ [Proposal Accept] Agreement saved successfully with conversationId:', conversationId);
+              
+              agreementCreated = agreement;
             } else {
               console.warn('⚠️ [Proposal Accept] Client or Booster user not found for Agreement creation');
             }
           } else {
             console.log(`ℹ️ [Proposal Accept] Agreement already exists: ${existingAgreement.agreementId}`);
+            agreementCreated = existingAgreement;
           }
-        } catch (agreementError) {
-          console.error('❌ [Proposal Accept] CRITICAL ERROR creating Agreement:', agreementError.message);
-          console.error('❌ [Proposal Accept] Stack trace:', agreementError.stack);
-          console.error('❌ [Proposal Accept] This will prevent delivery confirmation!');
-          
-          // Log dados detalhados para debug
-          console.error('❌ [Proposal Accept] Failed with data:', {
-            conversationId,
-            actualProposalId,
-            clientId,
-            boosterId,
-            metadata: JSON.stringify(metadata, null, 2)
-          });
-          
-          // ⚠️ IMPORTANTE: Agreement é CRÍTICO para confirmação de entrega
-          // Se falhar, retornar erro para o cliente tentar novamente
-          throw new Error(`Falha crítica ao criar Agreement: ${agreementError.message}`);
-        }
-      } else {
-        console.warn('⚠️ [Proposal Accept] Conversation not found for local update');
+      } catch (agreementError) {
+        console.error('❌ [Proposal Accept] CRITICAL ERROR creating Agreement:', agreementError.message);
+        console.error('❌ [Proposal Accept] Stack trace:', agreementError.stack);
+        console.error('❌ [Proposal Accept] This will prevent delivery confirmation!');
+        
+        // Log dados detalhados para debug
+        console.error('❌ [Proposal Accept] Failed with data:', {
+          conversationId,
+          actualProposalId,
+          clientId,
+          boosterId,
+          metadata: JSON.stringify(metadata, null, 2)
+        });
+        
+        // ⚠️ IMPORTANTE: Agreement é CRÍTICO para confirmação de entrega
+        // Propagar erro para impedir aceitação
+        throw agreementError;
       }
+      
+      // 3. Somente APÓS criar Agreement, aceitar a conversa
+      acceptedConv.isTemporary = false;
+      acceptedConv.status = 'accepted';
+      acceptedConv.expiresAt = null;
+      acceptedConv.boostingStatus = 'active';
+      await acceptedConv.save();
+      console.log('✅ [Proposal Accept] Conversation accepted locally:', acceptedConv._id);
+      
     } catch (localError) {
-      console.error('❌ [Proposal Accept] Error accepting locally:', localError.message);
+      console.error('❌ [Proposal Accept] FATAL ERROR accepting locally:', localError.message);
+      console.error('❌ [Proposal Accept] Stack:', localError.stack);
+      
+      // ⚠️ RETORNAR ERRO para o cliente - NÃO continuar se Agreement falhou
+      return res.status(500).json({
+        success: false,
+        message: 'Erro crítico ao aceitar proposta. Por favor, tente novamente.',
+        error: localError.message,
+        details: 'O Agreement não pôde ser criado. Isso é necessário para confirmar a entrega posteriormente.'
+      });
     }
     
     // Tenta sincronizar com API principal (não-bloqueante)
