@@ -538,9 +538,31 @@ class BoostingChatController {
         boosterReceives
       });
 
-      // Idempotência: verificar se já completado
+      // ✅ IDEMPOTÊNCIA: verificar se já completado
       if (agreement && agreement.status === 'completed') {
         console.log(`✅ Agreement ${agreement.agreementId} já está completado - operação idempotente`);
+        return res.json({
+          success: true,
+          message: 'Entrega já foi confirmada anteriormente',
+          blocked: true,
+          idempotent: true
+        });
+      }
+      
+      // ✅ IDEMPOTÊNCIA: verificar se conversation já está bloqueada por finalização
+      if (conversation.isBlocked && conversation.blockedReason === 'pedido_finalizado') {
+        console.log(`✅ Conversation ${conversationId} já está finalizada - operação idempotente`);
+        return res.json({
+          success: true,
+          message: 'Entrega já foi confirmada anteriormente',
+          blocked: true,
+          idempotent: true
+        });
+      }
+      
+      // ✅ IDEMPOTÊNCIA: verificar se conversation já tem deliveryConfirmedAt
+      if (conversation.deliveryConfirmedAt) {
+        console.log(`✅ Conversation ${conversationId} já tem deliveryConfirmedAt - operação idempotente`);
         return res.json({
           success: true,
           message: 'Entrega já foi confirmada anteriormente',
@@ -835,7 +857,7 @@ class BoostingChatController {
         await conversation.save({ session });
       });
 
-      // Criar mensagens do sistema (fora da transação)
+      // ✅ CRIAR APENAS UMA MENSAGEM DO SISTEMA (evita duplicação)
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
@@ -849,29 +871,15 @@ class BoostingChatController {
           price: price,
           priceFormatted: formattedPrice,
           boosterReceives: boosterReceives,
-          feeAmount: feeAmount
+          feeAmount: feeAmount,
+          // ✅ Marcar como já processado para idempotência
+          processed: true,
+          processedAt: new Date()
         }
       });
       await systemMessage.save();
       conversation.lastMessage = systemMessage._id;
       await conversation.save();
-
-      // Mensagem para o booster
-      if (boosterUserId) {
-        const boosterMessage = new Message({
-          conversation: conversationId,
-          sender: userId,
-          content: `🎉 Parabéns! O cliente confirmou a entrega do seu serviço.\n\n💰 Você recebeu: ${formattedBoosterReceives}\n💵 Taxa da plataforma: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(feeAmount)} (5%)\n\n🔒 Este chat foi finalizado.\n\nObrigado por usar nossa plataforma!`,
-          type: 'system',
-          metadata: {
-            type: 'booster_notification',
-            targetUser: boosterUserId,
-            confirmedBy: userId,
-            amountReceived: boosterReceives
-          }
-        });
-        await boosterMessage.save();
-      }
 
       // Notificar Main API
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';

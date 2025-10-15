@@ -594,9 +594,61 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
+    // ✅ VALIDAÇÃO 0: Usuário banido (prioritário)
+    const User = require('../models/User');
+    const userDoc = await User.findById(userId);
+    if (userDoc && userDoc.isBanned) {
+      logger.warn('[MSG:REST] User is banned - blocking send', { 
+        conversationId, 
+        userId,
+        bannedAt: userDoc.bannedAt,
+        banReason: userDoc.banReason
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Usuário banido - não é possível enviar mensagens',
+        error: 'USER_BANNED',
+        banned: true,
+        bannedAt: userDoc.bannedAt,
+        banReason: userDoc.banReason
+      });
+    }
 
+    // ✅ VALIDAÇÃO 1: Chat bloqueado (isBlocked = true)
+    if (conversation.isBlocked) {
+      const reasonMap = {
+        'pedido_finalizado': 'Pedido finalizado',
+        'pedido_cancelado': 'Pedido cancelado',
+        'support_ticket': 'Suporte acionado - ticket aberto',
+        'denunciado': 'Chat denunciado',
+        'fraude': 'Suspeita de fraude',
+        'proposta_recusada': 'Proposta recusada',
+        'usuario_banido': 'Usuário banido'
+      };
+      const reason = reasonMap[conversation.blockedReason] || 'Chat bloqueado';
+      
+      logger.warn('[MSG:REST] Conversation is blocked - blocking send', { 
+        conversationId, 
+        userId, 
+        blockedReason: conversation.blockedReason,
+        blockedAt: conversation.blockedAt,
+        blockedBy: conversation.blockedBy
+      });
+      
+      return res.status(423).json({
+        success: false,
+        message: `${reason} - não é possível enviar mensagens`,
+        error: 'CHAT_BLOCKED',
+        blocked: true,
+        blockedReason: conversation.blockedReason,
+        blockedAt: conversation.blockedAt
+      });
+    }
+
+    // ✅ VALIDAÇÃO 2: Chat reportado
     if (conversation.isReported) {
-      logger.warn('[MSG:REST] Conversation reported - blocking send', { conversationId, userId });
+      logger.warn('[MSG:REST] Conversation is reported - blocking send', { conversationId, userId });
       return res.status(423).json({
         success: false,
         message: 'Chat reportado - não é possível enviar mensagens',
@@ -604,7 +656,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-
+    // ✅ VALIDAÇÃO 3: Chat inativo
     if (!conversation.isActive) {
       logger.warn('[MSG:REST] Conversation inactive/finalized - blocking send', { conversationId, userId });
       return res.status(423).json({
