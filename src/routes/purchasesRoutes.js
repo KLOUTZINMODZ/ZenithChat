@@ -97,20 +97,28 @@ async function emitMarketplaceStatusChanged(app, purchase, status) {
     const ws = app.get('webSocketServer');
     const participants = [purchase?.buyerId?.toString?.(), purchase?.sellerId?.toString?.()].filter(Boolean);
     if (ws) {
+      const now = new Date();
+      const wsData = {
+        conversationId: purchase?.conversationId?.toString?.() || purchase?.conversationId,
+        purchaseId: purchase?._id?.toString?.() || purchase?._id,
+        buyerId: purchase?.buyerId?.toString?.() || purchase?.buyerId,
+        sellerId: purchase?.sellerId?.toString?.() || purchase?.sellerId,
+        status,
+        shippedAt: purchase?.shippedAt || null,
+        deliveredAt: purchase?.deliveredAt || null,
+        autoReleaseAt: purchase?.autoReleaseAt || null,
+        timestamp: now.toISOString(),
+        updatedAt: now.toISOString(), // Para priorização no front-end
+        source: 'realtime' // Identifica origem do evento
+      };
+      
       for (const uid of participants) {
         ws.sendToUser(uid, {
           type: 'marketplace:status_changed',
-          data: {
-            conversationId: purchase?.conversationId?.toString?.() || purchase?.conversationId,
-            purchaseId: purchase?._id?.toString?.() || purchase?._id,
-            status,
-            shippedAt: purchase?.shippedAt || null,
-            deliveredAt: purchase?.deliveredAt || null,
-            autoReleaseAt: purchase?.autoReleaseAt || null,
-            timestamp: new Date().toISOString()
-          }
+          data: wsData
         });
       }
+      
       if (ws.conversationHandler) {
         for (const uid of participants) {
           await ws.conversationHandler.sendConversationsUpdate(uid);
