@@ -725,16 +725,15 @@ class BoostingChatController {
 
         // 3. Transferir taxa ao mediador (5%)
         if (feeAmount > 0) {
-          let mediatorUser = null;
-          const envId = process.env.MEDIATOR_USER_ID;
-          const envEmail = process.env.MEDIATOR_EMAIL;
-
-          if (envId) {
-            try { mediatorUser = await User.findById(envId).session(session); } catch (_) {}
-          }
-          if (!mediatorUser && envEmail) {
-            try { mediatorUser = await User.findOne({ email: envEmail }).session(session); } catch (_) {}
-          }
+          // ✅ Buscar mediador apenas por email (igual walletRoutes.js)
+          const mediatorEmail = process.env.MEDIATOR_EMAIL || 'mediador@zenith.com';
+          
+          try {
+            const mediatorUser = await User.findOne({ email: mediatorEmail }).session(session);
+            
+            if (!mediatorUser) {
+              console.warn(`[BOOSTING] Mediador não encontrado (email: ${mediatorEmail}). Taxa não creditada.`);
+            }
 
           if (mediatorUser) {
             const mediatorBalanceBefore = round2(mediatorUser.walletBalance || 0);
@@ -804,8 +803,9 @@ class BoostingChatController {
                 description: 'Taxa de mediação (5%) creditada ao mediador - Boosting'
               }], { session });
             } catch (_) {}
-          } else {
-            console.warn('[BOOSTING] Mediator user not found; fee not credited');
+          }
+          } catch (mediatorError) {
+            console.error('[BOOSTING] Erro ao creditar mediador:', mediatorError.message);
           }
         }
 
