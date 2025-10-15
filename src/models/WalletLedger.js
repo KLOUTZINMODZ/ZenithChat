@@ -24,8 +24,7 @@ const walletLedgerSchema = new mongoose.Schema({
     'boosting_escrow_release',  // ✅ NOVO: Escrow liberado ao confirmar entrega
     'boosting_payment',         // ✅ NOVO: Fluxo legado (sem escrow)
     'boosting_release',
-    'boosting_fee',
-    'boosting_settle'           // ✅ NOVO: Settlement cliente (amount: 0) - igual marketplace
+    'boosting_fee'
   ], required: true },
 
   amount: { type: Number, required: true },

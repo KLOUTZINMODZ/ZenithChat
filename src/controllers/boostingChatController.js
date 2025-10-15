@@ -692,91 +692,124 @@ class BoostingChatController {
           balanceAfter: boosterBalanceAfter
         });
 
-        // Log platform release into mediator (idempotent) - IGUAL marketplace
+        // Criar log no Mediator (release) - Formato idêntico ao marketplace
         try {
-          const operationId = `boosting_release:${agreement?._id || acceptedProposal?._id}`;
-          await Mediator.updateOne(
-            { operationId },
-            {
-              $setOnInsert: {
-                eventType: 'release',
-                amount: Number(boosterReceives),
+          await Mediator.create([{
+            eventType: 'release',
+            amount: boosterReceives,
+            currency: 'BRL',
+            operationId: `boosting_release:${agreement?._id || acceptedProposal?._id}`,
+            source: 'ZenithChatApi',
+            occurredAt: new Date(),
+            reference: {
+              agreementId: agreement?._id || null,
+              conversationId: conversationId,
+              walletLedgerId: boosterLedger[0]?._id || null,
+              // ✅ Adicionar campos de referência similares ao marketplace
+              transactionId: null,
+              asaasTransferId: null
+            },
+            metadata: {
+              price: Number(price),
+              feeAmount: Number(feeAmount),
+              boosterReceives: Number(boosterReceives),
+              clientId: clientUserId?.toString(),
+              boosterId: boosterUserId?.toString(),
+              // ✅ Adicionar campos extras para compatibilidade
+              feePercent: 0.05,
+              serviceType: 'boosting'
+            },
+            description: 'Liberação de pagamento ao booster'
+          }], { session });
+        } catch (_) {}
+
+        // 3. Transferir taxa ao mediador (5%)
+        if (feeAmount > 0) {
+          // ✅ Buscar mediador apenas por email (igual walletRoutes.js)
+          const mediatorEmail = process.env.MEDIATOR_EMAIL || 'mediador@zenith.com';
+          1
+          try {
+            const mediatorUser = await User.findOne({ email: mediatorEmail }).session(session);
+            
+            if (!mediatorUser) {
+              console.warn(`[BOOSTING] Mediador não encontrado (email: ${mediatorEmail}). Taxa não creditada.`);
+            }
+
+          if (mediatorUser) {
+            const mediatorBalanceBefore = round2(mediatorUser.walletBalance || 0);
+            const mediatorBalanceAfter = round2(mediatorBalanceBefore + feeAmount);
+            mediatorUser.walletBalance = mediatorBalanceAfter;
+            await mediatorUser.save({ session });
+
+            // Criar registro no WalletLedger (mediador) - Formato idêntico ao marketplace
+            const mediatorLedger = await WalletLedger.create([{
+              userId: mediatorUser._id,
+              txId: null,
+              direction: 'credit',
+              reason: 'boosting_fee',
+              amount: feeAmount,
+              operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
+              balanceBefore: mediatorBalanceBefore,
+              balanceAfter: mediatorBalanceAfter,
+              metadata: {
+                source: 'boosting',
+                agreementId: agreement?._id?.toString() || null,
+                conversationId: conversationId,
+                boosterId: boosterUserId?.toString(),
+                clientId: clientUserId?.toString(),
+                price: Number(price),
+                feeAmount: Number(feeAmount),
+                boosterReceives: Number(boosterReceives),
+                // ✅ Adicionar campos extras para compatibilidade com marketplace
+                feePercent: 0.05,
+                type: 'boosting_service'
+              }
+            }], { session });
+
+            console.log('[BOOSTING] Taxa transferida ao mediador:', {
+              mediatorId: mediatorUser._id?.toString(),
+              amount: feeAmount,
+              balanceBefore: mediatorBalanceBefore,
+              balanceAfter: mediatorBalanceAfter
+            });
+
+            // Criar log no Mediator (fee) - Formato idêntico ao marketplace
+            try {
+              await Mediator.create([{
+                eventType: 'fee',
+                amount: feeAmount,
                 currency: 'BRL',
-                operationId,
+                operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
                 source: 'ZenithChatApi',
                 occurredAt: new Date(),
                 reference: {
                   agreementId: agreement?._id || null,
                   conversationId: conversationId,
-                  walletLedgerId: Array.isArray(boosterLedger) ? boosterLedger[0]?._id : (boosterLedger?._id || null),
+                  walletLedgerId: mediatorLedger[0]?._id || null,
+                  // ✅ Adicionar campos de referência similares ao marketplace
                   transactionId: null,
                   asaasTransferId: null
                 },
-                metadata: { 
-                  price: Number(price), 
-                  feeAmount: Number(feeAmount), 
+                metadata: {
+                  price: Number(price),
+                  feeAmount: Number(feeAmount),
                   boosterReceives: Number(boosterReceives),
+                  boosterId: boosterUserId?.toString(),
                   clientId: clientUserId?.toString(),
-                  boosterId: boosterUserId?.toString()
+                  // ✅ Adicionar campos extras para compatibilidade
+                  feePercent: 0.05,
+                  serviceType: 'boosting'
                 },
-                description: 'Liberação de escrow ao booster'
-              }
-            },
-            { upsert: true, session }
-          );
-        } catch (_) {}
-
-        // 3. Log mediator fee event for precise financial reporting - IGUAL marketplace
-        try {
-          if (feeAmount > 0) {
-            await Mediator.create([{
-              eventType: 'fee',
-              amount: feeAmount,
-              currency: 'BRL',
-              operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
-              source: 'ZenithChatApi',
-              occurredAt: new Date(),
-              reference: {
-                agreementId: agreement?._id || null,
-                conversationId: conversationId,
-                walletLedgerId: null,
-                transactionId: null,
-                asaasTransferId: null
-              },
-              metadata: { 
-                price: Number(price), 
-                feeAmount: feeAmount, 
-                boosterReceives: Number(boosterReceives), 
-                boosterId: boosterUserId?.toString(),
-                clientId: clientUserId?.toString()
-              },
-              description: 'Taxa de mediação (5%) creditada ao mediador'
-            }], { session });
+                description: 'Taxa de mediação (5%) creditada ao mediador - Boosting'
+              }], { session });
+            } catch (_) {}
           }
-        } catch (_) {}
+          } catch (mediatorError) {
+            console.error('[BOOSTING] Erro ao creditar mediador:', mediatorError.message);
+          }
+        }
 
-        // 4. Client settlement ledger (amount 0) to appear in history - IGUAL marketplace
-        try {
-          const client = await User.findById(clientUserId).session(session);
-          const clientBefore = round2(client?.walletBalance || 0);
-          await WalletLedger.create([{
-            userId: clientUserId,
-            txId: null,
-            direction: 'debit',
-            reason: 'boosting_settle',
-            amount: 0,
-            operationId: `boosting_settle:${agreement?._id || acceptedProposal?._id}`,
-            balanceBefore: clientBefore,
-            balanceAfter: clientBefore,
-            metadata: { 
-              source: 'boosting', 
-              agreementId: agreement?._id?.toString() || null,
-              conversationId: conversationId
-            }
-          }], { session });
-        } catch (_) {}
-
-        // 5. Atualizar Agreement
+        // 4. Atualizar Agreement
         if (agreement) {
           if (agreement.status === 'active') {
             agreement.status = 'completed';
@@ -790,7 +823,7 @@ class BoostingChatController {
           }
         }
 
-        // 6. Atualizar Conversation
+        // 5. Atualizar Conversation
         conversation.lastMessageAt = new Date();
         conversation.boostingStatus = 'completed';
         conversation.metadata.set('status', 'delivery_confirmed');
