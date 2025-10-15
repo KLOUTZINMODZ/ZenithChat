@@ -300,9 +300,24 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 throw new Error(`Invalid proposal price: ${proposalPrice}`);
               }
               
+              // Validar e converter proposalId para ObjectId válido
+              const mongoose = require('mongoose');
+              let validProposalId;
+              
+              if (mongoose.Types.ObjectId.isValid(actualProposalId) && !actualProposalId.includes('_')) {
+                validProposalId = actualProposalId;
+                console.log('✅ [Proposal Accept] Using actualProposalId as ObjectId:', validProposalId);
+              } else if (mongoose.Types.ObjectId.isValid(boostingId)) {
+                validProposalId = boostingId;
+                console.log('✅ [Proposal Accept] ProposalId is composite, using boostingId:', validProposalId);
+              } else {
+                validProposalId = conversationId;
+                console.log('⚠️ [Proposal Accept] Using conversationId as fallback:', validProposalId);
+              }
+              
               const agreement = new Agreement({
                 conversationId,
-                proposalId: actualProposalId,
+                proposalId: validProposalId,
                 proposalSnapshot: {
                   game: proposalData.game || metadata?.game || 'N/A',
                   category: proposalData.category || metadata?.category || metadata?.boostingCategory || 'Boosting',
