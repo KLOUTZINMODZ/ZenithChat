@@ -15,6 +15,7 @@ async function updateUserFields() {
       {
         $or: [
           { rating: { $exists: false } },
+          { 'rating.average': { $exists: false } },
           { totalBoosts: { $exists: false } },
           { completedBoosts: { $exists: false } },
           { totalOrders: { $exists: false } },
@@ -23,7 +24,8 @@ async function updateUserFields() {
       },
       {
         $set: {
-          rating: 0,
+          'rating.average': 0,
+          'rating.count': 0,
           totalBoosts: 0,
           completedBoosts: 0,
           totalOrders: 0,
@@ -39,7 +41,7 @@ async function updateUserFields() {
     const sampleUsers = await User.find({}).limit(5).select('name rating totalBoosts completedBoosts totalOrders isVerified');
     console.log('\n📊 Amostra de usuários atualizados:');
     sampleUsers.forEach(user => {
-      console.log(`- ${user.name}: rating=${user.rating}, totalBoosts=${user.totalBoosts}, completedBoosts=${user.completedBoosts}, totalOrders=${user.totalOrders}, isVerified=${user.isVerified}`);
+      console.log(`- ${user.name}: rating.average=${user.rating?.average || 0}, rating.count=${user.rating?.count || 0}, totalBoosts=${user.totalBoosts}, completedBoosts=${user.completedBoosts}, totalOrders=${user.totalOrders}, isVerified=${user.isVerified}`);
     });
 
     console.log('\n✅ Atualização concluída com sucesso!');

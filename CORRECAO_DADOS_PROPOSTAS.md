@@ -12,10 +12,16 @@ As informações dos boosters (rating e totalBoosts) estavam sendo exibidas como
 **Adicionados os seguintes campos:**
 ```javascript
 rating: {
-  type: Number,
-  default: 0,
-  min: 0,
-  max: 5
+  average: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
+  },
+  count: {
+    type: Number,
+    default: 0
+  }
 },
 totalBoosts: {
   type: Number,
@@ -34,6 +40,8 @@ isVerified: {
   default: false
 }
 ```
+
+**⚠️ IMPORTANTE:** A estrutura do campo `rating` foi ajustada para ser compatível com a HackLoteAPI, usando um objeto com `{average, count}` ao invés de um número simples.
 
 ### 2. Rota de Compatibilidade (`src/routes/compatibilityRoutes.js`)
 **Criada nova rota:** `GET /api/v1/boosting-requests/:boostingId/proposals`
@@ -74,24 +82,53 @@ Esta rota:
 ### 3. Script de Migração (`update-user-fields.js`)
 Criado script para atualizar os usuários existentes com valores padrão para os novos campos.
 
-## Como Aplicar as Alterações
+## ⚠️ Erro de Conflito no MongoDB
 
-### Passo 1: Atualizar o Banco de Dados
-Execute o script de migração para atualizar os usuários existentes:
+Se você encontrar o erro:
+```
+MongoServerError: Cannot create field 'average' in element {rating: 0}
+```
+
+Isso significa que há um **conflito de estrutura** no campo `rating`. Alguns usuários têm `rating` como **número** e o sistema está tentando criar `rating.average` como **objeto**.
+
+### Solução: Execute o script de correção ANTES do script de migração
 
 ```bash
 cd HackloteChatApi
+# PRIMEIRO: Corrigir estrutura conflitante
+node fix-rating-structure.js
+```
+
+Este script irá:
+1. Converter ratings numéricos para a estrutura de objeto `{average, count}`
+2. Adicionar campos faltantes
+3. Garantir que todos os usuários tenham a estrutura correta
+
+## Como Aplicar as Alterações
+
+### Passo 1: Corrigir Estrutura do Banco de Dados
+Execute o script de correção para resolver conflitos:
+
+```bash
+cd HackloteChatApi
+node fix-rating-structure.js
+```
+
+### Passo 2: Atualizar Campos Adicionais
+Execute o script de migração para adicionar os novos campos:
+
+```bash
 node update-user-fields.js
 ```
 
-### Passo 2: Reiniciar o Servidor da API
+### Passo 3: Reiniciar o Servidor da API
 ```bash
 # Parar o servidor atual (Ctrl+C)
 # Iniciar novamente
 npm start
 ```
 
-### Passo 3: Testar no Frontend
+### Passo 4: Testar no Frontend
 1. Acesse a página de propostas
 2. Verifique se os dados dos boosters estão sendo exibidos corretamente
 3. Os valores devem aparecer como números reais ao invés de "0.0" e "0 boosts"
@@ -106,7 +143,8 @@ db.users.updateOne(
   { _id: ObjectId("ID_DO_USUARIO") },
   {
     $set: {
-      rating: 4.5,
+      'rating.average': 4.5,
+      'rating.count': 50,
       totalBoosts: 120,
       completedBoosts: 115,
       isVerified: true
@@ -114,6 +152,8 @@ db.users.updateOne(
   }
 )
 ```
+
+**Nota:** Use `rating.average` e `rating.count` ao invés de apenas `rating`.
 
 Ou você pode criar um sistema que atualize esses campos automaticamente quando:
 - Um boost é completado → incrementar `completedBoosts` e `totalBoosts`

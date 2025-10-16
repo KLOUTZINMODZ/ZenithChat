@@ -320,7 +320,7 @@ router.get('/v1/boosting-requests/:boostingId/proposals', auth, async (req, res)
             _id: boosterUser._id,
             name: boosterUser.name || 'Booster',
             avatar: boosterUser.avatar || null,
-            rating: boosterUser.rating || 0,
+            rating: boosterUser.rating?.average || 0,
             totalBoosts: boosterUser.totalBoosts || 0,
             completedBoosts: boosterUser.completedBoosts || 0,
             isVerified: boosterUser.isVerified || false
@@ -328,7 +328,7 @@ router.get('/v1/boosting-requests/:boostingId/proposals', auth, async (req, res)
           
           logger.info(`[COMPATIBILITY] Enriched proposal ${proposal._id} with booster data:`, {
             boosterId: boosterUser._id.toString(),
-            rating: boosterUser.rating,
+            rating: boosterUser.rating?.average || 0,
             totalBoosts: boosterUser.totalBoosts
           });
         } else {
@@ -354,7 +354,7 @@ router.get('/v1/boosting-requests/:boostingId/proposals', auth, async (req, res)
             ...boostingRequest.client,
             name: clientUser.name || boostingRequest.client.name || 'Cliente',
             avatar: clientUser.avatar || boostingRequest.client.avatar || null,
-            rating: clientUser.rating || 0,
+            rating: clientUser.rating?.average || 0,
             totalOrders: clientUser.totalOrders || 0,
             isVerified: clientUser.isVerified || false
           };
