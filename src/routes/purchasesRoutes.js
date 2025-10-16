@@ -210,9 +210,28 @@ router.get('/list', auth, async (req, res) => {
       .sort({ completedAt: -1 })
       .lean();
 
+    // ========== BUSCAR CONVERSATIONS PARA FALLBACK ==========
+    const conversationIds = Array.from(new Set((agreements || []).map(a => (a.conversationId || '').toString()).filter(Boolean)));
+    const conversations = await Conversation.find({ _id: { $in: conversationIds } })
+      .select('_id metadata')
+      .lean();
+    
+    const conversationMap = new Map((conversations || []).map(c => [String(c._id), c]));
+
     // ========== POPULATE DATA ==========
     const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
-    const boostingIds = Array.from(new Set((agreements || []).map(a => (a.boostingRequestId || '').toString()).filter(Boolean)));
+    
+    // Coletar boostingIds tanto do agreement quanto da conversa (fallback)
+    const boostingIdsFromAgreements = (agreements || [])
+      .map(a => {
+        if (a.boostingRequestId) return String(a.boostingRequestId);
+        const conv = conversationMap.get(String(a.conversationId));
+        const boostingId = conv?.metadata?.get?.('boostingId') || conv?.metadata?.boostingId;
+        return boostingId ? String(boostingId) : null;
+      })
+      .filter(Boolean);
+    
+    const boostingIds = Array.from(new Set(boostingIdsFromAgreements));
     const allBuyerIds = Array.from(new Set([
       ...(purchases || []).map(p => (p.buyerId || '').toString()).filter(Boolean),
       ...(agreements || []).map(a => (a.parties?.client?.userid || '').toString()).filter(Boolean)
@@ -259,28 +278,43 @@ router.get('/list', auth, async (req, res) => {
 
     // ========== FORMAT BOOSTING ORDERS ==========
     const boostingOrders = (agreements || []).map(a => {
-      const boost = boostingMap.get(String(a.boostingRequestId)) || {};
+      // Fallback: buscar boostingRequestId da conversa se não estiver no agreement
+      let boostingRequestId = a.boostingRequestId;
+      if (!boostingRequestId) {
+        const conv = conversationMap.get(String(a.conversationId));
+        boostingRequestId = conv?.metadata?.get?.('boostingId') || conv?.metadata?.boostingId;
+      }
+
+      const boost = boostingMap.get(String(boostingRequestId)) || {};
       const buyer = buyerMap.get(String(a.parties?.client?.userid));
       const seller = sellerMap.get(String(a.parties?.booster?.userid));
-      const title = boost.title || `Boosting ${boost.game || 'Unknown'}`;
+      
+      // Título: preferir boost.title, depois boost.game, depois proposalSnapshot
+      const title = boost.title || 
+                   (boost.game ? `Boosting ${boost.game}` : null) ||
+                   (a.proposalSnapshot?.game ? `Boosting ${a.proposalSnapshot.game}` : 'Boosting');
+      
+      // Preço: preferir agreement.price, depois proposalSnapshot.price, depois boost.price
+      const price = Number(a.price) || Number(a.proposalSnapshot?.price) || Number(boost.price) || 0;
+      
       return {
         _id: String(a._id),
         orderNumber: String(a.agreementId || String(a._id).slice(-8).toUpperCase()),
         status: 'completed',
-        price: Number(a.price) || 0,
+        price: price,
         feePercent: 0,
         feeAmount: 0,
-        sellerReceives: Number(a.price) || 0,
+        sellerReceives: price,
         createdAt: a.completedAt || a.createdAt,
         type: 'boosting',
-        item: { _id: String(a.boostingRequestId || ''), title, image: '' },
+        item: { _id: String(boostingRequestId || ''), title, image: '' },
         buyer: { _id: String(a.parties?.client?.userid || ''), name: userName(buyer) },
         seller: { _id: String(a.parties?.booster?.userid || ''), name: userName(seller) },
         boostingRequest: {
-          _id: String(a.boostingRequestId || ''),
-          game: boost.game || '',
-          currentRank: boost.currentRank,
-          desiredRank: boost.desiredRank
+          _id: String(boostingRequestId || ''),
+          game: boost.game || a.proposalSnapshot?.game || '',
+          currentRank: boost.currentRank || a.proposalSnapshot?.currentRank,
+          desiredRank: boost.desiredRank || a.proposalSnapshot?.desiredRank
         }
       };
     });
