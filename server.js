@@ -179,22 +179,6 @@ app.use('/api', checkBanned);
 
 app.use('/api/messages', messageRoutes);
 
-app.use('/api/uploads', (req, res, next) => {
-  try {
-    const authHeader = req.headers['authorization'] || '';
-    const masked = authHeader.replace(/(Bearer\s+)[A-Za-z0-9\-\._]+/i, '$1***');
-    console.log('[UPLOADS-LOGGER]', {
-      method: req.method,
-      url: req.originalUrl || req.url,
-      contentType: req.headers['content-type'],
-      hasAuth: !!authHeader,
-      authMasked: masked,
-      query: req.query,
-      ip: req.ip
-    });
-  } catch (_) {}
-  next();
-});
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
@@ -213,21 +197,6 @@ app.use('/api/qa', qaRoutes);
 app.use('/api/ai/support', aiSupportRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/achievements', achievementRoutes);
-// Purchases logger to debug 404 reports
-app.use('/api/purchases', (req, res, next) => {
-  try {
-    const maskedAuth = (req.headers['authorization'] || '').replace(/(Bearer\s+)[A-Za-z0-9\-\._]+/i, '$1***');
-    console.log('[PURCHASES-LOGGER]', {
-      method: req.method,
-      url: req.originalUrl || req.url,
-      contentType: req.headers['content-type'],
-      hasAuth: !!req.headers['authorization'],
-      authMasked: maskedAuth,
-      ip: req.ip
-    });
-  } catch (_) {}
-  next();
-});
 app.use('/api/purchases', purchasesRoutes);
 
 // Support routes (tickets, detalhes)

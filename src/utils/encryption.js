@@ -43,7 +43,6 @@ function decryptMessage(encryptedText) {
     
     // Validar que as partes existem e têm conteúdo
     if (!parts[0] || !parts[1] || !parts[2]) {
-      console.warn('[ENCRYPTION] Partes de criptografia vazias, retornando texto original');
       return encryptedText;
     }
 
@@ -53,18 +52,15 @@ function decryptMessage(encryptedText) {
       iv = Buffer.from(parts[0], 'hex');
       authTag = Buffer.from(parts[1], 'hex');
     } catch (err) {
-      console.warn('[ENCRYPTION] Erro ao converter IV/authTag de hex:', err.message);
       return encryptedText;
     }
 
     // Validar tamanhos
     if (iv.length !== 16) {
-      console.warn('[ENCRYPTION] IV inválido (tamanho !== 16):', iv.length);
       return encryptedText;
     }
 
     if (authTag.length !== 16) {
-      console.warn('[ENCRYPTION] AuthTag inválido (tamanho !== 16):', authTag.length);
       return encryptedText;
     }
 
@@ -78,7 +74,7 @@ function decryptMessage(encryptedText) {
     
     return decrypted;
   } catch (error) {
-    console.warn('[ENCRYPTION] Erro na descriptografia, retornando texto original:', error.message);
+    // Retorna texto original silenciosamente se falhar
     return encryptedText;
   }
 }

@@ -61,14 +61,12 @@ const imageServeMiddleware = async (req, res, next) => {
 
       // Verificar se o buffer existe e é válido
       if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
-        console.warn('[IMAGE_SERVE] Buffer inválido ou vazio no banco de dados:', imageId);
         return next(); // Tentar buscar no disco
       }
 
       // Garantir que buffer.length seja um número válido
       const bufferSize = Number(buffer.length);
       if (!bufferSize || isNaN(bufferSize)) {
-        console.warn('[IMAGE_SERVE] Tamanho de buffer inválido:', imageId);
         return next(); // Tentar buscar no disco
       }
 
@@ -84,14 +82,10 @@ const imageServeMiddleware = async (req, res, next) => {
         'Access-Control-Allow-Origin': '*'
       });
 
-      const imageTypeLabel = isMarketplace ? 'marketplace' : 'conversation';
-      console.log('[IMAGE_SERVE] Servindo do banco de dados:', imageId, `(${(buffer.length / 1024).toFixed(2)}KB)`, `[${imageTypeLabel}]`);
       return res.send(buffer);
     }
 
     // Se não encontrou no banco, deixa o express.static servir do disco
-    const imageTypeLabel = isMarketplace ? 'marketplace' : 'conversation';
-    console.log('[IMAGE_SERVE] Não encontrado no BD, tentando disco:', imageId, `[${imageTypeLabel}]`);
     next();
     
   } catch (error) {
