@@ -248,6 +248,23 @@ class AgreementController {
         completedVia: 'api'
       }, idempotencyKey);
 
+      // Atualizar estatísticas do booster
+      try {
+        const User = require('../models/User');
+        const boosterId = agreement.parties.booster.userid;
+        
+        await User.findByIdAndUpdate(boosterId, {
+          $inc: { 
+            completedBoosts: 1,
+            totalBoosts: 1
+          }
+        });
+        
+        console.log(`✅ [Agreement Complete] Updated booster stats: ${boosterId}`);
+      } catch (statsError) {
+        console.error('❌ [Agreement Complete] Error updating booster stats:', statsError.message);
+        // Não falha a operação se não conseguir atualizar stats
+      }
 
       const systemMessage = new Message({
         conversation: agreement.conversationId,
