@@ -1386,8 +1386,8 @@ class BoostingChatController {
 
 
       // Buscar boostingRequestId da conversa
-      const conversation = await Conversation.findById(conversationId).select('metadata').lean();
-      const boostingRequestId = conversation?.metadata?.get?.('boostingId') || conversation?.metadata?.boostingId;
+      const conv = await Conversation.findById(conversationId).select('metadata').lean();
+      const boostingRequestId = conv?.metadata?.get?.('boostingId') || conv?.metadata?.boostingId;
 
       const agreement = new Agreement({
         conversationId,
