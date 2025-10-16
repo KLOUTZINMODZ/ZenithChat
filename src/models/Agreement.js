@@ -28,7 +28,16 @@ const agreementSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'AcceptedProposal'
   },
+
+  boostingRequestId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'BoostingRequest',
+    index: true
+  },
   
+  price: {
+    type: Number
+  },
 
   proposalSnapshot: {
     game: { type: String, required: true },
