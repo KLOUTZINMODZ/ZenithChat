@@ -4,6 +4,7 @@ const { auth } = require('../middleware/auth');
 const Review = require('../models/Review');
 const Purchase = require('../models/Purchase');
 const User = require('../models/User');
+const Agreement = require('../models/Agreement');
 
 function summarizeVoteCounts(reviewDoc) {
   const helpful = (reviewDoc.helpfulVotes || []).filter(v => v.vote === 'helpful').length;
@@ -190,6 +191,105 @@ router.post('/:reviewId/helpful', auth, async (req, res) => {
     return res.json({ success: true, data: { hasVoted: true, userVote: isHelpful ? 'helpful' : 'not_helpful', isHelpful: counts.helpful, isNotHelpful: counts.notHelpful } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Erro ao registrar voto', error: error.message });
+  }
+});
+
+// POST /api/ratings/boosting/:agreementId
+// Body: { rating, comment }
+router.post('/boosting/:agreementId', auth, async (req, res) => {
+  try {
+    const { agreementId } = req.params;
+    const { rating, comment } = req.body || {};
+    
+    if (!rating) {
+      return res.status(400).json({ success: false, message: 'Rating é obrigatório' });
+    }
+
+    if (!comment || comment.trim().length < 10) {
+      return res.status(400).json({ success: false, message: 'Comentário deve ter pelo menos 10 caracteres' });
+    }
+
+    // Buscar agreement por _id ou agreementId
+    let agreement = await Agreement.findById(agreementId);
+    if (!agreement) {
+      agreement = await Agreement.findOne({ agreementId });
+    }
+    
+    if (!agreement) {
+      return res.status(404).json({ success: false, message: 'Boosting não encontrado' });
+    }
+
+    // Verificar se é o cliente
+    const userId = req.user._id.toString();
+    if (agreement.parties?.client?.userid?.toString() !== userId) {
+      return res.status(403).json({ success: false, message: 'Apenas o cliente pode avaliar este serviço' });
+    }
+
+    // Verificar se está completo
+    if (agreement.status !== 'completed') {
+      return res.status(400).json({ success: false, message: 'O boosting precisa estar concluído para avaliação' });
+    }
+
+    // Verificar se já foi avaliado
+    const existing = await Review.findOne({ 
+      agreementId: agreement._id,
+      targetType: 'Boosting'
+    });
+    
+    if (existing) {
+      return res.status(409).json({ success: false, message: 'Este boosting já foi avaliado' });
+    }
+
+    // Criar avaliação
+    const boosterId = agreement.parties?.booster?.userid;
+    const review = await Review.create({
+      userId: agreement.parties.client.userid,
+      targetId: boosterId,
+      targetType: 'Boosting',
+      agreementId: agreement._id,
+      rating: Math.max(1, Math.min(5, Number(rating))),
+      comment: String(comment).trim().slice(0, 1500),
+      isVerifiedPurchase: true,
+      status: 'approved'
+    });
+
+    // Atualizar rating do booster
+    try {
+      const allBoosterReviews = await Review.find({ 
+        targetId: boosterId,
+        status: 'approved'
+      });
+      
+      if (allBoosterReviews.length > 0) {
+        const totalRating = allBoosterReviews.reduce((sum, r) => sum + (r.rating || 0), 0);
+        const averageRating = totalRating / allBoosterReviews.length;
+        
+        await User.findByIdAndUpdate(boosterId, {
+          rating: Number(averageRating.toFixed(2))
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar rating do booster:', err);
+    }
+
+    const populated = await Review.findById(review._id)
+      .populate('userId', 'name email avatar profileImage')
+      .lean();
+
+    const { helpful, notHelpful } = summarizeVoteCounts(populated);
+
+    return res.status(201).json({ 
+      success: true, 
+      message: 'Avaliação enviada com sucesso',
+      data: {
+        ...populated,
+        isHelpful: helpful,
+        isNotHelpful: notHelpful
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao criar avaliação de boosting:', error);
+    return res.status(500).json({ success: false, message: 'Erro ao criar avaliação', error: error.message });
   }
 });
 

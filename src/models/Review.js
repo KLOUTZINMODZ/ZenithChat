@@ -7,10 +7,11 @@ const helpfulVoteSchema = new mongoose.Schema({
 }, { _id: false });
 
 const reviewSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }, // reviewer (buyer)
-  targetId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }, // reviewed (seller)
-  targetType: { type: String, enum: ['User'], default: 'User' },
-  purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Purchase', required: true, unique: true }, // 1 review por compra
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }, // reviewer (buyer/client)
+  targetId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true }, // reviewed (seller/booster)
+  targetType: { type: String, enum: ['User', 'Boosting'], default: 'User' },
+  purchaseId: { type: mongoose.Schema.Types.ObjectId, ref: 'Purchase', index: true }, // Para marketplace
+  agreementId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agreement', index: true }, // Para boosting
   rating: { type: Number, min: 1, max: 5, required: true },
   title: { type: String, default: null },
   comment: { type: String, default: null },
