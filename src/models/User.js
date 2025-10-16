@@ -67,6 +67,29 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Boosting/Rating stats
+  rating: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 5
+  },
+  totalBoosts: {
+    type: Number,
+    default: 0
+  },
+  completedBoosts: {
+    type: Number,
+    default: 0
+  },
+  totalOrders: {
+    type: Number,
+    default: 0
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
   // Complaints counters
   complaintsSent: {
     type: Number,

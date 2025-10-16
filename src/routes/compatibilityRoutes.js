@@ -8,6 +8,7 @@ const Purchase = require('../models/Purchase');
 const User = require('../models/User');
 const logger = require('../utils/logger');
 const { decryptMessage } = require('../utils/encryption');
+const axios = require('axios');
 
 
 router.get('/v1/messages/conversations', auth, async (req, res) => {
@@ -268,6 +269,117 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
     res.status(500).json({
       success: false,
       message: 'Error fetching messages',
+      error: error.message
+    });
+  }
+});
+
+// Rota para obter propostas de um boosting request com dados populados do booster
+router.get('/v1/boosting-requests/:boostingId/proposals', auth, async (req, res) => {
+  try {
+    const { boostingId } = req.params;
+    const apiUrl = process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api';
+    
+    logger.info(`[COMPATIBILITY] Fetching proposals for boosting ${boostingId}`);
+    
+    // Busca propostas da API principal
+    const response = await axios.get(`${apiUrl}/boosting-requests/${boostingId}/proposals`, {
+      headers: {
+        Authorization: req.headers.authorization
+      }
+    });
+    
+    if (!response.data.success) {
+      return res.json(response.data);
+    }
+    
+    const { proposals, boostingRequest } = response.data.data || response.data;
+    
+    if (!proposals || !Array.isArray(proposals)) {
+      return res.json(response.data);
+    }
+    
+    // Popula dados reais dos boosters do banco de dados local
+    const enrichedProposals = await Promise.all(proposals.map(async (proposal) => {
+      try {
+        // Extrai o boosterId da proposta
+        const boosterId = proposal.boosterId?._id || proposal.boosterId || proposal.booster?._id || proposal.booster;
+        
+        if (!boosterId) {
+          logger.warn(`[COMPATIBILITY] No boosterId found for proposal ${proposal._id}`);
+          return proposal;
+        }
+        
+        // Busca dados completos do booster no banco de dados local
+        const boosterUser = await User.findById(boosterId).select('name avatar rating totalBoosts completedBoosts isVerified').lean();
+        
+        if (boosterUser) {
+          // Atualiza os dados do booster na proposta
+          proposal.booster = {
+            userid: boosterUser._id,
+            _id: boosterUser._id,
+            name: boosterUser.name || 'Booster',
+            avatar: boosterUser.avatar || null,
+            rating: boosterUser.rating || 0,
+            totalBoosts: boosterUser.totalBoosts || 0,
+            completedBoosts: boosterUser.completedBoosts || 0,
+            isVerified: boosterUser.isVerified || false
+          };
+          
+          logger.info(`[COMPATIBILITY] Enriched proposal ${proposal._id} with booster data:`, {
+            boosterId: boosterUser._id.toString(),
+            rating: boosterUser.rating,
+            totalBoosts: boosterUser.totalBoosts
+          });
+        } else {
+          logger.warn(`[COMPATIBILITY] Booster user not found: ${boosterId}`);
+        }
+        
+        return proposal;
+      } catch (error) {
+        logger.error(`[COMPATIBILITY] Error enriching proposal ${proposal._id}:`, error);
+        return proposal;
+      }
+    }));
+    
+    // Popula dados do cliente se necessário
+    if (boostingRequest && boostingRequest.client) {
+      const clientId = boostingRequest.client.userid || boostingRequest.client._id || boostingRequest.clientId;
+      
+      if (clientId) {
+        const clientUser = await User.findById(clientId).select('name avatar rating totalOrders isVerified').lean();
+        
+        if (clientUser) {
+          boostingRequest.client = {
+            ...boostingRequest.client,
+            name: clientUser.name || boostingRequest.client.name || 'Cliente',
+            avatar: clientUser.avatar || boostingRequest.client.avatar || null,
+            rating: clientUser.rating || 0,
+            totalOrders: clientUser.totalOrders || 0,
+            isVerified: clientUser.isVerified || false
+          };
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        proposals: enrichedProposals,
+        boostingRequest: boostingRequest
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[COMPATIBILITY] Error fetching proposals:', error);
+    
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar propostas',
       error: error.message
     });
   }
