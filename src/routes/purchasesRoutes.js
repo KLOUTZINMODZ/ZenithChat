@@ -10,6 +10,8 @@ const Mediator = require('../models/Mediator');
 const MarketItem = require('../models/MarketItem');
 const Report = require('../models/Report');
 const Review = require('../models/Review');
+const Agreement = require('../models/Agreement');
+const BoostingRequest = require('../models/BoostingRequest');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 const axios = require('axios');
@@ -164,7 +166,7 @@ router.get('/health', (req, res) => {
   res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// GET /api/purchases/list - listagem paginada de compras/vendas do usuário
+// GET /api/purchases/list - listagem paginada de compras/vendas do usuário (Marketplace + Boosting)
 router.get('/list', auth, async (req, res) => {
   try {
     const userId = req.user._id;
@@ -173,42 +175,68 @@ router.get('/list', auth, async (req, res) => {
     const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || '10')) || 10));
 
-    const filter = {};
+    // ========== MARKETPLACE PURCHASES ==========
+    const marketFilter = {};
     if (type === 'sales') {
-      filter.sellerId = userId;
+      marketFilter.sellerId = userId;
     } else if (type === 'purchases') {
-      filter.buyerId = userId;
+      marketFilter.buyerId = userId;
     } else {
-      filter.$or = [{ buyerId: userId }, { sellerId: userId }];
+      marketFilter.$or = [{ buyerId: userId }, { sellerId: userId }];
     }
     if (statusParam) {
       const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
-      if (statuses.length) filter.status = { $in: statuses };
+      if (statuses.length) marketFilter.status = { $in: statuses };
     }
 
-    const total = await Purchase.countDocuments(filter);
-    const purchases = await Purchase.find(filter)
+    const purchases = await Purchase.find(marketFilter)
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
       .lean();
 
-    const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
-    const buyerIds = Array.from(new Set((purchases || []).map(p => (p.buyerId || '').toString()).filter(Boolean)));
-    const sellerIds = Array.from(new Set((purchases || []).map(p => (p.sellerId || '').toString()).filter(Boolean)));
+    // ========== BOOSTING AGREEMENTS ==========
+    const boostingFilter = { status: 'completed' };
+    if (type === 'sales') {
+      boostingFilter['parties.booster.userid'] = userId;
+    } else if (type === 'purchases') {
+      boostingFilter['parties.client.userid'] = userId;
+    } else {
+      boostingFilter.$or = [
+        { 'parties.booster.userid': userId },
+        { 'parties.client.userid': userId }
+      ];
+    }
 
-    const [items, buyers, sellers] = await Promise.all([
+    const agreements = await Agreement.find(boostingFilter)
+      .sort({ completedAt: -1 })
+      .lean();
+
+    // ========== POPULATE DATA ==========
+    const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
+    const boostingIds = Array.from(new Set((agreements || []).map(a => (a.boostingRequestId || '').toString()).filter(Boolean)));
+    const allBuyerIds = Array.from(new Set([
+      ...(purchases || []).map(p => (p.buyerId || '').toString()).filter(Boolean),
+      ...(agreements || []).map(a => (a.parties?.client?.userid || '').toString()).filter(Boolean)
+    ]));
+    const allSellerIds = Array.from(new Set([
+      ...(purchases || []).map(p => (p.sellerId || '').toString()).filter(Boolean),
+      ...(agreements || []).map(a => (a.parties?.booster?.userid || '').toString()).filter(Boolean)
+    ]));
+
+    const [items, boostingRequests, buyers, sellers] = await Promise.all([
       MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images').lean(),
-      User.find({ _id: { $in: buyerIds } }).select('_id name legalName username avatar').lean(),
-      User.find({ _id: { $in: sellerIds } }).select('_id name legalName username avatar').lean()
+      BoostingRequest.find({ _id: { $in: boostingIds } }).select('_id game title currentRank desiredRank price').lean(),
+      User.find({ _id: { $in: allBuyerIds } }).select('_id name legalName username avatar').lean(),
+      User.find({ _id: { $in: allSellerIds } }).select('_id name legalName username avatar').lean()
     ]);
 
     const itemMap = new Map((items || []).map(d => [String(d._id), d]));
+    const boostingMap = new Map((boostingRequests || []).map(b => [String(b._id), b]));
     const buyerMap = new Map((buyers || []).map(u => [String(u._id), u]));
     const sellerMap = new Map((sellers || []).map(u => [String(u._id), u]));
     const userName = (u) => (u?.name || u?.legalName || u?.username || 'Usuário');
 
-    const list = (purchases || []).map(p => {
+    // ========== FORMAT MARKETPLACE ORDERS ==========
+    const marketplaceOrders = (purchases || []).map(p => {
       const item = itemMap.get(String(p.itemId)) || {};
       const buyer = buyerMap.get(String(p.buyerId));
       const seller = sellerMap.get(String(p.sellerId));
@@ -222,20 +250,58 @@ router.get('/list', auth, async (req, res) => {
         feeAmount: p.feeAmount,
         sellerReceives: p.sellerReceives,
         createdAt: p.createdAt,
+        type: 'marketplace',
         item: { _id: String(p.itemId || ''), title: String(item.title || ''), image: img },
         buyer: { _id: String(p.buyerId || ''), name: userName(buyer) },
         seller: { _id: String(p.sellerId || ''), name: userName(seller) }
       };
     });
 
+    // ========== FORMAT BOOSTING ORDERS ==========
+    const boostingOrders = (agreements || []).map(a => {
+      const boost = boostingMap.get(String(a.boostingRequestId)) || {};
+      const buyer = buyerMap.get(String(a.parties?.client?.userid));
+      const seller = sellerMap.get(String(a.parties?.booster?.userid));
+      const title = boost.title || `Boosting ${boost.game || 'Unknown'}`;
+      return {
+        _id: String(a._id),
+        orderNumber: String(a.agreementId || String(a._id).slice(-8).toUpperCase()),
+        status: 'completed',
+        price: Number(a.price) || 0,
+        feePercent: 0,
+        feeAmount: 0,
+        sellerReceives: Number(a.price) || 0,
+        createdAt: a.completedAt || a.createdAt,
+        type: 'boosting',
+        item: { _id: String(a.boostingRequestId || ''), title, image: '' },
+        buyer: { _id: String(a.parties?.client?.userid || ''), name: userName(buyer) },
+        seller: { _id: String(a.parties?.booster?.userid || ''), name: userName(seller) },
+        boostingRequest: {
+          _id: String(a.boostingRequestId || ''),
+          game: boost.game || '',
+          currentRank: boost.currentRank,
+          desiredRank: boost.desiredRank
+        }
+      };
+    });
+
+    // ========== MERGE AND PAGINATE ==========
+    const allOrders = [...marketplaceOrders, ...boostingOrders].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    const total = allOrders.length;
+    const paginatedOrders = allOrders.slice((page - 1) * limit, page * limit);
+
     return res.json({
       success: true,
       data: {
-        orders: list,
+        orders: paginatedOrders,
         pagination: { total, page, limit, pages: Math.ceil(total / limit) }
       }
     });
   } catch (error) {
+    console.error('[PURCHASES LIST ERROR]', error);
     return res.status(500).json({ success: false, message: 'Erro ao listar compras/vendas', error: error.message });
   }
 });
