@@ -253,16 +253,33 @@ class AgreementController {
         const User = require('../models/User');
         const boosterId = agreement.parties.booster.userid;
         
-        await User.findByIdAndUpdate(boosterId, {
-          $inc: { 
-            completedBoosts: 1,
-            totalBoosts: 1
-          }
-        });
+        console.log(`🔍 [Agreement Complete] Tentando incrementar boosts para booster: ${boosterId}`);
+        console.log(`🔍 [Agreement Complete] Tipo do boosterId: ${typeof boosterId}`);
         
-        console.log(`✅ [Agreement Complete] Updated booster stats: ${boosterId}`);
+        const updateResult = await User.findByIdAndUpdate(
+          boosterId,
+          {
+            $inc: { 
+              completedBoosts: 1,
+              totalBoosts: 1
+            }
+          },
+          { new: true, runValidators: false }
+        );
+        
+        if (updateResult) {
+          console.log(`✅ [Agreement Complete] Booster stats updated successfully!`);
+          console.log(`   - User: ${updateResult.name}`);
+          console.log(`   - New totalBoosts: ${updateResult.totalBoosts}`);
+          console.log(`   - New completedBoosts: ${updateResult.completedBoosts}`);
+        } else {
+          console.error(`❌ [Agreement Complete] User not found with ID: ${boosterId}`);
+        }
+        
       } catch (statsError) {
-        console.error('❌ [Agreement Complete] Error updating booster stats:', statsError.message);
+        console.error('❌ [Agreement Complete] Error updating booster stats:');
+        console.error('   Message:', statsError.message);
+        console.error('   Stack:', statsError.stack);
         // Não falha a operação se não conseguir atualizar stats
       }
 
