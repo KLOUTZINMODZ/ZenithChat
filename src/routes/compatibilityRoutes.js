@@ -299,6 +299,10 @@ router.get('/v1/boosting-requests/:boostingId/proposals', auth, async (req, res)
       return res.json(response.data);
     }
     
+    // Importa modelos necessários
+    const Agreement = require('../models/Agreement');
+    const AcceptedProposal = require('../models/AcceptedProposal');
+    
     // Popula dados reais dos boosters do banco de dados local
     const enrichedProposals = await Promise.all(proposals.map(async (proposal) => {
       try {
@@ -311,29 +315,55 @@ router.get('/v1/boosting-requests/:boostingId/proposals', auth, async (req, res)
         }
         
         // Busca dados completos do booster no banco de dados local
-        const boosterUser = await User.findById(boosterId).select('name avatar rating totalBoosts completedBoosts isVerified').lean();
+        const boosterUser = await User.findById(boosterId).select('name email avatar isVerified').lean();
         
-        if (boosterUser) {
-          // Atualiza os dados do booster na proposta
-          proposal.booster = {
-            userid: boosterUser._id,
-            _id: boosterUser._id,
-            name: boosterUser.name || 'Booster',
-            avatar: boosterUser.avatar || null,
-            rating: boosterUser.rating?.average || 0,
-            totalBoosts: boosterUser.totalBoosts || 0,
-            completedBoosts: boosterUser.completedBoosts || 0,
-            isVerified: boosterUser.isVerified || false
-          };
-          
-          logger.info(`[COMPATIBILITY] Enriched proposal ${proposal._id} with booster data:`, {
-            boosterId: boosterUser._id.toString(),
-            rating: boosterUser.rating?.average || 0,
-            totalBoosts: boosterUser.totalBoosts
-          });
-        } else {
+        if (!boosterUser) {
           logger.warn(`[COMPATIBILITY] Booster user not found: ${boosterId}`);
+          return proposal;
         }
+        
+        // Busca boosts CONCLUÍDOS (completed) do booster
+        const completedBoostsCount = await Agreement.countDocuments({
+          'parties.booster.userid': boosterId,
+          status: 'completed'
+        }) + await AcceptedProposal.countDocuments({
+          'booster.userid': boosterId,
+          status: 'completed'
+        });
+        
+        // Busca rating real do sistema de avaliações da API principal
+        let realRating = null;
+        try {
+          const ratingResponse = await axios.get(`${apiUrl}/ratings/user/${boosterId}`, {
+            headers: { Authorization: req.headers.authorization },
+            params: { email: boosterUser.email }
+          });
+          
+          if (ratingResponse.data.success && ratingResponse.data.data?.stats?.average) {
+            realRating = Number(ratingResponse.data.data.stats.average);
+            logger.info(`[COMPATIBILITY] Real rating for booster ${boosterId}: ${realRating}`);
+          }
+        } catch (ratingError) {
+          logger.warn(`[COMPATIBILITY] Could not fetch rating for booster ${boosterId}:`, ratingError.message);
+        }
+        
+        // Atualiza os dados do booster na proposta com dados REAIS
+        proposal.booster = {
+          userid: boosterUser._id,
+          _id: boosterUser._id,
+          name: boosterUser.name,
+          avatar: boosterUser.avatar,
+          rating: realRating,
+          totalBoosts: completedBoostsCount,
+          completedBoosts: completedBoostsCount,
+          isVerified: boosterUser.isVerified
+        };
+        
+        logger.info(`[COMPATIBILITY] Enriched proposal ${proposal._id} with REAL booster data:`, {
+          boosterId: boosterUser._id.toString(),
+          rating: realRating,
+          completedBoosts: completedBoostsCount
+        });
         
         return proposal;
       } catch (error) {
@@ -347,17 +377,46 @@ router.get('/v1/boosting-requests/:boostingId/proposals', auth, async (req, res)
       const clientId = boostingRequest.client.userid || boostingRequest.client._id || boostingRequest.clientId;
       
       if (clientId) {
-        const clientUser = await User.findById(clientId).select('name avatar rating totalOrders isVerified').lean();
+        const clientUser = await User.findById(clientId).select('name email avatar isVerified').lean();
         
         if (clientUser) {
+          // Busca rating real do cliente
+          let clientRating = null;
+          try {
+            const ratingResponse = await axios.get(`${apiUrl}/ratings/user/${clientId}`, {
+              headers: { Authorization: req.headers.authorization },
+              params: { email: clientUser.email }
+            });
+            
+            if (ratingResponse.data.success && ratingResponse.data.data?.stats?.average) {
+              clientRating = Number(ratingResponse.data.data.stats.average);
+              logger.info(`[COMPATIBILITY] Real rating for client ${clientId}: ${clientRating}`);
+            }
+          } catch (error) {
+            logger.warn(`[COMPATIBILITY] Could not fetch rating for client ${clientId}:`, error.message);
+          }
+          
+          // Busca total de pedidos reais (boosts solicitados)
+          const totalOrders = await Agreement.countDocuments({
+            'parties.client.userid': clientId
+          }) + await AcceptedProposal.countDocuments({
+            'client.userid': clientId
+          });
+          
           boostingRequest.client = {
             ...boostingRequest.client,
-            name: clientUser.name || boostingRequest.client.name || 'Cliente',
-            avatar: clientUser.avatar || boostingRequest.client.avatar || null,
-            rating: clientUser.rating?.average || 0,
-            totalOrders: clientUser.totalOrders || 0,
-            isVerified: clientUser.isVerified || false
+            name: clientUser.name,
+            avatar: clientUser.avatar,
+            rating: clientRating,
+            totalOrders: totalOrders,
+            isVerified: clientUser.isVerified
           };
+          
+          logger.info(`[COMPATIBILITY] Enriched client data:`, {
+            clientId: clientId.toString(),
+            rating: clientRating,
+            totalOrders: totalOrders
+          });
         }
       }
     }

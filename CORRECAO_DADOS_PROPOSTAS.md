@@ -193,11 +193,23 @@ Para verificar se tudo está funcionando:
 3. **Verificar logs:**
    - Os logs devem mostrar: `[COMPATIBILITY] Enriched proposal ... with booster data`
 
+## ⚠️ ATUALIZAÇÃO IMPORTANTE - Dados Reais (Produção)
+
+Este documento foi **ATUALIZADO** para refletir a implementação de **dados 100% reais**.
+
+**Veja o documento completo:** `CORRECAO_DADOS_REAIS_PROPOSTAS.md`
+
+### Mudanças Principais:
+1. ✅ **Rating**: Buscado do sistema de avaliações real (não mais do campo rating do User)
+2. ✅ **Total de Boosts**: Apenas boosts **concluídos** (`status: 'completed'`)
+3. ✅ **Sem Fallbacks**: Exibe `null` ou `0` quando não houver dados (frontend exibe "N/A" ou "Nenhum boost")
+
 ## Observações Importantes
 
-1. **Valores Padrão:** Todos os usuários existentes terão valores padrão (0) até que sejam atualizados
-2. **Compatibilidade:** A rota antiga continua funcionando, mas a nova rota retorna dados mais completos
-3. **Performance:** A rota faz uma consulta adicional ao banco para cada proposta, mas isso é necessário para garantir dados atualizados
+1. **Valores Reais:** A rota agora busca dados do sistema de avaliações e conta apenas boosts finalizados
+2. **Compatibilidade:** A estrutura do campo `rating` foi padronizada para `{average, count}`
+3. **Performance:** A rota faz requisições adicionais para garantir dados reais e atualizados
+4. **UX Profissional:** Usuários sem avaliações exibem "N/A", não "0.0"
 
 ## Próximos Passos (Opcional)
 
