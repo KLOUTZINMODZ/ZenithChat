@@ -168,7 +168,27 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
 
         const isBoosting = meta?.boostingId || plain.boostingStatus;
         const isMarketplace = meta?.purchaseId || meta?.context === 'marketplace_purchase' || plain.type === 'marketplace';
-        if (!isMarketplace || isBoosting) {
+        
+        // Enriquecer boosting com agreement
+        if (isBoosting && !isMarketplace) {
+          try {
+            const Agreement = require('../models/Agreement');
+            const agreement = await Agreement.findOne({ conversationId: plain._id }).sort({ createdAt: -1 }).lean();
+            if (agreement) {
+              plain.agreement = agreement;
+              // Adicionar preço ao metadata para compatibilidade
+              if (agreement.serviceDetails?.price && !meta.price) {
+                meta.price = agreement.serviceDetails.price;
+              }
+            }
+          } catch (err) {
+            logger.error('Error enriching boosting conversation with agreement:', err);
+          }
+          plain.metadata = meta;
+          return plain;
+        }
+        
+        if (!isMarketplace) {
           plain.metadata = meta;
           return plain;
         }
