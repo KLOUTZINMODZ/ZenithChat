@@ -144,7 +144,13 @@ class AgreementController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      const agreement = await Agreement.findByAgreementId(agreementId);
+      // Tentar buscar por agreementId (string) ou _id (ObjectId)
+      let agreement = await Agreement.findByAgreementId(agreementId);
+      
+      if (!agreement) {
+        // Tentar buscar por _id se agreementId não encontrou
+        agreement = await Agreement.findById(agreementId);
+      }
       
       if (!agreement) {
         return res.status(404).json({ 
@@ -164,9 +170,12 @@ class AgreementController {
 
       res.json({
         success: true,
-        agreement: {
+        data: {
+          _id: agreement._id,
           agreementId: agreement.agreementId,
           conversationId: agreement.conversationId,
+          price: agreement.price,
+          boostingRequestId: agreement.boostingRequestId,
           proposalSnapshot: agreement.proposalSnapshot,
           parties: agreement.parties,
           status: agreement.status,
