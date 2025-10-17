@@ -549,8 +549,14 @@ router.get('/users/banned', requireAdminKey, async (req, res) => {
 router.get('/email-stats', requireAdminKey, async (req, res) => {
   try {
     const totalUsers = await User.countDocuments({});
+    
+    // Contar usuários que aceitam emails (true OU campo não existe = default true)
     const eligibleUsers = await User.countDocuments({
-      'preferences.emailNotifications': true
+      $or: [
+        { 'preferences.emailNotifications': true },
+        { 'preferences.emailNotifications': { $exists: false } },
+        { 'preferences.emailNotifications': null }
+      ]
     });
 
     res.json({
@@ -591,8 +597,13 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
     }
 
     // Buscar usuários que aceitam receber emails
+    // Incluir usuários onde o campo é true OU não existe (undefined/null = default true)
     const users = await User.find({
-      'preferences.emailNotifications': true
+      $or: [
+        { 'preferences.emailNotifications': true },
+        { 'preferences.emailNotifications': { $exists: false } },
+        { 'preferences.emailNotifications': null }
+      ]
     }).select('name email').lean();
 
     if (users.length === 0) {
