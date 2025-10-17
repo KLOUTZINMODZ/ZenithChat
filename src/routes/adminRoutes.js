@@ -655,6 +655,62 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
   }
 });
 
+// POST /api/admin/migrate-email-preferences - Migrar usuários com emailNotifications undefined para true
+router.post('/migrate-email-preferences', requireAdminKey, async (req, res) => {
+  try {
+    // Buscar todos os usuários onde emailNotifications é undefined
+    const usersToMigrate = await User.find({
+      $or: [
+        { 'preferences.emailNotifications': { $exists: false } },
+        { 'preferences.emailNotifications': null },
+        { preferences: { $exists: false } }
+      ]
+    }).select('name email preferences');
+
+    logger.info(`Found ${usersToMigrate.length} users to migrate`);
+
+    let migratedCount = 0;
+    let errorCount = 0;
+
+    for (const user of usersToMigrate) {
+      try {
+        // Garantir que preferences existe
+        if (!user.preferences) {
+          user.preferences = {};
+        }
+
+        // Definir emailNotifications como true (opt-in por padrão para usuários existentes)
+        user.preferences.emailNotifications = true;
+        
+        await user.save();
+        migratedCount++;
+      } catch (error) {
+        logger.error(`Error migrating user ${user.email}:`, error);
+        errorCount++;
+      }
+    }
+
+    logger.info(`Migration completed: ${migratedCount} migrated, ${errorCount} errors`);
+
+    res.json({
+      success: true,
+      message: `Migração concluída: ${migratedCount} usuários atualizados`,
+      details: {
+        total: usersToMigrate.length,
+        migrated: migratedCount,
+        errors: errorCount
+      }
+    });
+  } catch (error) {
+    logger.error('Error during migration:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro durante a migração',
+      error: error.message
+    });
+  }
+});
+
 // GET /api/admin/email-users-debug - Debug detalhado de todos os usuários e preferências
 router.get('/email-users-debug', requireAdminKey, async (req, res) => {
   try {
