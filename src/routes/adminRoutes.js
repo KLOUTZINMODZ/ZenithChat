@@ -548,25 +548,157 @@ router.get('/users/banned', requireAdminKey, async (req, res) => {
 // GET /api/admin/email-stats - Obter estatísticas de usuários para email
 router.get('/email-stats', requireAdminKey, async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments({});
-    
-    // Contar usuários que aceitam emails (true, undefined, null = aceita, false = não aceita)
-    const eligibleUsers = await User.countDocuments({
-      'preferences.emailNotifications': { $ne: false }
+    // Buscar TODOS os usuários com suas preferências
+    const allUsers = await User.find({})
+      .select('name email preferences')
+      .lean();
+
+    // Análise detalhada
+    const analysis = {
+      total: allUsers.length,
+      withPreferences: 0,
+      withoutPreferences: 0,
+      emailNotifications: {
+        explicitTrue: 0,
+        explicitFalse: 0,
+        undefined: 0,
+        null: 0
+      },
+      eligible: 0,
+      notEligible: 0
+    };
+
+    const eligibleUsersList = [];
+    const notEligibleUsersList = [];
+
+    allUsers.forEach(user => {
+      const hasPreferences = user.preferences && typeof user.preferences === 'object';
+      
+      if (hasPreferences) {
+        analysis.withPreferences++;
+        
+        const emailNotif = user.preferences.emailNotifications;
+        
+        if (emailNotif === true) {
+          analysis.emailNotifications.explicitTrue++;
+          analysis.eligible++;
+          eligibleUsersList.push({
+            name: user.name,
+            email: user.email,
+            status: 'explicit_true'
+          });
+        } else if (emailNotif === false) {
+          analysis.emailNotifications.explicitFalse++;
+          analysis.notEligible++;
+          notEligibleUsersList.push({
+            name: user.name,
+            email: user.email,
+            status: 'explicit_false'
+          });
+        } else if (emailNotif === null) {
+          analysis.emailNotifications.null++;
+          // Null = default true
+          analysis.eligible++;
+          eligibleUsersList.push({
+            name: user.name,
+            email: user.email,
+            status: 'null_default_true'
+          });
+        } else {
+          analysis.emailNotifications.undefined++;
+          // Undefined = default true
+          analysis.eligible++;
+          eligibleUsersList.push({
+            name: user.name,
+            email: user.email,
+            status: 'undefined_default_true'
+          });
+        }
+      } else {
+        analysis.withoutPreferences++;
+        // Sem preferences = default true
+        analysis.eligible++;
+        eligibleUsersList.push({
+          name: user.name,
+          email: user.email,
+          status: 'no_preferences_default_true'
+        });
+      }
+    });
+
+    logger.info('Email Stats Analysis:', {
+      total: analysis.total,
+      eligible: analysis.eligible,
+      notEligible: analysis.notEligible,
+      breakdown: analysis.emailNotifications
     });
 
     res.json({
       success: true,
       stats: {
-        totalUsers,
-        eligibleUsers
+        totalUsers: analysis.total,
+        eligibleUsers: analysis.eligible
+      },
+      debug: {
+        analysis,
+        eligibleSample: eligibleUsersList.slice(0, 5),
+        notEligibleSample: notEligibleUsersList.slice(0, 5)
       }
     });
   } catch (error) {
     logger.error('Error fetching email stats:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao buscar estatísticas'
+      message: 'Erro ao buscar estatísticas',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/admin/email-users-debug - Debug detalhado de todos os usuários e preferências
+router.get('/email-users-debug', requireAdminKey, async (req, res) => {
+  try {
+    const allUsers = await User.find({})
+      .select('name email preferences')
+      .lean();
+
+    const detailedList = allUsers.map(user => ({
+      name: user.name,
+      email: user.email,
+      hasPreferences: !!(user.preferences && typeof user.preferences === 'object'),
+      emailNotifications: user.preferences?.emailNotifications,
+      emailNotificationsType: typeof user.preferences?.emailNotifications,
+      isEligible: (() => {
+        const hasPreferences = user.preferences && typeof user.preferences === 'object';
+        if (!hasPreferences) return true;
+        return user.preferences.emailNotifications !== false;
+      })()
+    }));
+
+    const summary = {
+      total: detailedList.length,
+      eligible: detailedList.filter(u => u.isEligible).length,
+      notEligible: detailedList.filter(u => !u.isEligible).length,
+      breakdown: {
+        explicitTrue: detailedList.filter(u => u.emailNotifications === true).length,
+        explicitFalse: detailedList.filter(u => u.emailNotifications === false).length,
+        undefined: detailedList.filter(u => u.emailNotifications === undefined).length,
+        null: detailedList.filter(u => u.emailNotifications === null).length,
+        noPreferences: detailedList.filter(u => !u.hasPreferences).length
+      }
+    };
+
+    res.json({
+      success: true,
+      summary,
+      users: detailedList
+    });
+  } catch (error) {
+    logger.error('Error fetching email users debug:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar debug',
+      error: error.message
     });
   }
 });
@@ -592,16 +724,35 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       });
     }
 
-    // Buscar usuários que aceitam receber emails (todos exceto quem desativou)
-    const users = await User.find({
-      'preferences.emailNotifications': { $ne: false }
-    }).select('name email').lean();
+    // Buscar TODOS os usuários e filtrar manualmente quem aceita emails
+    const allUsers = await User.find({})
+      .select('name email preferences')
+      .lean();
+
+    // Filtrar apenas usuários elegíveis (mesma lógica do endpoint de stats)
+    const users = allUsers.filter(user => {
+      const hasPreferences = user.preferences && typeof user.preferences === 'object';
+      
+      if (!hasPreferences) {
+        // Sem preferences = default true
+        return true;
+      }
+      
+      const emailNotif = user.preferences.emailNotifications;
+      
+      // Apenas false explícito = não elegível
+      // true, undefined, null = elegível
+      return emailNotif !== false;
+    });
+
+    logger.info(`Email campaign: ${users.length}/${allUsers.length} users eligible`);
 
     if (users.length === 0) {
       return res.json({
         success: true,
-        message: 'Nenhum usuário encontrado para enviar emails',
-        sentCount: 0
+        message: 'Nenhum usuário elegível encontrado para enviar emails',
+        sentCount: 0,
+        totalUsers: allUsers.length
       });
     }
 
