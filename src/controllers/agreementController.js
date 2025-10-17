@@ -2,6 +2,7 @@ const Agreement = require('../models/Agreement');
 const AcceptedProposal = require('../models/AcceptedProposal');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
+const User = require('../models/User');
 const axios = require('axios');
 
 class AgreementController {
@@ -168,6 +169,26 @@ class AgreementController {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
 
+      // Buscar dados atualizados do booster e cliente para obter rating correto
+      const [boosterUser, clientUser] = await Promise.all([
+        User.findById(agreement.parties.booster.userid).select('_id name avatar rating').lean(),
+        User.findById(agreement.parties.client.userid).select('_id name avatar rating').lean()
+      ]);
+
+      // Atualizar parties com dados frescos
+      const updatedParties = {
+        client: {
+          ...agreement.parties.client,
+          avatar: clientUser?.avatar || agreement.parties.client.avatar,
+          rating: clientUser?.rating
+        },
+        booster: {
+          ...agreement.parties.booster,
+          avatar: boosterUser?.avatar || agreement.parties.booster.avatar,
+          rating: boosterUser?.rating || 0
+        }
+      };
+
       res.json({
         success: true,
         data: {
@@ -177,7 +198,7 @@ class AgreementController {
           price: agreement.price,
           boostingRequestId: agreement.boostingRequestId,
           proposalSnapshot: agreement.proposalSnapshot,
-          parties: agreement.parties,
+          parties: updatedParties,
           status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
