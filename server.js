@@ -33,6 +33,7 @@ const qaRoutes = require('./src/routes/qaRoutes');
 const aiSupportRoutes = require('./src/routes/aiSupportRoutes');
 const ratingsRoutes = require('./src/routes/ratingsRoutes');
 const achievementRoutes = require('./src/routes/achievementRoutes');
+const emailVerificationRoutes = require('./src/routes/emailVerificationRoutes');
 const imageServeMiddleware = require('./src/middleware/imageServeMiddleware');
 
 const app = express();
@@ -193,6 +194,7 @@ app.use('/api/cache', cacheRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/email', emailVerificationRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api/ai/support', aiSupportRoutes);
 app.use('/api/ratings', ratingsRoutes);
