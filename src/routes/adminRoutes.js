@@ -597,31 +597,31 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
           });
         } else if (emailNotif === null) {
           analysis.emailNotifications.null++;
-          // Null = default true
-          analysis.eligible++;
-          eligibleUsersList.push({
+          // Null = não aceita (campo nunca foi definido corretamente)
+          analysis.notEligible++;
+          notEligibleUsersList.push({
             name: user.name,
             email: user.email,
-            status: 'null_default_true'
+            status: 'null_not_eligible'
           });
         } else {
           analysis.emailNotifications.undefined++;
-          // Undefined = default true
-          analysis.eligible++;
-          eligibleUsersList.push({
+          // Undefined = não aceita (campo nunca foi definido)
+          analysis.notEligible++;
+          notEligibleUsersList.push({
             name: user.name,
             email: user.email,
-            status: 'undefined_default_true'
+            status: 'undefined_not_eligible'
           });
         }
       } else {
         analysis.withoutPreferences++;
-        // Sem preferences = default true
-        analysis.eligible++;
-        eligibleUsersList.push({
+        // Sem preferences = não aceita
+        analysis.notEligible++;
+        notEligibleUsersList.push({
           name: user.name,
           email: user.email,
-          status: 'no_preferences_default_true'
+          status: 'no_preferences_not_eligible'
         });
       }
     });
@@ -669,9 +669,8 @@ router.get('/email-users-debug', requireAdminKey, async (req, res) => {
       emailNotifications: user.preferences?.emailNotifications,
       emailNotificationsType: typeof user.preferences?.emailNotifications,
       isEligible: (() => {
-        const hasPreferences = user.preferences && typeof user.preferences === 'object';
-        if (!hasPreferences) return true;
-        return user.preferences.emailNotifications !== false;
+        // Apenas true explícito = elegível
+        return user.preferences?.emailNotifications === true;
       })()
     }));
 
@@ -730,19 +729,9 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       .lean();
 
     // Filtrar apenas usuários elegíveis (mesma lógica do endpoint de stats)
+    // Apenas usuários com emailNotifications === true explícito
     const users = allUsers.filter(user => {
-      const hasPreferences = user.preferences && typeof user.preferences === 'object';
-      
-      if (!hasPreferences) {
-        // Sem preferences = default true
-        return true;
-      }
-      
-      const emailNotif = user.preferences.emailNotifications;
-      
-      // Apenas false explícito = não elegível
-      // true, undefined, null = elegível
-      return emailNotif !== false;
+      return user.preferences?.emailNotifications === true;
     });
 
     logger.info(`Email campaign: ${users.length}/${allUsers.length} users eligible`);
