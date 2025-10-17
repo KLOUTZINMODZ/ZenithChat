@@ -550,10 +550,22 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
   try {
     logger.info('=== INICIANDO ANÁLISE PROFUNDA DE USUÁRIOS ===');
     
-    // Buscar TODOS os usuários DIRETO do MongoDB sem filtros
+    // Buscar TODOS os usuários
     const allUsersRaw = await User.find({}).lean();
-    
     logger.info(`Total de usuários no banco: ${allUsersRaw.length}`);
+    
+    // IMPORTANTE: Buscar preferências de notificação do modelo correto
+    // As preferências estão em NotificationPreferences (HackLoteAPI), não em User
+    const NotificationPreferences = mongoose.connection.collection('notificationpreferences');
+    const allPreferences = await NotificationPreferences.find({}).toArray();
+    
+    logger.info(`Total de preferências encontradas: ${allPreferences.length}`);
+    
+    // Criar mapa userId -> emailNotifications
+    const emailPrefsMap = new Map();
+    allPreferences.forEach(pref => {
+      emailPrefsMap.set(pref.userId.toString(), pref.emailNotifications);
+    });
 
     // Análise minuciosa de cada usuário
     const detailedAnalysis = {
@@ -574,57 +586,53 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
 
     // Analisar CADA usuário individualmente
     for (const user of allUsersRaw) {
+      const userId = user._id.toString();
       const userInfo = {
         name: user.name,
         email: user.email,
-        hasPreferencesObject: false,
+        hasPreferencesObject: emailPrefsMap.has(userId),
         emailNotificationsValue: 'NOT_SET',
         emailNotificationsType: 'undefined',
         isEligible: false,
         reason: ''
       };
 
-      // Verificar se preferences existe
-      if (user.preferences && typeof user.preferences === 'object') {
-        userInfo.hasPreferencesObject = true;
-        
-        // Verificar emailNotifications
-        const emailNotif = user.preferences.emailNotifications;
+      // Buscar emailNotifications do modelo NotificationPreferences
+      const emailNotif = emailPrefsMap.get(userId);
+      
+      if (emailNotif !== undefined) {
         userInfo.emailNotificationsValue = String(emailNotif);
         userInfo.emailNotificationsType = typeof emailNotif;
+        userInfo.hasPreferencesObject = true;
 
         if (emailNotif === true) {
           detailedAnalysis.breakdown.trueExplicit++;
           detailedAnalysis.eligible++;
           userInfo.isEligible = true;
-          userInfo.reason = 'emailNotifications === true';
+          userInfo.reason = 'emailNotifications === true (NotificationPreferences)';
           eligibleUsers.push(userInfo);
         } else if (emailNotif === false) {
           detailedAnalysis.breakdown.falseExplicit++;
           detailedAnalysis.notEligible++;
           userInfo.isEligible = false;
-          userInfo.reason = 'emailNotifications === false';
+          userInfo.reason = 'emailNotifications === false (NotificationPreferences)';
           notEligibleUsers.push(userInfo);
         } else if (emailNotif === null) {
           detailedAnalysis.breakdown.nullValue++;
           detailedAnalysis.notEligible++;
           userInfo.isEligible = false;
-          userInfo.reason = 'emailNotifications === null';
-          notEligibleUsers.push(userInfo);
-        } else if (emailNotif === undefined) {
-          detailedAnalysis.breakdown.undefinedValue++;
-          detailedAnalysis.notEligible++;
-          userInfo.isEligible = false;
-          userInfo.reason = 'emailNotifications === undefined';
+          userInfo.reason = 'emailNotifications === null (NotificationPreferences)';
           notEligibleUsers.push(userInfo);
         }
       } else {
-        // Sem objeto preferences
-        detailedAnalysis.breakdown.noPreferencesObject++;
+        // Sem preferências no banco (não criou documento NotificationPreferences ainda)
+        detailedAnalysis.breakdown.undefinedValue++;
         detailedAnalysis.notEligible++;
         userInfo.hasPreferencesObject = false;
         userInfo.isEligible = false;
-        userInfo.reason = 'preferences object not found';
+        userInfo.reason = 'Sem NotificationPreferences (default: false)';
+        userInfo.emailNotificationsValue = 'undefined';
+        userInfo.emailNotificationsType = 'undefined';
         notEligibleUsers.push(userInfo);
       }
     }
@@ -712,20 +720,32 @@ router.post('/revert-email-preferences', requireAdminKey, async (req, res) => {
 router.get('/email-users-debug', requireAdminKey, async (req, res) => {
   try {
     const allUsers = await User.find({})
-      .select('name email preferences')
+      .select('name email')
       .lean();
 
-    const detailedList = allUsers.map(user => ({
-      name: user.name,
-      email: user.email,
-      hasPreferences: !!(user.preferences && typeof user.preferences === 'object'),
-      emailNotifications: user.preferences?.emailNotifications,
-      emailNotificationsType: typeof user.preferences?.emailNotifications,
-      isEligible: (() => {
-        // Apenas true explícito = elegível
-        return user.preferences?.emailNotifications === true;
-      })()
-    }));
+    // Buscar preferências do modelo correto (NotificationPreferences)
+    const NotificationPreferences = mongoose.connection.collection('notificationpreferences');
+    const allPreferences = await NotificationPreferences.find({}).toArray();
+    
+    // Criar mapa userId -> emailNotifications
+    const emailPrefsMap = new Map();
+    allPreferences.forEach(pref => {
+      emailPrefsMap.set(pref.userId.toString(), pref.emailNotifications);
+    });
+
+    const detailedList = allUsers.map(user => {
+      const userId = user._id.toString();
+      const emailNotif = emailPrefsMap.get(userId);
+      
+      return {
+        name: user.name,
+        email: user.email,
+        hasPreferences: emailPrefsMap.has(userId),
+        emailNotifications: emailNotif,
+        emailNotificationsType: typeof emailNotif,
+        isEligible: emailNotif === true
+      };
+    });
 
     const summary = {
       total: detailedList.length,
@@ -778,23 +798,34 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
 
     logger.info('=== INICIANDO CAMPANHA DE EMAIL ===');
     
-    // Buscar TODOS os usuários sem filtro
+    // Buscar TODOS os usuários
     const allUsersRaw = await User.find({}).lean();
-    
     logger.info(`Total de usuários no banco: ${allUsersRaw.length}`);
+
+    // Buscar preferências do modelo correto (NotificationPreferences)
+    const NotificationPreferences = mongoose.connection.collection('notificationpreferences');
+    const allPreferences = await NotificationPreferences.find({}).toArray();
+    logger.info(`Total de preferências encontradas: ${allPreferences.length}`);
+    
+    // Criar mapa userId -> emailNotifications
+    const emailPrefsMap = new Map();
+    allPreferences.forEach(pref => {
+      emailPrefsMap.set(pref.userId.toString(), pref.emailNotifications);
+    });
 
     // Filtrar usando EXATAMENTE a mesma lógica do endpoint de stats
     const eligibleUsers = [];
     
     for (const user of allUsersRaw) {
-      // Verificar se preferences existe E emailNotifications === true
-      if (user.preferences && typeof user.preferences === 'object') {
-        if (user.preferences.emailNotifications === true) {
-          eligibleUsers.push({
-            name: user.name,
-            email: user.email
-          });
-        }
+      const userId = user._id.toString();
+      const emailNotif = emailPrefsMap.get(userId);
+      
+      // Apenas usuários com emailNotifications === true explícito
+      if (emailNotif === true) {
+        eligibleUsers.push({
+          name: user.name,
+          email: user.email
+        });
       }
     }
 
