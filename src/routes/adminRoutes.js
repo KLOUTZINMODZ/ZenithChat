@@ -655,57 +655,49 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
   }
 });
 
-// POST /api/admin/migrate-email-preferences - Migrar usuários com emailNotifications undefined para true
-router.post('/migrate-email-preferences', requireAdminKey, async (req, res) => {
+// POST /api/admin/revert-email-preferences - Reverter migração (remover emailNotifications undefined)
+router.post('/revert-email-preferences', requireAdminKey, async (req, res) => {
   try {
-    // Buscar todos os usuários onde emailNotifications é undefined
-    const usersToMigrate = await User.find({
-      $or: [
-        { 'preferences.emailNotifications': { $exists: false } },
-        { 'preferences.emailNotifications': null },
-        { preferences: { $exists: false } }
-      ]
+    // Buscar todos os usuários com emailNotifications = true
+    const users = await User.find({
+      'preferences.emailNotifications': true
     }).select('name email preferences');
 
-    logger.info(`Found ${usersToMigrate.length} users to migrate`);
+    logger.info(`Found ${users.length} users with emailNotifications=true`);
 
-    let migratedCount = 0;
+    let revertedCount = 0;
     let errorCount = 0;
 
-    for (const user of usersToMigrate) {
+    for (const user of users) {
       try {
-        // Garantir que preferences existe
-        if (!user.preferences) {
-          user.preferences = {};
+        // Remover o campo emailNotifications (voltar para undefined)
+        if (user.preferences) {
+          user.preferences.emailNotifications = undefined;
+          await user.save();
+          revertedCount++;
         }
-
-        // Definir emailNotifications como true (opt-in por padrão para usuários existentes)
-        user.preferences.emailNotifications = true;
-        
-        await user.save();
-        migratedCount++;
       } catch (error) {
-        logger.error(`Error migrating user ${user.email}:`, error);
+        logger.error(`Error reverting user ${user.email}:`, error);
         errorCount++;
       }
     }
 
-    logger.info(`Migration completed: ${migratedCount} migrated, ${errorCount} errors`);
+    logger.info(`Revert completed: ${revertedCount} reverted, ${errorCount} errors`);
 
     res.json({
       success: true,
-      message: `Migração concluída: ${migratedCount} usuários atualizados`,
+      message: `Reversão concluída: ${revertedCount} usuários revertidos para undefined`,
       details: {
-        total: usersToMigrate.length,
-        migrated: migratedCount,
+        total: users.length,
+        reverted: revertedCount,
         errors: errorCount
       }
     });
   } catch (error) {
-    logger.error('Error during migration:', error);
+    logger.error('Error during revert:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro durante a migração',
+      message: 'Erro durante a reversão',
       error: error.message
     });
   }
