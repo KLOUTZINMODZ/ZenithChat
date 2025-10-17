@@ -304,6 +304,145 @@ class EmailService {
   }
 
   /**
+   * Envia email personalizado para usuários
+   */
+  async sendCustomEmail(email, userName, subject, templateType, customMessage) {
+    try {
+      if (!this.transporter) {
+        throw new Error('Email service not initialized');
+      }
+
+      const mailOptions = {
+        from: {
+          name: 'Zenith Gaming',
+          address: process.env.EMAIL_USER
+        },
+        to: email,
+        subject: subject,
+        html: this.getCustomEmailTemplate(templateType, userName, customMessage)
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      logger.info(`Custom email sent to ${email}:`, info.messageId);
+      
+      return {
+        success: true,
+        messageId: info.messageId
+      };
+    } catch (error) {
+      logger.error('Error sending custom email:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Template HTML para emails personalizados
+   */
+  getCustomEmailTemplate(templateType, userName, customMessage) {
+    const iconMap = {
+      warning: '⚠️',
+      news: '📰',
+      announcement: '📢'
+    };
+
+    const titleMap = {
+      warning: 'Aviso Importante',
+      news: 'Novidades da Plataforma',
+      announcement: 'Comunicado Oficial'
+    };
+
+    const colorMap = {
+      warning: '#f59e0b',
+      news: '#3b82f6',
+      announcement: '#a855f7'
+    };
+
+    return `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Zenith - ${titleMap[templateType]}</title>
+      </head>
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #0a0e1a;">
+        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" style="max-width: 600px; width: 100%; background: #111827; border: 1px solid #1f2937; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;">
+                <!-- Header -->
+                <tr>
+                  <td style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 40px 30px; text-align: center; border-bottom: 2px solid ${colorMap[templateType]};">
+                    <div style="display: inline-block; padding: 12px 24px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 24px; margin-bottom: 20px;">
+                      <span style="color: #3b82f6; font-size: 14px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                          <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
+                          <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z"></path>
+                        </svg>
+                        Zenith Gaming
+                      </span>
+                    </div>
+                    
+                    <div style="width: 64px; height: 64px; margin: 0 auto 20px; background: linear-gradient(135deg, ${colorMap[templateType]}, ${templateType === 'warning' ? '#ea580c' : templateType === 'news' ? '#06b6d4' : '#ec4899'}); border-radius: 16px; display: flex; align-items: center; justify-center; box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);">
+                      <span style="font-size: 32px;">${iconMap[templateType]}</span>
+                    </div>
+                    
+                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: bold; text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);">
+                      ${titleMap[templateType]}
+                    </h1>
+                  </td>
+                </tr>
+
+                <!-- Body -->
+                <tr>
+                  <td style="padding: 40px 30px; background: #111827;">
+                    <p style="margin: 0 0 20px; color: #e2e8f0; font-size: 16px; line-height: 1.6;">
+                      Olá <strong style="color: #3b82f6;">${userName}</strong>,
+                    </p>
+                    
+                    <div style="background: rgba(59, 130, 246, 0.05); border-left: 4px solid ${colorMap[templateType]}; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                      <p style="margin: 0; color: #cbd5e1; font-size: 15px; line-height: 1.8;">
+                        ${customMessage.replace(/\n/g, '<br>')}
+                      </p>
+                    </div>
+
+                    <p style="margin: 30px 0 0; color: #cbd5e1; font-size: 15px; line-height: 1.6;">
+                      ${templateType === 'warning' ? 'Atenciosamente' : 'Boas partidas'},<br>
+                      <strong style="color: #3b82f6;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
+                          <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
+                          <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z"></path>
+                        </svg>
+                        Equipe Zenith
+                      </strong>
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background: #0f172a; padding: 30px; text-align: center; border-top: 1px solid #1f2937;">
+                    <div style="height: 2px; background: linear-gradient(90deg, transparent 0%, ${colorMap[templateType]} 50%, transparent 100%); margin-bottom: 20px;"></div>
+                    
+                    <p style="margin: 0 0 10px; color: #64748b; font-size: 13px;">
+                      Este é um email automático, por favor não responda.
+                    </p>
+                    
+                    <p style="margin: 0; color: #475569; font-size: 12px;">
+                      © 2025 <strong style="color: #3b82f6;">Zenith</strong> • Powered by Klouts
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
    * Valida se o email é de um provedor confiável
    */
   isValidEmailProvider(email) {

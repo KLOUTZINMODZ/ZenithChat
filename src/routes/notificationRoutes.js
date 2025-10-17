@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 const User = require('../models/User');
+const auth = require('../middleware/auth');
 
 function requireAdminKey(req, res, next) {
   try {
@@ -72,6 +73,98 @@ router.post('/send', requireAdminKey, async (req, res) => {
   } catch (error) {
     logger.error('Error in /api/notifications/send:', error);
     res.status(500).json({ success: false, message: 'Internal error' });
+  }
+});
+
+// GET /api/notifications/preferences - Obter preferências do usuário
+router.get('/preferences', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('preferences').lean();
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+    }
+
+    // Garantir que os defaults sejam aplicados se não existirem
+    const preferences = {
+      preferences: {
+        newProposal: user.preferences?.notifications?.newProposal ?? true,
+        proposalAccepted: user.preferences?.notifications?.proposalAccepted ?? true,
+        newBoosting: user.preferences?.notifications?.newBoosting ?? false,
+        boostingCompleted: user.preferences?.notifications?.boostingCompleted ?? true
+      },
+      watchedGames: user.preferences?.watchedGames || [],
+      watchedGameIds: user.preferences?.watchedGameIds || [],
+      emailNotifications: user.preferences?.emailNotifications ?? true
+    };
+
+    res.json({ success: true, data: preferences });
+  } catch (error) {
+    logger.error('Error getting notification preferences:', error);
+    res.status(500).json({ success: false, message: 'Erro ao buscar preferências' });
+  }
+});
+
+// PUT /api/notifications/preferences - Atualizar preferências do usuário
+router.put('/preferences', auth, async (req, res) => {
+  try {
+    const { preferences, watchedGames, watchedGameIds, emailNotifications } = req.body;
+
+    const updateData = {};
+    
+    if (preferences) {
+      if (preferences.newProposal !== undefined) {
+        updateData['preferences.notifications.newProposal'] = preferences.newProposal;
+      }
+      if (preferences.proposalAccepted !== undefined) {
+        updateData['preferences.notifications.proposalAccepted'] = preferences.proposalAccepted;
+      }
+      if (preferences.newBoosting !== undefined) {
+        updateData['preferences.notifications.newBoosting'] = preferences.newBoosting;
+      }
+      if (preferences.boostingCompleted !== undefined) {
+        updateData['preferences.notifications.boostingCompleted'] = preferences.boostingCompleted;
+      }
+    }
+
+    if (watchedGames !== undefined) {
+      updateData['preferences.watchedGames'] = watchedGames;
+    }
+    
+    if (watchedGameIds !== undefined) {
+      updateData['preferences.watchedGameIds'] = watchedGameIds;
+    }
+
+    if (emailNotifications !== undefined) {
+      updateData['preferences.emailNotifications'] = emailNotifications;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('preferences');
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+    }
+
+    const responseData = {
+      preferences: {
+        newProposal: user.preferences?.notifications?.newProposal ?? true,
+        proposalAccepted: user.preferences?.notifications?.proposalAccepted ?? true,
+        newBoosting: user.preferences?.notifications?.newBoosting ?? false,
+        boostingCompleted: user.preferences?.notifications?.boostingCompleted ?? true
+      },
+      watchedGames: user.preferences?.watchedGames || [],
+      watchedGameIds: user.preferences?.watchedGameIds || [],
+      emailNotifications: user.preferences?.emailNotifications ?? true
+    };
+
+    res.json({ success: true, message: 'Preferências atualizadas com sucesso', data: responseData });
+  } catch (error) {
+    logger.error('Error updating notification preferences:', error);
+    res.status(500).json({ success: false, message: 'Erro ao atualizar preferências' });
   }
 });
 

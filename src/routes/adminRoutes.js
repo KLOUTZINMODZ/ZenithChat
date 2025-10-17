@@ -545,4 +545,104 @@ router.get('/users/banned', requireAdminKey, async (req, res) => {
   }
 });
 
+// GET /api/admin/email-stats - Obter estatísticas de usuários para email
+router.get('/email-stats', requireAdminKey, async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments({});
+    const eligibleUsers = await User.countDocuments({
+      'preferences.emailNotifications': true
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        totalUsers,
+        eligibleUsers
+      }
+    });
+  } catch (error) {
+    logger.error('Error fetching email stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar estatísticas'
+    });
+  }
+});
+
+// POST /api/admin/send-custom-email - Enviar email personalizado para usuários
+router.post('/send-custom-email', requireAdminKey, async (req, res) => {
+  try {
+    const { templateType, subject, customMessage } = req.body;
+
+    if (!templateType || !subject || !customMessage) {
+      return res.status(400).json({
+        success: false,
+        message: 'Parâmetros obrigatórios: templateType, subject, customMessage'
+      });
+    }
+
+    // Validar tipo de template
+    const validTypes = ['warning', 'news', 'announcement'];
+    if (!validTypes.includes(templateType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tipo de template inválido. Use: warning, news ou announcement'
+      });
+    }
+
+    // Buscar usuários que aceitam receber emails
+    const users = await User.find({
+      'preferences.emailNotifications': true
+    }).select('name email').lean();
+
+    if (users.length === 0) {
+      return res.json({
+        success: true,
+        message: 'Nenhum usuário encontrado para enviar emails',
+        sentCount: 0
+      });
+    }
+
+    const emailService = require('../services/emailService');
+    let successCount = 0;
+    let failCount = 0;
+
+    // Enviar emails em lotes para evitar sobrecarga
+    for (const user of users) {
+      try {
+        await emailService.sendCustomEmail(
+          user.email,
+          user.name,
+          subject,
+          templateType,
+          customMessage
+        );
+        successCount++;
+        
+        // Pequeno delay entre emails para evitar rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        logger.error(`Failed to send email to ${user.email}:`, error);
+        failCount++;
+      }
+    }
+
+    logger.info(`Custom emails sent: ${successCount} success, ${failCount} failed`);
+
+    res.json({
+      success: true,
+      message: `Emails enviados com sucesso!`,
+      sentCount: successCount,
+      failedCount: failCount
+    });
+
+  } catch (error) {
+    logger.error('Error sending custom emails:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao enviar emails'
+    });
+  }
+});
+
 module.exports = router;

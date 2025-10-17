@@ -94,8 +94,33 @@ const userSchema = new mongoose.Schema({
   },
   preferences: {
     notifications: {
-
-      type: mongoose.Schema.Types.Mixed,
+      newProposal: {
+        type: Boolean,
+        default: true
+      },
+      proposalAccepted: {
+        type: Boolean,
+        default: true
+      },
+      newBoosting: {
+        type: Boolean,
+        default: false
+      },
+      boostingCompleted: {
+        type: Boolean,
+        default: true
+      }
+    },
+    watchedGames: {
+      type: [String],
+      default: []
+    },
+    watchedGameIds: {
+      type: [Number],
+      default: []
+    },
+    emailNotifications: {
+      type: Boolean,
       default: true
     },
     sound: {
