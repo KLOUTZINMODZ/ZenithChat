@@ -110,6 +110,11 @@ router.put('/preferences', auth, async (req, res) => {
   try {
     const { preferences, watchedGames, watchedGameIds, emailNotifications } = req.body;
 
+    logger.info('=== ATUALIZAÇÃO DE PREFERÊNCIAS ===');
+    logger.info(`Usuário: ${req.user.id}`);
+    logger.info(`emailNotifications recebido: ${emailNotifications} (${typeof emailNotifications})`);
+    logger.info(`Body completo:`, JSON.stringify(req.body, null, 2));
+
     const updateData = {};
     
     if (preferences) {
@@ -137,7 +142,12 @@ router.put('/preferences', auth, async (req, res) => {
 
     if (emailNotifications !== undefined) {
       updateData['preferences.emailNotifications'] = emailNotifications;
+      logger.info(`✓ emailNotifications será atualizado para: ${emailNotifications}`);
+    } else {
+      logger.warn(`⚠ emailNotifications NÃO foi enviado no body!`);
     }
+
+    logger.info(`Dados a serem atualizados:`, JSON.stringify(updateData, null, 2));
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
@@ -148,6 +158,10 @@ router.put('/preferences', auth, async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
     }
+
+    logger.info(`✓ Usuário atualizado com sucesso!`);
+    logger.info(`emailNotifications salvo no banco: ${user.preferences?.emailNotifications} (${typeof user.preferences?.emailNotifications})`);
+    logger.info(`Preferences completo:`, JSON.stringify(user.preferences, null, 2));
 
     const responseData = {
       preferences: {
@@ -160,6 +174,8 @@ router.put('/preferences', auth, async (req, res) => {
       watchedGameIds: user.preferences?.watchedGameIds || [],
       emailNotifications: user.preferences?.emailNotifications ?? true
     };
+
+    logger.info('=== FIM DA ATUALIZAÇÃO ===\n');
 
     res.json({ success: true, message: 'Preferências atualizadas com sucesso', data: responseData });
   } catch (error) {
