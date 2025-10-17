@@ -1390,7 +1390,7 @@ router.post('/auto-release/run', auth, async (req, res) => {
 router.get('/:purchaseId', auth, async (req, res) => {
     try {
     const { purchaseId } = req.params;
-    const purchase = await Purchase.findById(purchaseId);
+    const purchase = await Purchase.findById(purchaseId).lean();
     if (!purchase) {
       return res.status(404).json({ success: false, message: 'Compra não encontrada' });
     }
@@ -1402,8 +1402,20 @@ router.get('/:purchaseId', auth, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Acesso negado' });
     }
 
+    // Populate item and users
+    const [item, buyer, seller] = await Promise.all([
+      MarketItem.findById(purchase.itemId).select('_id title image images').lean(),
+      User.findById(purchase.buyerId).select('_id name legalName username avatar rating').lean(),
+      User.findById(purchase.sellerId).select('_id name legalName username avatar rating').lean()
+    ]);
+
+    const userName = (u) => (u?.name || u?.legalName || u?.username || 'Usuário');
+    const itemImage = item?.image || (Array.isArray(item?.images) && item.images.length ? String(item.images[0]) : null);
+
     const data = {
+      _id: purchase._id?.toString(),
       purchaseId: purchase._id?.toString(),
+      orderNumber: String(purchase._id).slice(-8).toUpperCase(),
       buyerId: purchase.buyerId?.toString(),
       sellerId: purchase.sellerId?.toString(),
       itemId: purchase.itemId?.toString?.() || purchase.itemId,
@@ -1413,10 +1425,28 @@ router.get('/:purchaseId', auth, async (req, res) => {
       feeAmount: purchase.feeAmount,
       sellerReceives: purchase.sellerReceives,
       conversationId: purchase.conversationId?.toString?.() || purchase.conversationId,
+      createdAt: purchase.createdAt,
       escrowReservedAt: purchase.escrowReservedAt,
       shippedAt: purchase.shippedAt,
       deliveredAt: purchase.deliveredAt,
-      autoReleaseAt: purchase.autoReleaseAt
+      autoReleaseAt: purchase.autoReleaseAt,
+      item: {
+        _id: String(purchase.itemId || ''),
+        title: item?.title || 'Item',
+        image: itemImage
+      },
+      buyer: {
+        _id: String(purchase.buyerId || ''),
+        name: userName(buyer),
+        avatar: buyer?.avatar,
+        rating: buyer?.rating
+      },
+      seller: {
+        _id: String(purchase.sellerId || ''),
+        name: userName(seller),
+        avatar: seller?.avatar,
+        rating: seller?.rating
+      }
     };
 
     return res.json({ success: true, data });
