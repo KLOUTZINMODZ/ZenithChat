@@ -776,25 +776,42 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       });
     }
 
-    // Buscar TODOS os usuários e filtrar manualmente quem aceita emails
-    const allUsers = await User.find({})
-      .select('name email preferences')
-      .lean();
+    logger.info('=== INICIANDO CAMPANHA DE EMAIL ===');
+    
+    // Buscar TODOS os usuários sem filtro
+    const allUsersRaw = await User.find({}).lean();
+    
+    logger.info(`Total de usuários no banco: ${allUsersRaw.length}`);
 
-    // Filtrar apenas usuários elegíveis (mesma lógica do endpoint de stats)
-    // Apenas usuários com emailNotifications === true explícito
-    const users = allUsers.filter(user => {
-      return user.preferences?.emailNotifications === true;
+    // Filtrar usando EXATAMENTE a mesma lógica do endpoint de stats
+    const eligibleUsers = [];
+    
+    for (const user of allUsersRaw) {
+      // Verificar se preferences existe E emailNotifications === true
+      if (user.preferences && typeof user.preferences === 'object') {
+        if (user.preferences.emailNotifications === true) {
+          eligibleUsers.push({
+            name: user.name,
+            email: user.email
+          });
+        }
+      }
+    }
+
+    const users = eligibleUsers;
+    
+    logger.info(`=== RESULTADO DO FILTRO ===`);
+    logger.info(`Usuários elegíveis: ${users.length}/${allUsersRaw.length}`);
+    users.forEach((user, index) => {
+      logger.info(`${index + 1}. ${user.name} (${user.email})`);
     });
-
-    logger.info(`Email campaign: ${users.length}/${allUsers.length} users eligible`);
 
     if (users.length === 0) {
       return res.json({
         success: true,
         message: 'Nenhum usuário elegível encontrado para enviar emails',
         sentCount: 0,
-        totalUsers: allUsers.length
+        totalUsers: allUsersRaw.length
       });
     }
 
