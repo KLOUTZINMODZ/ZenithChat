@@ -615,36 +615,52 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
     }
 
     const emailService = require('../services/emailService');
-    let successCount = 0;
-    let failCount = 0;
-
-    // Enviar emails em lotes para evitar sobrecarga
-    for (const user of users) {
-      try {
-        await emailService.sendCustomEmail(
-          user.email,
-          user.name,
-          subject,
-          templateType,
-          customMessage
-        );
-        successCount++;
-        
-        // Pequeno delay entre emails para evitar rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (error) {
-        logger.error(`Failed to send email to ${user.email}:`, error);
-        failCount++;
-      }
-    }
-
-    logger.info(`Custom emails sent: ${successCount} success, ${failCount} failed`);
-
+    
+    // Responder imediatamente ao cliente
     res.json({
       success: true,
-      message: `Emails enviados com sucesso!`,
-      sentCount: successCount,
-      failedCount: failCount
+      message: `Iniciando envio de emails para ${users.length} usuários...`,
+      totalUsers: users.length
+    });
+
+    // Processar emails em background de forma assíncrona
+    setImmediate(async () => {
+      let successCount = 0;
+      let failCount = 0;
+
+      // Processar em batches paralelos de 50 emails por vez
+      const BATCH_SIZE = 50;
+      
+      for (let i = 0; i < users.length; i += BATCH_SIZE) {
+        const batch = users.slice(i, i + BATCH_SIZE);
+        
+        // Enviar todos os emails do batch em paralelo
+        const results = await Promise.allSettled(
+          batch.map(user => 
+            emailService.sendCustomEmail(
+              user.email,
+              user.name,
+              subject,
+              templateType,
+              customMessage
+            )
+          )
+        );
+
+        // Contar sucessos e falhas
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            successCount++;
+          } else {
+            failCount++;
+            logger.error(`Failed to send email to ${batch[index].email}:`, result.reason);
+          }
+        });
+
+        logger.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${successCount} sent, ${failCount} failed`);
+      }
+
+      logger.info(`✅ Email campaign completed: ${successCount} success, ${failCount} failed out of ${users.length} total`);
     });
 
   } catch (error) {
