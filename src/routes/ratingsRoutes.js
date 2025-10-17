@@ -49,6 +49,27 @@ router.post('/', auth, async (req, res) => {
       status: 'approved'
     });
 
+    // Atualizar rating do vendedor
+    try {
+      const allSellerReviews = await Review.find({ 
+        targetId: purchase.sellerId,
+        status: 'approved'
+      });
+      
+      if (allSellerReviews.length > 0) {
+        const totalRating = allSellerReviews.reduce((sum, r) => sum + (r.rating || 0), 0);
+        const averageRating = totalRating / allSellerReviews.length;
+        
+        console.log(`[RATING UPDATE] Seller ${purchase.sellerId}: ${allSellerReviews.length} reviews, avg: ${averageRating.toFixed(2)}`);
+        
+        await User.findByIdAndUpdate(purchase.sellerId, {
+          rating: Number(averageRating.toFixed(2))
+        });
+      }
+    } catch (err) {
+      console.error('[RATING UPDATE] Erro ao atualizar rating do vendedor:', err);
+    }
+
     const populated = await Review.findById(doc._id)
       .populate('userId', 'name email avatar profileImage')
       .lean();
@@ -255,21 +276,38 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
 
     // Atualizar rating do booster
     try {
+      console.log(`[BOOSTING RATING] Atualizando rating para booster: ${boosterId}`);
+      
       const allBoosterReviews = await Review.find({ 
         targetId: boosterId,
         status: 'approved'
       });
       
+      console.log(`[BOOSTING RATING] Encontradas ${allBoosterReviews.length} avaliações para o booster`);
+      
       if (allBoosterReviews.length > 0) {
         const totalRating = allBoosterReviews.reduce((sum, r) => sum + (r.rating || 0), 0);
         const averageRating = totalRating / allBoosterReviews.length;
         
-        await User.findByIdAndUpdate(boosterId, {
-          rating: Number(averageRating.toFixed(2))
-        });
+        console.log(`[BOOSTING RATING] Média calculada: ${averageRating.toFixed(2)} (${totalRating}/${allBoosterReviews.length})`);
+        
+        const updateResult = await User.findByIdAndUpdate(
+          boosterId, 
+          { rating: Number(averageRating.toFixed(2)) },
+          { new: true }
+        );
+        
+        if (updateResult) {
+          console.log(`[BOOSTING RATING] ✅ Rating atualizado com sucesso! Novo rating: ${updateResult.rating}`);
+        } else {
+          console.error(`[BOOSTING RATING] ❌ Usuário não encontrado: ${boosterId}`);
+        }
+      } else {
+        console.log(`[BOOSTING RATING] Nenhuma avaliação encontrada ainda`);
       }
     } catch (err) {
-      console.error('Erro ao atualizar rating do booster:', err);
+      console.error('[BOOSTING RATING] ❌ Erro ao atualizar rating do booster:', err);
+      console.error('[BOOSTING RATING] Stack:', err.stack);
     }
 
     const populated = await Review.findById(review._id)
