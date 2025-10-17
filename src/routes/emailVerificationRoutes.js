@@ -142,7 +142,7 @@ router.post('/send-verification', async (req, res) => {
     `;
 
     // Enviar email
-    const result = await emailService.sendCustomEmail(
+    const result = await emailService.sendRawHtmlEmail(
       email,
       subject,
       htmlTemplate

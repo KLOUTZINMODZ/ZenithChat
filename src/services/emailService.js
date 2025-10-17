@@ -531,6 +531,38 @@ class EmailService {
     const domain = email.toLowerCase().split('@')[1];
     return trustedProviders.includes(domain);
   }
+
+  /**
+   * Envia email com HTML customizado (para códigos de verificação)
+   */
+  async sendRawHtmlEmail(email, subject, htmlContent) {
+    try {
+      if (!this.transporter) {
+        throw new Error('Email service not initialized');
+      }
+
+      const mailOptions = {
+        from: {
+          name: 'Zenith Gaming',
+          address: process.env.EMAIL_USER
+        },
+        to: email,
+        subject: subject,
+        html: htmlContent
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      logger.info(`Raw HTML email sent to ${email}:`, info.messageId);
+      
+      return {
+        success: true,
+        messageId: info.messageId
+      };
+    } catch (error) {
+      logger.error('Error sending raw HTML email:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new EmailService();
