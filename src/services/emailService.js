@@ -339,26 +339,11 @@ class EmailService {
    * Template HTML para emails personalizados
    */
   getCustomEmailTemplate(templateType, userName, customMessage) {
-    // Ícones SVG personalizados (estilo Lucide)
+    // Usar caracteres Unicode que funcionam em todos os clientes de email
     const iconMap = {
-      warning: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-        <line x1="12" y1="9" x2="12" y2="13"></line>
-        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-      </svg>`,
-      news: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 2v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V2"></path>
-        <path d="M3 13h18"></path>
-        <path d="M3 18h18"></path>
-        <path d="M10 21h4"></path>
-        <rect x="4" y="6" width="16" height="16" rx="2"></rect>
-      </svg>`,
-      announcement: `<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
-        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
-        <path d="M4 2C2.8 3.7 2 5.7 2 8"></path>
-        <path d="M22 8c0-2.3-.8-4.3-2-6"></path>
-      </svg>`
+      warning: '⚠',
+      news: '📰',
+      announcement: '🔔'
     };
 
     const titleMap = {
@@ -400,98 +385,115 @@ class EmailService {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Zenith - ${titleMap[templateType]}</title>
+        <style>
+          @media only screen and (max-width: 600px) {
+            .content-cell { padding: 30px 20px !important; }
+            .icon-size { font-size: 48px !important; }
+            .title-size { font-size: 24px !important; }
+          }
+        </style>
       </head>
-      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #0a0e1a;">
-        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+      <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0a0e1a;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #0a0e1a;">
           <tr>
             <td align="center" style="padding: 40px 20px;">
-              <table role="presentation" style="max-width: 600px; width: 100%; background: linear-gradient(135deg, #111827 0%, #0f172a 100%); border: 1px solid #1f2937; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.7); overflow: hidden;">
-                <!-- Header -->
+              <!-- Main Container -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #111827; border-radius: 16px; overflow: hidden; border: 1px solid #1f2937;">
+                <!-- Header Section -->
                 <tr>
-                  <td style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 50px 30px; text-align: center; border-bottom: 3px solid ${colors.primary};">
-                    <!-- Badge Zenith -->
-                    <div style="display: inline-block; padding: 10px 20px; background: rgba(59, 130, 246, 0.12); border: 1.5px solid rgba(59, 130, 246, 0.4); border-radius: 20px; margin-bottom: 25px;">
-                      <span style="color: #60a5fa; font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-                          <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
-                          <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z"></path>
-                        </svg>
-                        Zenith Gaming
-                      </span>
-                    </div>
+                  <td align="center" style="background: linear-gradient(180deg, #1e293b 0%, #111827 100%); padding: 40px 30px; border-bottom: 3px solid ${colors.primary};">
+                    <!-- Badge -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="center" style="background-color: ${colors.bg}; border: 1.5px solid ${colors.primary}; border-radius: 20px; padding: 10px 20px;">
+                          <span style="color: ${colors.primary}; font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            ZENITH GAMING
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
                     
-                    <!-- Ícone Principal -->
-                    <div style="width: 80px; height: 80px; margin: 0 auto 25px; background: ${colors.gradient}; border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 8px 32px ${colors.primary}80, 0 0 60px ${colors.primary}40;">
-                      <div style="color: #ffffff; filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));">
-                        ${iconMap[templateType]}
-                      </div>
-                    </div>
+                    <!-- Icon -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 25px auto;">
+                      <tr>
+                        <td align="center" style="width: 100px; height: 100px; background: ${colors.gradient}; border-radius: 20px; text-align: center; line-height: 100px;">
+                          <span class="icon-size" style="font-size: 56px; display: inline-block;">${iconMap[templateType]}</span>
+                        </td>
+                      </tr>
+                    </table>
                     
-                    <!-- Título -->
-                    <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 800; text-shadow: 0 2px 20px ${colors.primary}60; letter-spacing: -0.5px;">
+                    <!-- Title -->
+                    <h1 class="title-size" style="margin: 20px 0 0; color: #ffffff; font-size: 32px; font-weight: 800; letter-spacing: -0.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                       ${titleMap[templateType]}
                     </h1>
                     
-                    <!-- Decoração -->
-                    <div style="width: 60px; height: 4px; background: ${colors.gradient}; margin: 20px auto 0; border-radius: 2px;"></div>
+                    <!-- Divider -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 20px auto 0;">
+                      <tr>
+                        <td style="width: 60px; height: 4px; background: ${colors.primary}; border-radius: 2px;"></td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
 
                 <!-- Body -->
                 <tr>
-                  <td style="padding: 45px 35px; background: #111827;">
-                    <!-- Saudação -->
-                    <p style="margin: 0 0 25px; color: #f1f5f9; font-size: 17px; line-height: 1.6;">
+                  <td class="content-cell" style="padding: 40px 35px; background-color: #111827;">
+                    <p style="margin: 0 0 25px; color: #f1f5f9; font-size: 17px; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                       Olá <strong style="color: ${colors.primary}; font-weight: 700;">${userName}</strong>,
                     </p>
                     
-                    <!-- Mensagem Principal -->
-                    <div style="background: ${colors.bg}; border-left: 4px solid ${colors.primary}; border-radius: 12px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);">
-                      <p style="margin: 0; color: #e2e8f0; font-size: 16px; line-height: 1.8;">
-                        ${customMessage.replace(/\n/g, '<br>')}
-                      </p>
-                    </div>
-
-                    <!-- Decoração de Atenção (Warning only) -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 25px 0;">
+                      <tr>
+                        <td style="background-color: ${colors.bg}; border-left: 4px solid ${colors.primary}; border-radius: 12px; padding: 25px;">
+                          <p style="margin: 0; color: #e2e8f0; font-size: 16px; line-height: 1.8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            ${customMessage.replace(/\n/g, '<br>')}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                    
                     ${templateType === 'warning' ? `
-                    <div style="background: rgba(239, 68, 68, 0.1); border: 1.5px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px; margin: 25px 0; display: flex; align-items: center; gap: 15px;">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="8" x2="12" y2="12"></line>
-                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                      </svg>
-                      <p style="margin: 0; color: #fca5a5; font-size: 14px; line-height: 1.6;">
-                        <strong style="color: #f87171;">Atenção:</strong> Esta mensagem requer sua atenção imediata.
-                      </p>
-                    </div>
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 25px 0;">
+                      <tr>
+                        <td style="background-color: rgba(239, 68, 68, 0.1); border: 1.5px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 20px;">
+                          <p style="margin: 0; color: #fca5a5; font-size: 14px; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            <strong style="color: #f87171;">⚠️ Atenção:</strong> Esta mensagem requer sua atenção imediata.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
                     ` : ''}
-
-                    <!-- Assinatura -->
-                    <div style="margin: 40px 0 0; padding-top: 30px; border-top: 1px solid #1f2937;">
-                      <p style="margin: 0 0 8px; color: #94a3b8; font-size: 15px;">
-                        ${templateType === 'warning' ? 'Atenciosamente' : templateType === 'announcement' ? 'Com respeito' : 'Boas partidas'},
-                      </p>
-                      <p style="margin: 0; font-size: 16px; font-weight: 700; color: ${colors.primary}; display: inline-flex; align-items: center; gap: 8px;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
-                          <path d="M2 17L12 22L22 17V12L12 17L2 12V17Z"></path>
-                        </svg>
-                        Equipe Zenith
-                      </p>
-                    </div>
+                    
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 40px 0 0; padding-top: 30px; border-top: 1px solid #1f2937;">
+                      <tr>
+                        <td>
+                          <p style="margin: 0 0 8px; color: #94a3b8; font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            ${templateType === 'warning' ? 'Atenciosamente' : templateType === 'announcement' ? 'Com respeito' : 'Boas partidas'},
+                          </p>
+                          <p style="margin: 0; font-size: 16px; font-weight: 700; color: ${colors.primary}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            🎮 Equipe Zenith
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
 
                 <!-- Footer -->
                 <tr>
-                  <td style="background: #0f172a; padding: 35px; text-align: center; border-top: 1px solid #1f2937;">
-                    <div style="height: 3px; background: ${colors.gradient}; margin-bottom: 25px; border-radius: 2px; opacity: 0.6;"></div>
+                  <td align="center" style="background-color: #0f172a; padding: 35px; border-top: 1px solid #1f2937;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 25px;">
+                      <tr>
+                        <td style="height: 3px; background: ${colors.primary}; border-radius: 2px; opacity: 0.6;"></td>
+                      </tr>
+                    </table>
                     
-                    <p style="margin: 0 0 12px; color: #64748b; font-size: 13px; line-height: 1.6;">
+                    <p style="margin: 0 0 12px; color: #64748b; font-size: 13px; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                       Este é um email automático, por favor não responda.
                     </p>
                     
-                    <p style="margin: 0; color: #475569; font-size: 12px;">
+                    <p style="margin: 0; color: #475569; font-size: 12px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                       &copy; 2025 <strong style="color: #60a5fa; font-weight: 600;">Zenith</strong> • Powered by Klouts
                     </p>
                   </td>

@@ -628,23 +628,44 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       let successCount = 0;
       let failCount = 0;
 
-      // Processar em batches paralelos de 50 emails por vez
-      const BATCH_SIZE = 50;
+      // Gmail limits: ~100 emails per minute, ~500 per hour for free accounts
+      // Use smaller batches with delays to respect rate limits
+      const BATCH_SIZE = 10; // Reduced from 50 to 10
+      const DELAY_BETWEEN_BATCHES = 2000; // 2 seconds between batches
       
       for (let i = 0; i < users.length; i += BATCH_SIZE) {
         const batch = users.slice(i, i + BATCH_SIZE);
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
         
-        // Enviar todos os emails do batch em paralelo
+        logger.info(`Starting batch ${batchNumber}/${Math.ceil(users.length / BATCH_SIZE)}`);
+        
+        // Enviar emails do batch em paralelo com retry
         const results = await Promise.allSettled(
-          batch.map(user => 
-            emailService.sendCustomEmail(
-              user.email,
-              user.name,
-              subject,
-              templateType,
-              customMessage
-            )
-          )
+          batch.map(async (user) => {
+            // Retry logic with exponential backoff
+            let retries = 3;
+            let delay = 1000;
+            
+            for (let attempt = 1; attempt <= retries; attempt++) {
+              try {
+                await emailService.sendCustomEmail(
+                  user.email,
+                  user.name,
+                  subject,
+                  templateType,
+                  customMessage
+                );
+                return { success: true };
+              } catch (error) {
+                if (attempt === retries || !error.responseCode || error.responseCode !== 421) {
+                  throw error;
+                }
+                logger.warn(`Retry ${attempt}/${retries} for ${user.email} after ${delay}ms`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2; // Exponential backoff
+              }
+            }
+          })
         );
 
         // Contar sucessos e falhas
@@ -657,7 +678,13 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
           }
         });
 
-        logger.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${successCount} sent, ${failCount} failed`);
+        logger.info(`Batch ${batchNumber} completed: ${successCount} total sent, ${failCount} total failed`);
+        
+        // Delay between batches to avoid rate limiting (except for last batch)
+        if (i + BATCH_SIZE < users.length) {
+          logger.info(`Waiting ${DELAY_BETWEEN_BATCHES}ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+        }
       }
 
       logger.info(`✅ Email campaign completed: ${successCount} success, ${failCount} failed out of ${users.length} total`);
