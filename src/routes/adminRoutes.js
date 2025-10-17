@@ -545,112 +545,117 @@ router.get('/users/banned', requireAdminKey, async (req, res) => {
   }
 });
 
-// GET /api/admin/email-stats - Obter estatísticas de usuários para email
+// GET /api/admin/email-stats - Obter estatísticas REAIS e DETALHADAS de usuários para email
 router.get('/email-stats', requireAdminKey, async (req, res) => {
   try {
-    // Buscar TODOS os usuários com suas preferências
-    const allUsers = await User.find({})
-      .select('name email preferences')
-      .lean();
+    logger.info('=== INICIANDO ANÁLISE PROFUNDA DE USUÁRIOS ===');
+    
+    // Buscar TODOS os usuários DIRETO do MongoDB sem filtros
+    const allUsersRaw = await User.find({}).lean();
+    
+    logger.info(`Total de usuários no banco: ${allUsersRaw.length}`);
 
-    // Análise detalhada
-    const analysis = {
-      total: allUsers.length,
-      withPreferences: 0,
-      withoutPreferences: 0,
-      emailNotifications: {
-        explicitTrue: 0,
-        explicitFalse: 0,
-        undefined: 0,
-        null: 0
-      },
+    // Análise minuciosa de cada usuário
+    const detailedAnalysis = {
+      total: allUsersRaw.length,
       eligible: 0,
-      notEligible: 0
+      notEligible: 0,
+      breakdown: {
+        trueExplicit: 0,
+        falseExplicit: 0,
+        undefinedValue: 0,
+        nullValue: 0,
+        noPreferencesObject: 0
+      }
     };
 
-    const eligibleUsersList = [];
-    const notEligibleUsersList = [];
+    const eligibleUsers = [];
+    const notEligibleUsers = [];
 
-    allUsers.forEach(user => {
-      const hasPreferences = user.preferences && typeof user.preferences === 'object';
-      
-      if (hasPreferences) {
-        analysis.withPreferences++;
+    // Analisar CADA usuário individualmente
+    for (const user of allUsersRaw) {
+      const userInfo = {
+        name: user.name,
+        email: user.email,
+        hasPreferencesObject: false,
+        emailNotificationsValue: 'NOT_SET',
+        emailNotificationsType: 'undefined',
+        isEligible: false,
+        reason: ''
+      };
+
+      // Verificar se preferences existe
+      if (user.preferences && typeof user.preferences === 'object') {
+        userInfo.hasPreferencesObject = true;
         
+        // Verificar emailNotifications
         const emailNotif = user.preferences.emailNotifications;
-        
+        userInfo.emailNotificationsValue = String(emailNotif);
+        userInfo.emailNotificationsType = typeof emailNotif;
+
         if (emailNotif === true) {
-          analysis.emailNotifications.explicitTrue++;
-          analysis.eligible++;
-          eligibleUsersList.push({
-            name: user.name,
-            email: user.email,
-            status: 'explicit_true'
-          });
+          detailedAnalysis.breakdown.trueExplicit++;
+          detailedAnalysis.eligible++;
+          userInfo.isEligible = true;
+          userInfo.reason = 'emailNotifications === true';
+          eligibleUsers.push(userInfo);
         } else if (emailNotif === false) {
-          analysis.emailNotifications.explicitFalse++;
-          analysis.notEligible++;
-          notEligibleUsersList.push({
-            name: user.name,
-            email: user.email,
-            status: 'explicit_false'
-          });
+          detailedAnalysis.breakdown.falseExplicit++;
+          detailedAnalysis.notEligible++;
+          userInfo.isEligible = false;
+          userInfo.reason = 'emailNotifications === false';
+          notEligibleUsers.push(userInfo);
         } else if (emailNotif === null) {
-          analysis.emailNotifications.null++;
-          // Null = não aceita (campo nunca foi definido corretamente)
-          analysis.notEligible++;
-          notEligibleUsersList.push({
-            name: user.name,
-            email: user.email,
-            status: 'null_not_eligible'
-          });
-        } else {
-          analysis.emailNotifications.undefined++;
-          // Undefined = não aceita (campo nunca foi definido)
-          analysis.notEligible++;
-          notEligibleUsersList.push({
-            name: user.name,
-            email: user.email,
-            status: 'undefined_not_eligible'
-          });
+          detailedAnalysis.breakdown.nullValue++;
+          detailedAnalysis.notEligible++;
+          userInfo.isEligible = false;
+          userInfo.reason = 'emailNotifications === null';
+          notEligibleUsers.push(userInfo);
+        } else if (emailNotif === undefined) {
+          detailedAnalysis.breakdown.undefinedValue++;
+          detailedAnalysis.notEligible++;
+          userInfo.isEligible = false;
+          userInfo.reason = 'emailNotifications === undefined';
+          notEligibleUsers.push(userInfo);
         }
       } else {
-        analysis.withoutPreferences++;
-        // Sem preferences = não aceita
-        analysis.notEligible++;
-        notEligibleUsersList.push({
-          name: user.name,
-          email: user.email,
-          status: 'no_preferences_not_eligible'
-        });
+        // Sem objeto preferences
+        detailedAnalysis.breakdown.noPreferencesObject++;
+        detailedAnalysis.notEligible++;
+        userInfo.hasPreferencesObject = false;
+        userInfo.isEligible = false;
+        userInfo.reason = 'preferences object not found';
+        notEligibleUsers.push(userInfo);
       }
-    });
+    }
 
-    logger.info('Email Stats Analysis:', {
-      total: analysis.total,
-      eligible: analysis.eligible,
-      notEligible: analysis.notEligible,
-      breakdown: analysis.emailNotifications
-    });
+    logger.info('=== RESULTADO DA ANÁLISE ===');
+    logger.info(`Total: ${detailedAnalysis.total}`);
+    logger.info(`Elegíveis: ${detailedAnalysis.eligible}`);
+    logger.info(`Não elegíveis: ${detailedAnalysis.notEligible}`);
+    logger.info('Breakdown:', detailedAnalysis.breakdown);
 
     res.json({
       success: true,
       stats: {
-        totalUsers: analysis.total,
-        eligibleUsers: analysis.eligible
+        totalUsers: detailedAnalysis.total,
+        eligibleUsers: detailedAnalysis.eligible
       },
-      debug: {
-        analysis,
-        eligibleSample: eligibleUsersList.slice(0, 5),
-        notEligibleSample: notEligibleUsersList.slice(0, 5)
+      analysis: {
+        ...detailedAnalysis,
+        eligibleSample: eligibleUsers.slice(0, 10),
+        notEligibleSample: notEligibleUsers.slice(0, 10),
+        allEligible: eligibleUsers,
+        allNotEligible: notEligibleUsers
       }
     });
   } catch (error) {
-    logger.error('Error fetching email stats:', error);
+    logger.error('ERRO na análise de usuários:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar estatísticas',
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
   }
 });
