@@ -1713,16 +1713,17 @@ router.get('/escrow', auth, async (req, res) => {
   try {
     const Agreement = require('../models/Agreement');
     
-    // Buscar agreements ativos onde o usuário é o cliente (quem pagou)
-    const clientEscrow = await Agreement.find({
-      'parties.client.userid': req.user._id,
+    // Buscar agreements ativos onde o usuário é o BOOSTER (vendedor/prestador)
+    // O saldo bloqueado representa o valor que o vendedor vai receber quando concluir
+    const boosterEscrow = await Agreement.find({
+      'parties.booster.userid': req.user._id,
       status: { $in: ['pending', 'active'] },
       'financial.paymentStatus': 'escrowed'
     }).select('financial.totalAmount');
     
     // Calcular total em escrow
     let totalEscrow = 0;
-    for (const agreement of clientEscrow) {
+    for (const agreement of boosterEscrow) {
       totalEscrow += agreement.financial?.totalAmount || 0;
     }
     
@@ -1730,7 +1731,7 @@ router.get('/escrow', auth, async (req, res) => {
       success: true,
       data: {
         escrowBalance: round2(totalEscrow),
-        activeAgreements: clientEscrow.length,
+        activeAgreements: boosterEscrow.length,
         currency: 'BRL'
       }
     });
