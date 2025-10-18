@@ -280,7 +280,7 @@ exports.resetPassword = async (req, res) => {
         timeout: 5000
       });
       
-      console.log(`[SYNC] ✅ Senha sincronizada com sucesso: ${response.data.message}`);
+      console.log(`[SYNC] Senha sincronizada com sucesso: ${response.data.message}`);
       logger.info(`Password synced to main API for user: ${user.email}`);
     } catch (syncError) {
       console.error(`[SYNC] ❌ Erro ao sincronizar senha para ${user.email}:`, {

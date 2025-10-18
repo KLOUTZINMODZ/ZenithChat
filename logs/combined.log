@@ -8,9 +8,9 @@
 {"level":"info","message":"📝 Environment: development","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"info","message":"🔗 Allowed origins: http://localhost:5173,http://localhost:5174,https://hacklote.vercel.app,https://hacklotesite.vercel.app,https://zenithgg.com.br,https://zenithggapi.vercel.app,https://zenith.enrelyugi.com.br,https://zenithpaineladm.vercel.app,https://apizenithadmin-byzenith.vercel.app","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
-{"level":"info","message":"✅ Serviço de limpeza de chats temporários iniciado (executa a cada hora)","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
-{"level":"info","message":"✅ Purchase auto-release service started","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
+{"level":"info","message":"Serviço de limpeza de chats temporários iniciado (executa a cada hora)","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
+{"level":"info","message":"Purchase auto-release service started","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-04 14:42:30"}
 {"level":"error","message":"Authentication error: No authentication token provided","service":"chat-api","stack":"Error: No authentication token provided\n    at auth (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\src\\middleware\\auth.js:10:13)\n    at Layer.handle [as handle_request] (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\index.js:284:15\n    at param (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\index.js:365:14)\n    at param (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\index.js:376:14)\n    at Function.process_params (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\index.js:421:3)\n    at next (C:\\SandboxShare\\Nova pasta\\Nova pasta\\HackloteChatApi\\node_modules\\express\\lib\\router\\index.js:280:10)","timestamp":"2025-10-04 14:42:53"}
 {"level":"info","message":"SIGINT signal received: initiating graceful shutdown","service":"chat-api","timestamp":"2025-10-04 14:45:57"}
 {"level":"info","message":"🧠 In-Memory Cache Service initialized","service":"chat-api","timestamp":"2025-10-05 11:35:45"}
@@ -23,9 +23,9 @@
 {"level":"info","message":"📝 Environment: development","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"🔗 Allowed origins: http://localhost:5173,http://localhost:5174,https://hacklote.vercel.app,https://hacklotesite.vercel.app,https://zenithgg.com.br,https://zenithggapi.vercel.app,https://zenith.enrelyugi.com.br,https://zenithpaineladm.vercel.app,https://apizenithadmin-byzenith.vercel.app","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
-{"level":"info","message":"✅ Serviço de limpeza de chats temporários iniciado (executa a cada hora)","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
-{"level":"info","message":"✅ Purchase auto-release service started","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
+{"level":"info","message":"Serviço de limpeza de chats temporários iniciado (executa a cada hora)","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
+{"level":"info","message":"Purchase auto-release service started","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 11:35:46"}
 {"level":"info","message":"Email service ready to send emails","service":"chat-api","timestamp":"2025-10-05 11:35:50"}
 {"level":"info","message":"🧠 In-Memory Cache Service initialized","service":"chat-api","timestamp":"2025-10-05 12:12:56"}
 {"level":"info","message":"🌐 Global Cache initialized","service":"chat-api","timestamp":"2025-10-05 12:12:56"}
@@ -36,17 +36,17 @@
 {"level":"info","message":"Email service ready to send emails","service":"chat-api","timestamp":"2025-10-05 12:13:00"}
 {"level":"info","message":"SIGINT signal received: initiating graceful shutdown","service":"chat-api","timestamp":"2025-10-05 12:13:02"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 12:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 12:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 12:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 13:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 13:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 13:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 14:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 14:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 14:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 15:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 15:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 15:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 16:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 16:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 16:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 17:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 17:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 17:35:46"}
 {"level":"info","message":"🧠 In-Memory Cache Service initialized","service":"chat-api","timestamp":"2025-10-05 18:09:29"}
 {"level":"info","message":"🌐 Global Cache initialized","service":"chat-api","timestamp":"2025-10-05 18:09:29"}
 {"level":"info","message":"🔔 Notification WebSocket Handler initialized","service":"chat-api","timestamp":"2025-10-05 18:09:29"}
@@ -56,20 +56,20 @@
 {"level":"info","message":"Email service ready to send emails","service":"chat-api","timestamp":"2025-10-05 18:09:32"}
 {"level":"info","message":"SIGINT signal received: initiating graceful shutdown","service":"chat-api","timestamp":"2025-10-05 18:24:58"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 18:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 18:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 18:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 19:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 19:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 19:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 20:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 20:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 20:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 21:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 21:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 21:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 22:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 22:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 22:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-05 23:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 23:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-05 23:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-06 00:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 00:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 00:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-06 01:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 01:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 01:35:46"}
 {"level":"info","message":"🧹 Iniciando limpeza de chats temporários expirados...","service":"chat-api","timestamp":"2025-10-06 02:35:46"}
-{"level":"info","message":"✅ Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 02:35:46"}
+{"level":"info","message":"Nenhum chat temporário expirado encontrado","service":"chat-api","timestamp":"2025-10-06 02:35:46"}

@@ -53,7 +53,7 @@ async function runTx(executor) {
 
 class BoostingChatController {
 
-  // ✅ NOVO: Obter conversa individual
+  // NOVO: Obter conversa individual
   async getConversation(req, res) {
     try {
       const { conversationId } = req.params;
@@ -323,7 +323,7 @@ class BoostingChatController {
               }
             });
             notificationSuccess = true;
-            console.log('✅ API principal notificada com sucesso (PATCH)');
+            console.log('API principal notificada com sucesso (PATCH)');
           } catch (patchError) {
             if (patchError.response?.status === 405) {
               // Tentativa 2: PUT
@@ -338,7 +338,7 @@ class BoostingChatController {
                   }
                 });
                 notificationSuccess = true;
-                console.log('✅ API principal notificada com sucesso (PUT)');
+                console.log('API principal notificada com sucesso (PUT)');
               } catch (putError) {
                 if (putError.response?.status === 405) {
                   // Tentativa 3: DELETE com body (alguns endpoints usam isso)
@@ -354,7 +354,7 @@ class BoostingChatController {
                       }
                     });
                     notificationSuccess = true;
-                    console.log('✅ API principal notificada com sucesso (DELETE)');
+                    console.log('API principal notificada com sucesso (DELETE)');
                   } catch (deleteError) {
                     throw deleteError; // Se DELETE também falhou, lança erro
                   }
@@ -538,9 +538,9 @@ class BoostingChatController {
         boosterReceives
       });
 
-      // ✅ IDEMPOTÊNCIA: verificar se já completado
+      // IDEMPOTÊNCIA: verificar se já completado
       if (agreement && agreement.status === 'completed') {
-        console.log(`✅ Agreement ${agreement.agreementId} já está completado - operação idempotente`);
+        console.log(`Agreement ${agreement.agreementId} já está completado - operação idempotente`);
         return res.json({
           success: true,
           message: 'Entrega já foi confirmada anteriormente',
@@ -549,9 +549,9 @@ class BoostingChatController {
         });
       }
       
-      // ✅ IDEMPOTÊNCIA: verificar se conversation já está bloqueada por finalização
+      // IDEMPOTÊNCIA: verificar se conversation já está bloqueada por finalização
       if (conversation.isBlocked && conversation.blockedReason === 'pedido_finalizado') {
-        console.log(`✅ Conversation ${conversationId} já está finalizada - operação idempotente`);
+        console.log(`Conversation ${conversationId} já está finalizada - operação idempotente`);
         return res.json({
           success: true,
           message: 'Entrega já foi confirmada anteriormente',
@@ -560,9 +560,9 @@ class BoostingChatController {
         });
       }
       
-      // ✅ IDEMPOTÊNCIA: verificar se conversation já tem deliveryConfirmedAt
+      // IDEMPOTÊNCIA: verificar se conversation já tem deliveryConfirmedAt
       if (conversation.deliveryConfirmedAt) {
-        console.log(`✅ Conversation ${conversationId} já tem deliveryConfirmedAt - operação idempotente`);
+        console.log(`Conversation ${conversationId} já tem deliveryConfirmedAt - operação idempotente`);
         return res.json({
           success: true,
           message: 'Entrega já foi confirmada anteriormente',
@@ -586,7 +586,7 @@ class BoostingChatController {
         let clientBalanceBefore, clientBalanceAfter;
         
         if (existingEscrow) {
-          // ✅ Cliente JÁ FOI DEBITADO ao aceitar proposta (novo fluxo)
+          // Cliente JÁ FOI DEBITADO ao aceitar proposta (novo fluxo)
           console.log('[BOOSTING] Cliente já foi debitado no escrow:', {
             escrowId: existingEscrow._id,
             amount: existingEscrow.amount,
@@ -604,7 +604,7 @@ class BoostingChatController {
             txId: null,
             direction: 'debit',
             reason: 'boosting_escrow_release',
-            amount: 0, // ✅ Zero porque já foi debitado no escrow
+            amount: 0, // Zero porque já foi debitado no escrow
             operationId: `boosting_escrow_release:${agreement?._id || acceptedProposal?._id}`,
             balanceBefore: clientBalanceBefore,
             balanceAfter: clientBalanceAfter,
@@ -620,7 +620,7 @@ class BoostingChatController {
               type: 'boosting_service',
               serviceName: 'Serviço de Boosting',
               providerName: 'Booster',
-              status: 'released', // ✅ Escrow liberado
+              status: 'released', // Escrow liberado
               originalEscrowId: existingEscrow._id.toString()
             }
           }], { session });
@@ -701,7 +701,7 @@ class BoostingChatController {
             price: Number(price),
             feeAmount: Number(feeAmount),
             boosterReceives: Number(boosterReceives),
-            // ✅ Adicionar campos extras para compatibilidade com marketplace
+            // Adicionar campos extras para compatibilidade com marketplace
             feePercent: 0.05,
             type: 'boosting_service'
           }
@@ -727,7 +727,7 @@ class BoostingChatController {
               agreementId: agreement?._id || null,
               conversationId: conversationId,
               walletLedgerId: boosterLedger[0]?._id || null,
-              // ✅ Adicionar campos de referência similares ao marketplace
+              // Adicionar campos de referência similares ao marketplace
               transactionId: null,
               asaasTransferId: null
             },
@@ -737,7 +737,7 @@ class BoostingChatController {
               boosterReceives: Number(boosterReceives),
               clientId: clientUserId?.toString(),
               boosterId: boosterUserId?.toString(),
-              // ✅ Adicionar campos extras para compatibilidade
+              // Adicionar campos extras para compatibilidade
               feePercent: 0.05,
               serviceType: 'boosting'
             },
@@ -747,7 +747,7 @@ class BoostingChatController {
 
         // 3. Transferir taxa ao mediador (5%)
         if (feeAmount > 0) {
-          // ✅ Buscar mediador apenas por email (igual walletRoutes.js)
+          // Buscar mediador apenas por email (igual walletRoutes.js)
           const mediatorEmail = process.env.MEDIATOR_EMAIL || 'mediador@zenith.com';
           1
           try {
@@ -782,7 +782,7 @@ class BoostingChatController {
                 price: Number(price),
                 feeAmount: Number(feeAmount),
                 boosterReceives: Number(boosterReceives),
-                // ✅ Adicionar campos extras para compatibilidade com marketplace
+                // Adicionar campos extras para compatibilidade com marketplace
                 feePercent: 0.05,
                 type: 'boosting_service'
               }
@@ -808,7 +808,7 @@ class BoostingChatController {
                   agreementId: agreement?._id || null,
                   conversationId: conversationId,
                   walletLedgerId: mediatorLedger[0]?._id || null,
-                  // ✅ Adicionar campos de referência similares ao marketplace
+                  // Adicionar campos de referência similares ao marketplace
                   transactionId: null,
                   asaasTransferId: null
                 },
@@ -818,7 +818,7 @@ class BoostingChatController {
                   boosterReceives: Number(boosterReceives),
                   boosterId: boosterUserId?.toString(),
                   clientId: clientUserId?.toString(),
-                  // ✅ Adicionar campos extras para compatibilidade
+                  // Adicionar campos extras para compatibilidade
                   feePercent: 0.05,
                   serviceType: 'boosting'
                 },
@@ -857,11 +857,11 @@ class BoostingChatController {
         await conversation.save({ session });
       });
 
-      // ✅ CRIAR APENAS UMA MENSAGEM DO SISTEMA (evita duplicação)
+      // CRIAR APENAS UMA MENSAGEM DO SISTEMA (evita duplicação)
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
-        content: `✅ Entrega confirmada pelo cliente\n💰 Valor total: ${formattedPrice}\n💵 Booster recebeu: ${formattedBoosterReceives} (95%)\n💰 Taxa da plataforma: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(feeAmount)} (5%)\n🔒 Chat finalizado`,
+        content: `Entrega confirmada pelo cliente\n💰 Valor total: ${formattedPrice}\n💵 Booster recebeu: ${formattedBoosterReceives} (95%)\n💰 Taxa da plataforma: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(feeAmount)} (5%)\n🔒 Chat finalizado`,
         type: 'system',
         metadata: {
           type: 'delivery_confirmed',
@@ -872,7 +872,7 @@ class BoostingChatController {
           priceFormatted: formattedPrice,
           boosterReceives: boosterReceives,
           feeAmount: feeAmount,
-          // ✅ Marcar como já processado para idempotência
+          // Marcar como já processado para idempotência
           processed: true,
           processedAt: new Date()
         }
@@ -1011,7 +1011,7 @@ class BoostingChatController {
         return res.status(404).json({ success: false, message: 'Conversa não encontrada' });
       }
 
-      console.log('✅ [DEBUG] Conversa encontrada');
+      console.log('[DEBUG] Conversa encontrada');
       console.log('   Participants (raw):', conversation.participants);
       console.log('   Participants IDs:', conversation.participants.map(p => {
         const id = p._id ? p._id.toString() : p.toString();
@@ -1035,7 +1035,7 @@ class BoostingChatController {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      console.log('✅ [DEBUG] Usuário autorizado, continuando...');
+      console.log('[DEBUG] Usuário autorizado, continuando...');
 
 
       const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
@@ -1234,7 +1234,7 @@ class BoostingChatController {
         reportedBy: userId
       });
 
-      console.log('✅ [DEBUG] Conversa bloqueada após denúncia');
+      console.log('[DEBUG] Conversa bloqueada após denúncia');
 
 
       const systemMessage = new Message({
@@ -1472,7 +1472,7 @@ class BoostingChatController {
         }
         
         await conversation.save();
-        console.log(`✅ Mensagens reativadas para nova proposta do booster na conversa ${conversationId}`);
+        console.log(`Mensagens reativadas para nova proposta do booster na conversa ${conversationId}`);
       }
 
       res.json({

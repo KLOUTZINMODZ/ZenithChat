@@ -28,7 +28,7 @@ class TemporaryChatCleanupService {
     }, 3600000);
 
     this.isRunning = true;
-    logger.info('✅ Serviço de limpeza de chats temporários iniciado (executa a cada hora)');
+    logger.info('Serviço de limpeza de chats temporários iniciado (executa a cada hora)');
   }
 
 
@@ -53,7 +53,7 @@ class TemporaryChatCleanupService {
       });
 
       if (expiredChats.length === 0) {
-        logger.info('✅ Nenhum chat temporário expirado encontrado');
+        logger.info('Nenhum chat temporário expirado encontrado');
         return { cleanedCount: 0 };
       }
 
@@ -67,7 +67,7 @@ class TemporaryChatCleanupService {
           // Expirar o chat
           await chat.expireTemporaryChat();
 
-          // ✅ CORREÇÃO: Criar mensagem de sistema informando expiração
+          // CORREÇÃO: Criar mensagem de sistema informando expiração
           // Garantir que temos um participante válido
           if (chat.participants && chat.participants.length > 0) {
             // Extrair ObjectId do participante (pode ser objeto ou ObjectId)
@@ -103,7 +103,7 @@ class TemporaryChatCleanupService {
           }
           
           cleanedCount++;
-          logger.info(`✅ Chat ${chat._id} expirado com sucesso`);
+          logger.info(`Chat ${chat._id} expirado com sucesso`);
           
         } catch (error) {
           errorCount++;

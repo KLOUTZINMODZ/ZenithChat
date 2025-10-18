@@ -29,7 +29,7 @@ class ConversationController {
       
       const savedConversation = await conversation.save();
 
-      console.log(`✅ [API] Conversa desbloqueada com sucesso:`);
+      console.log(`[API] Conversa desbloqueada com sucesso:`);
       console.log(`   isBlocked: ${savedConversation.isBlocked}`);
       console.log(`   conversationId: ${savedConversation._id}`);
 

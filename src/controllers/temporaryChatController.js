@@ -477,7 +477,7 @@ class TemporaryChatController {
       const acceptanceMessage = new Message({
         conversation: conversation._id,
         sender: userId,
-        content: `✅ Proposta aceita! Cliente ${clientData.name} e Booster ${boosterData.name} foram conectados.\n💰 Valor acordado: ${_priceFormatted3}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}`,
+        content: `Proposta aceita! Cliente ${clientData.name} e Booster ${boosterData.name} foram conectados.\n💰 Valor acordado: ${_priceFormatted3}\n⏱️ Tempo estimado: ${proposalData.estimatedTime}`,
         type: 'system',
         metadata: {
           type: 'proposal_accepted',
@@ -654,14 +654,14 @@ class TemporaryChatController {
                 const participantIdStr = participantId.toString();
                 webSocketServer.sendToUser(participantIdStr, { type: 'proposal:accepted', data: proposalAcceptedEventData });
                 webSocketServer.sendToUser(participantIdStr, { type: 'conversation:updated', data: conversationUpdateEventData });
-                console.log(`✅ Fallback events sent to participant: ${participantIdStr}`);
+                console.log(`Fallback events sent to participant: ${participantIdStr}`);
               } catch (error) {
                 console.error(`❌ Error in participant fallback for ${participantId}:`, error);
               }
             });
           }
           
-          console.log('✅ Enhanced WebSocket event emission completed');
+          console.log('Enhanced WebSocket event emission completed');
         } else {
           console.warn('⚠️ [Temporary Chat Accept] WebSocket server not available for real-time updates');
         }
@@ -904,7 +904,7 @@ class TemporaryChatController {
         try {
           await chat.expireTemporaryChat();
           
-          // ✅ CORREÇÃO: Garantir que sender seja fornecido
+          // CORREÇÃO: Garantir que sender seja fornecido
           if (!chat.participants || chat.participants.length === 0) {
             console.warn(`⚠️ Chat ${chat._id} não tem participantes, pulando mensagem de expiração`);
             cleanedCount++;
@@ -922,7 +922,7 @@ class TemporaryChatController {
 
           const expirationMessage = new Message({
             conversation: chat._id,
-            sender: systemSenderId, // ✅ Campo obrigatório adicionado
+            sender: systemSenderId, // Campo obrigatório adicionado
             content: '🚫 Este chat expirou porque a proposta não foi aceita em até 3 dias.',
             type: 'system',
             metadata: {

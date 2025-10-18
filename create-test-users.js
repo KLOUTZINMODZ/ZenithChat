@@ -46,7 +46,7 @@ const User = mongoose.model('User', userSchema);
 // Usuários de teste
 const testUsers = [
   {
-    name: '✅ Test User TRUE',
+    name: 'Test User TRUE',
     email: 'test-true@zenith-test.com',
     password: 'test123',
     preferences: {

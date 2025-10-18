@@ -39,7 +39,7 @@ npm run create:test-users
 
 ## 📊 O Que Esperar
 
-### ✅ TODOS OS TESTES PASSARAM
+### TODOS OS TESTES PASSARAM
 ```
 ╔═══════════════════════════════════════════════════════════╗
 ║     TESTE DO SISTEMA DE EMAIL - ZENITH GAMING           ║
@@ -86,7 +86,7 @@ Após a reversão da migração, você deve ver:
    Não elegíveis: 43
 
 📋 BREAKDOWN:
-   ✅ true explícito: 0
+   true explícito: 0
    ❌ false explícito: 0
    ⚪ undefined: 43
    ⚫ null: 0
@@ -134,7 +134,7 @@ Se quiser testar TODAS as combinações possíveis:
       Não elegíveis: 47
    
    📋 BREAKDOWN:
-      ✅ true explícito: 1
+      true explícito: 1
       ❌ false explícito: 1
       ⚪ undefined: 44
       ⚫ null: 1

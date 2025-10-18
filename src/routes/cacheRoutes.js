@@ -57,7 +57,7 @@ router.post('/marketplace-items', authenticateCache, async (req, res) => {
 
     const cached = paymentCacheService.storeMarketplaceItems(externalReference, items);
     
-    logger.info('✅ Itens armazenados no cache com sucesso:', {
+    logger.info('Itens armazenados no cache com sucesso:', {
       externalReference: cached.externalReference,
       itemsCount: cached.items.length,
       userId: cached.userId
@@ -105,7 +105,7 @@ router.get('/marketplace-items/:externalReference', authenticateCache, async (re
       });
     }
     
-    logger.info('✅ Itens encontrados no cache:', {
+    logger.info('Itens encontrados no cache:', {
       externalReference: cached.externalReference,
       itemsCount: cached.items.length
     });

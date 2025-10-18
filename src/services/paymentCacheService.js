@@ -160,7 +160,7 @@ class PaymentCacheService {
 
     if (success) {
       this.pendingHighlights.delete(paymentId);
-      logger.info('✅ Highlight successfully processed and removed from queue:', { paymentId });
+      logger.info('Highlight successfully processed and removed from queue:', { paymentId });
       return true;
     }
 

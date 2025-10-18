@@ -143,7 +143,7 @@ async function testEmailStats() {
       
       console.log('');
       console.log(colors.bright + '📋 BREAKDOWN:' + colors.reset);
-      console.log(`   ✅ true explícito: ${analysis.breakdown.trueExplicit}`);
+      console.log(`   true explícito: ${analysis.breakdown.trueExplicit}`);
       console.log(`   ❌ false explícito: ${analysis.breakdown.falseExplicit}`);
       console.log(`   ⚪ undefined: ${analysis.breakdown.undefinedValue}`);
       console.log(`   ⚫ null: ${analysis.breakdown.nullValue}`);

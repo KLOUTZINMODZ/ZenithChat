@@ -385,7 +385,7 @@ router.patch('/support/tickets/:id', requireAdminKey, async (req, res) => {
   }
 });
 
-// ✅ ==================== ROTAS DE BANIMENTO ====================
+// ==================== ROTAS DE BANIMENTO ====================
 
 /**
  * @route   POST /api/admin/users/:userId/ban
@@ -468,7 +468,7 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
 
     const result = await banService.unbanUser(userId);
 
-    logger.info(`✅ [ADMIN] Usuário desbanido por ${adminName}:`, {
+    logger.info(`[ADMIN] Usuário desbanido por ${adminName}:`, {
       userId,
       ...result
     });
@@ -919,7 +919,7 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
         }
       }
 
-      logger.info(`✅ Email campaign completed: ${successCount} success, ${failCount} failed out of ${users.length} total`);
+      logger.info(`Email campaign completed: ${successCount} success, ${failCount} failed out of ${users.length} total`);
     });
 
   } catch (error) {

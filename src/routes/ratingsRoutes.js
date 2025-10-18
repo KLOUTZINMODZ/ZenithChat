@@ -298,7 +298,7 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
         );
         
         if (updateResult) {
-          console.log(`[BOOSTING RATING] ✅ Rating atualizado com sucesso! Novo rating: ${updateResult.rating}`);
+          console.log(`[BOOSTING RATING] Rating atualizado com sucesso! Novo rating: ${updateResult.rating}`);
         } else {
           console.error(`[BOOSTING RATING] ❌ Usuário não encontrado: ${boosterId}`);
         }

@@ -298,7 +298,7 @@ class AgreementController {
         );
         
         if (updateResult) {
-          console.log(`✅ [Agreement Complete] Booster stats updated successfully!`);
+          console.log(`[Agreement Complete] Booster stats updated successfully!`);
           console.log(`   - User: ${updateResult.name}`);
           console.log(`   - New totalBoosts: ${updateResult.totalBoosts}`);
           console.log(`   - New completedBoosts: ${updateResult.completedBoosts}`);
@@ -316,7 +316,7 @@ class AgreementController {
       const systemMessage = new Message({
         conversation: agreement.conversationId,
         sender: agreement.parties.booster.userid,
-        content: '✅ Entrega confirmada! O serviço foi concluído com sucesso.',
+        content: 'Entrega confirmada! O serviço foi concluído com sucesso.',
         type: 'system',
         metadata: new Map([
           ['agreementId', agreement.agreementId],

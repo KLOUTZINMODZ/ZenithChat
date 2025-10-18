@@ -133,7 +133,7 @@ class HighlightRetryService {
       );
 
       if (response.status === 200 && response.data.success) {
-        logger.info('✅ Main API highlight application successful');
+        logger.info('Main API highlight application successful');
         return true;
       }
 
@@ -212,7 +212,7 @@ class HighlightRetryService {
       }
 
       if (highlightedCount > 0) {
-        logger.info('✅ Local fallback highlight successful:', {
+        logger.info('Local fallback highlight successful:', {
           userId: highlightData.userId,
           highlightedItems: highlightedCount,
           duration: `${highlightData.durationDays || 14} days`

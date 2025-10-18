@@ -110,7 +110,7 @@ class AgreementMigrationMiddleware {
 
       await agreement.save();
       
-      logger.info(`✅ Migração concluída: AcceptedProposal ${acceptedProposal._id} → Agreement ${agreement.agreementId}`);
+      logger.info(`Migração concluída: AcceptedProposal ${acceptedProposal._id} → Agreement ${agreement.agreementId}`);
       return agreement;
       
     } catch (error) {
@@ -333,7 +333,7 @@ class AgreementMigrationMiddleware {
         }
       }
       
-      logger.info(`✅ Migração em lote concluída: ${migratedCount} migradas, ${skippedCount} ignoradas, ${errorCount} erros`);
+      logger.info(`Migração em lote concluída: ${migratedCount} migradas, ${skippedCount} ignoradas, ${errorCount} erros`);
       
       return {
         total: acceptedProposals.length,

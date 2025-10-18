@@ -11,7 +11,7 @@ const authenticateWebSocket = async (token) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id || decoded._id;
     
-    // ✅ VERIFICAR SE USUÁRIO ESTÁ BANIDO
+    // VERIFICAR SE USUÁRIO ESTÁ BANIDO
     const user = await User.findById(userId).select('banned bannedAt bannedReason bannedUntil');
     
     if (!user) {

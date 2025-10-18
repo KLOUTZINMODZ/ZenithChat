@@ -2,7 +2,7 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 
 /**
- * ✅ Middleware para verificar se usuário está banido
+ * Middleware para verificar se usuário está banido
  * Bloqueia TODAS as requisições de usuários banidos
  */
 const checkBanned = async (req, res, next) => {
@@ -53,7 +53,7 @@ const checkBanned = async (req, res, next) => {
         error: 'Account banned',
         message: 'Sua conta foi banida e não pode acessar este recurso.',
         ...banInfo,
-        forceLogout: true // ✅ Sinal para frontend deslogar
+        forceLogout: true // Sinal para frontend deslogar
       });
     }
 

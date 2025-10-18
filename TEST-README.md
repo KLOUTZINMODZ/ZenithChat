@@ -30,22 +30,22 @@ node test-email-system.js
 
 ## 🔍 O Que o Script Testa
 
-### ✅ Teste 1: Conexão com API
+### Teste 1: Conexão com API
 - Verifica se a API está acessível
 - Valida autenticação com Admin Key
 - Confirma status HTTP 200
 
-### ✅ Teste 2: Estatísticas de Email
+### Teste 2: Estatísticas de Email
 - Busca estatísticas gerais de usuários
 - Exibe total de usuários elegíveis e não elegíveis
 - Mostra breakdown detalhado por tipo de valor
 
-### ✅ Teste 3: Debug Detalhado de Usuários
+### Teste 3: Debug Detalhado de Usuários
 - Lista todos os usuários com suas preferências
 - Mostra valor e tipo de `emailNotifications`
 - Identifica quem é elegível e por quê
 
-### ✅ Teste 4: Validação de Lógica
+### Teste 4: Validação de Lógica
 - Verifica consistência entre endpoints
 - Valida soma do breakdown
 - Confirma que apenas `true` explícito = elegível
@@ -76,7 +76,7 @@ TESTE 2: Estatísticas de Email
    Não elegíveis: 43
 
 📋 BREAKDOWN:
-   ✅ true explícito: 0
+   true explícito: 0
    ❌ false explícito: 0
    ⚪ undefined: 43
    ⚫ null: 0

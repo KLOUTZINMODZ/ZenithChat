@@ -74,7 +74,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
 
     if (metadata?.proposalId) {
       actualProposalId = metadata.proposalId;
-      console.log(`✅ [Proposal Accept] Using proposalId from metadata: ${actualProposalId}`);
+      console.log(`[Proposal Accept] Using proposalId from metadata: ${actualProposalId}`);
     }
     
     if (!boostingId) {
@@ -89,14 +89,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           headers: { Authorization: req.headers.authorization }
         });
         
-        console.log('✅ [Proposal Accept] Lookup successful:', lookupResponse.data);
+        console.log('[Proposal Accept] Lookup successful:', lookupResponse.data);
         lookupData = lookupResponse.data;
         boostingId = lookupResponse.data.boostingId;
         
 
         if (lookupResponse.data.actualProposalId) {
           actualProposalId = lookupResponse.data.actualProposalId;
-          console.log('✅ [Proposal Accept] Using actualProposalId from lookup:', actualProposalId);
+          console.log('[Proposal Accept] Using actualProposalId from lookup:', actualProposalId);
         }
       } catch (lookupError) {
         console.log('❌ [Proposal Accept] Lookup failed:', lookupError.message);
@@ -105,7 +105,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         const mongoose = require('mongoose');
         if (mongoose.Types.ObjectId.isValid(proposalId)) {
           console.log('🔍 [Proposal Accept] Checking if proposalId', proposalId, 'is actually a boostingId...');
-          console.log('✅ [Proposal Accept] ProposalId', proposalId, 'is a valid ObjectId, using as boostingId');
+          console.log('[Proposal Accept] ProposalId', proposalId, 'is a valid ObjectId, using as boostingId');
           boostingId = proposalId;
         } else {
           console.log('❌ [Proposal Accept] ProposalId is not a valid ObjectId, cannot proceed');
@@ -154,7 +154,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         });
         
         const proposals = proposalsResponse.data.data || proposalsResponse.data.proposals || [];
-        console.log(`✅ [Proposal Accept] Found ${proposals.length} proposals for boosting ${boostingId}`);
+        console.log(`[Proposal Accept] Found ${proposals.length} proposals for boosting ${boostingId}`);
         
         // Encontra a proposta do booster correto (boosterId já normalizado no início)
         const boosterIdStr = String(boosterId);
@@ -168,7 +168,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         if (matchingProposal) {
           actualProposalId = String(matchingProposal._id || matchingProposal.id);
-          console.log(`✅ [Proposal Accept] Found matching proposal ID: ${actualProposalId} for booster ${boosterIdStr}`);
+          console.log(`[Proposal Accept] Found matching proposal ID: ${actualProposalId} for booster ${boosterIdStr}`);
         } else {
           console.error(`❌ [Proposal Accept] No matching proposal found for booster ${boosterIdStr}`);
           console.log(`🔍 [Proposal Accept] Available proposals:`, proposals.map(p => ({
@@ -213,7 +213,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         // Não usa metadata.proposalId se for formato composto
         if (conversationData?.metadata?.actualProposalId) {
           actualProposalId = conversationData.metadata.actualProposalId;
-          console.log('✅ [Proposal Accept] Found actualProposalId from conversation:', actualProposalId);
+          console.log('[Proposal Accept] Found actualProposalId from conversation:', actualProposalId);
         }
       } catch (error) {
         console.log('❌ [Proposal Accept] Error fetching conversation metadata:', error.message);
@@ -247,9 +247,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         throw new Error('Conversa não encontrada para aceitar proposta');
       }
 
-      console.log('✅ [Proposal Accept] Conversation found:', acceptedConv._id);
+      console.log('[Proposal Accept] Conversation found:', acceptedConv._id);
       
-      // 2. ✅ CRÍTICO: Criar Agreement ANTES de aceitar a conversa
+      // 2. CRÍTICO: Criar Agreement ANTES de aceitar a conversa
       try {
           console.log('📝 [Proposal Accept] Creating Agreement for conversation...');
           
@@ -306,10 +306,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               
               if (mongoose.Types.ObjectId.isValid(actualProposalId) && !actualProposalId.includes('_')) {
                 validProposalId = actualProposalId;
-                console.log('✅ [Proposal Accept] Using actualProposalId as ObjectId:', validProposalId);
+                console.log('[Proposal Accept] Using actualProposalId as ObjectId:', validProposalId);
               } else if (mongoose.Types.ObjectId.isValid(boostingId)) {
                 validProposalId = boostingId;
-                console.log('✅ [Proposal Accept] ProposalId is composite, using boostingId:', validProposalId);
+                console.log('[Proposal Accept] ProposalId is composite, using boostingId:', validProposalId);
               } else {
                 validProposalId = conversationId;
                 console.log('⚠️ [Proposal Accept] Using conversationId as fallback:', validProposalId);
@@ -369,10 +369,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               acceptedConv.metadata.set('latestAgreementId', agreement.agreementId);
               await acceptedConv.save();
               
-              console.log(`✅ [Proposal Accept] Agreement created: ${agreement.agreementId}`);
-              console.log('✅ [Proposal Accept] Agreement saved successfully with conversationId:', conversationId);
+              console.log(`[Proposal Accept] Agreement created: ${agreement.agreementId}`);
+              console.log('[Proposal Accept] Agreement saved successfully with conversationId:', conversationId);
               
-              // ✅ NOVO: DEBITAR cliente imediatamente (ESCROW) ao aceitar proposta
+              // NOVO: DEBITAR cliente imediatamente (ESCROW) ao aceitar proposta
               try {
                 console.log('💰 [Proposal Accept] Debitando cliente (escrow)...');
                 
@@ -413,7 +413,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                     type: 'boosting_service',
                     serviceName: 'Serviço de Boosting',
                     providerName: boosterUser.name || 'Booster',
-                    status: 'escrowed' // ✅ Indica que está em escrow
+                    status: 'escrowed' // Indica que está em escrow
                   }
                 });
                 
@@ -421,7 +421,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 agreement.financial.paymentStatus = 'escrowed';
                 await agreement.save();
                 
-                console.log('✅ [Proposal Accept] Cliente debitado (escrow):', {
+                console.log('[Proposal Accept] Cliente debitado (escrow):', {
                   clientId: clientId.toString(),
                   amount: proposalPrice,
                   balanceBefore: clientBalanceBefore,
@@ -470,7 +470,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       acceptedConv.expiresAt = null;
       acceptedConv.boostingStatus = 'active';
       await acceptedConv.save();
-      console.log('✅ [Proposal Accept] Conversation accepted locally:', acceptedConv._id);
+      console.log('[Proposal Accept] Conversation accepted locally:', acceptedConv._id);
       
     } catch (localError) {
       console.error('❌ [Proposal Accept] FATAL ERROR accepting locally:', localError.message);
@@ -511,7 +511,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         timeout: 10000 // 10s timeout
       });
       
-      console.log(`✅ [Proposal Accept] Main API sync successful:`, apiResponse.data);
+      console.log(`[Proposal Accept] Main API sync successful:`, apiResponse.data);
       apiSyncSuccess = true;
       
     } catch (apiError) {
@@ -557,12 +557,12 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         if (clientId) {
           webSocketServer.sendToUser(clientId, proposalAcceptedEvent);
-          console.log(`✅ [Proposal Accept] 'proposal:accepted' sent to client: ${clientId}`);
+          console.log(`[Proposal Accept] 'proposal:accepted' sent to client: ${clientId}`);
         }
         
         if (boosterId) {
           webSocketServer.sendToUser(boosterId, proposalAcceptedEvent);
-          console.log(`✅ [Proposal Accept] 'proposal:accepted' sent to booster: ${boosterId}`);
+          console.log(`[Proposal Accept] 'proposal:accepted' sent to booster: ${boosterId}`);
         }
         
         // Evento 2: conversation:updated (atualiza UI)
@@ -586,15 +586,15 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         if (clientId) {
           webSocketServer.sendToUser(clientId, conversationUpdateEvent);
-          console.log(`✅ [Proposal Accept] 'conversation:updated' sent to client: ${clientId}`);
+          console.log(`[Proposal Accept] 'conversation:updated' sent to client: ${clientId}`);
         }
         
         if (boosterId) {
           webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
-          console.log(`✅ [Proposal Accept] 'conversation:updated' sent to booster: ${boosterId}`);
+          console.log(`[Proposal Accept] 'conversation:updated' sent to booster: ${boosterId}`);
         }
         
-        console.log('✅ [Proposal Accept] All WebSocket events emitted successfully');
+        console.log('[Proposal Accept] All WebSocket events emitted successfully');
       } else {
         console.warn('⚠️ [Proposal Accept] WebSocket server not available for real-time updates');
       }
@@ -606,10 +606,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
 
     // Retorna resposta apropriada
     if (apiSyncSuccess && apiResponse) {
-      console.log('✅ [Proposal Accept] Returning API response');
+      console.log('[Proposal Accept] Returning API response');
       return res.json(apiResponse.data);
     } else {
-      console.log('✅ [Proposal Accept] Returning local acceptance response');
+      console.log('[Proposal Accept] Returning local acceptance response');
       return res.json({
         success: true,
         message: 'Proposta aceita com sucesso',

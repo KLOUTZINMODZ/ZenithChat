@@ -38,7 +38,7 @@ class MessageHandler {
 
   async handleSendMessage(userId, payload) {
     try {
-      // ✅ VERIFICAR BANIMENTO ANTES DE PROCESSAR MENSAGEM
+      // VERIFICAR BANIMENTO ANTES DE PROCESSAR MENSAGEM
       const user = await User.findById(userId).select('banned bannedAt bannedReason bannedUntil');
       
       if (user && user.isBanned()) {

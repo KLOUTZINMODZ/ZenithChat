@@ -475,7 +475,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
   }
 });
 
-// ✅ NOVA ROTA: Obter conversa individual por ID
+// NOVA ROTA: Obter conversa individual por ID
 router.get('/conversations/:conversationId', auth, async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -614,7 +614,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // ✅ VALIDAÇÃO 0: Usuário banido (prioritário)
+    // VALIDAÇÃO 0: Usuário banido (prioritário)
     const User = require('../models/User');
     const userDoc = await User.findById(userId);
     if (userDoc && userDoc.isBanned) {
@@ -635,7 +635,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // ✅ VALIDAÇÃO 1: Chat bloqueado (isBlocked = true)
+    // VALIDAÇÃO 1: Chat bloqueado (isBlocked = true)
     if (conversation.isBlocked) {
       const reasonMap = {
         'pedido_finalizado': 'Pedido finalizado',
@@ -666,7 +666,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // ✅ VALIDAÇÃO 2: Chat reportado
+    // VALIDAÇÃO 2: Chat reportado
     if (conversation.isReported) {
       logger.warn('[MSG:REST] Conversation is reported - blocking send', { conversationId, userId });
       return res.status(423).json({
@@ -676,7 +676,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // ✅ VALIDAÇÃO 3: Chat inativo
+    // VALIDAÇÃO 3: Chat inativo
     if (!conversation.isActive) {
       logger.warn('[MSG:REST] Conversation inactive/finalized - blocking send', { conversationId, userId });
       return res.status(423).json({

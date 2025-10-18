@@ -101,7 +101,7 @@ class ProposalHandler {
         });
       });
 
-      logger.info(`✅ Proposta ${proposalId} processada com sucesso`);
+      logger.info(`Proposta ${proposalId} processada com sucesso`);
 
     } catch (error) {
       logger.error('Erro ao processar proposta aceita:', error);

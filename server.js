@@ -171,10 +171,10 @@ app.get('/health', (req, res) => {
 const cacheRoutes = require('./src/routes/cache');
 const checkBanned = require('./src/middleware/checkBanned');
 
-// ✅ Rotas de autenticação (não verificar banimento aqui)
+// Rotas de autenticação (não verificar banimento aqui)
 app.use('/api/auth', authRoutes);
 
-// ✅ MIDDLEWARE GLOBAL: Verificar banimento em TODAS as rotas protegidas
+// MIDDLEWARE GLOBAL: Verificar banimento em TODAS as rotas protegidas
 // Aplicado após autenticação mas antes das rotas
 app.use('/api', checkBanned);
 
@@ -270,7 +270,7 @@ app.locals.notificationService = wsServer.notificationService;
 
 app.set('webSocketServer', wsServer);
 
-// ✅ Inicializar BanService com WebSocket Server
+// Inicializar BanService com WebSocket Server
 const banService = require('./src/services/BanService');
 banService.setWebSocketServer(wsServer);
 app.set('banService', banService);
@@ -329,7 +329,7 @@ connectDB()
       // Start purchase auto-release background job
       try {
         purchaseAutoReleaseService.start(app);
-        logger.info('✅ Purchase auto-release service started');
+        logger.info('Purchase auto-release service started');
       } catch (e) {
         logger.error('Failed to start purchase auto-release service:', e);
       }

@@ -50,7 +50,7 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
     });
     
     if (response.data.success) {
-      logger.info('✅ Highlight aplicado com sucesso na API principal:', response.data);
+      logger.info('Highlight aplicado com sucesso na API principal:', response.data);
       return {
         success: true,
         message: 'Highlight aplicado com sucesso',
@@ -144,7 +144,7 @@ const processMercadoPagoNotification = async (notification) => {
       const result = await applyHighlightToMainAPI(paymentDetails.external_reference, paymentDetails);
       
       if (result.success) {
-        logger.info('✅ Highlight aplicado com sucesso após confirmação de pagamento');
+        logger.info('Highlight aplicado com sucesso após confirmação de pagamento');
         
 
         try {
@@ -169,7 +169,7 @@ const processMercadoPagoNotification = async (notification) => {
               }
             });
             
-            logger.info('✅ Notificação de confirmação enviada ao usuário via WebSocket direto');
+            logger.info('Notificação de confirmação enviada ao usuário via WebSocket direto');
           } else {
             logger.warn('⚠️ UserId inválido extraído da referência externa');
           }

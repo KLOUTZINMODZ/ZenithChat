@@ -51,7 +51,7 @@ class WebSocketServer {
       const possibleId = decoded.id || decoded._id || decoded.userid || decoded.userId || decoded.user?.id || decoded.user?._id;
       const userId = (possibleId && possibleId.toString) ? possibleId.toString() : String(possibleId || '');
       
-      // ✅ VERIFICAR BANIMENTO ANTES DE ACEITAR CONEXÃO
+      // VERIFICAR BANIMENTO ANTES DE ACEITAR CONEXÃO
       const authResult = await authenticateWebSocket(token);
       
       if (!authResult.success) {
@@ -410,7 +410,7 @@ class WebSocketServer {
   }
 
   /**
-   * ✅ DESCONECTAR USUÁRIO BANIDO
+   * DESCONECTAR USUÁRIO BANIDO
    * Usado quando um usuário é banido enquanto está conectado
    */
   disconnectUser(userId, reason = 'Account banned') {

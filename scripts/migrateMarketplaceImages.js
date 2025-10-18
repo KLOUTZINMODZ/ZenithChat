@@ -30,7 +30,7 @@ async function migrateMarketplaceImages() {
   try {
     console.log('🔌 Conectando ao MongoDB...');
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✅ Conectado ao MongoDB\n');
+    console.log('Conectado ao MongoDB\n');
     
     const uploadsRoot = path.join(__dirname, '..', 'uploads', 'marketplace');
     
@@ -129,7 +129,7 @@ async function migrateMarketplaceImages() {
         });
         
         imported++;
-        console.log(`✅ Importado: ${imageId} (${(fullImage.length / 1024).toFixed(2)}KB)`);
+        console.log(`Importado: ${imageId} (${(fullImage.length / 1024).toFixed(2)}KB)`);
         
       } catch (error) {
         errors++;
@@ -153,7 +153,7 @@ async function migrateMarketplaceImages() {
     console.log(`Novos importados: ${imported}`);
     console.log(`Erros: ${errors}`);
     console.log('='.repeat(60));
-    console.log('\n✅ Migração concluída!\n');
+    console.log('\nMigração concluída!\n');
     
   } catch (error) {
     console.error('❌ Erro na migração:', error);
@@ -167,7 +167,7 @@ async function migrateMarketplaceImages() {
 // Executar migração
 migrateMarketplaceImages()
   .then(() => {
-    console.log('✅ Script finalizado com sucesso');
+    console.log('Script finalizado com sucesso');
     process.exit(0);
   })
   .catch((error) => {

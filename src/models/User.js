@@ -179,7 +179,7 @@ const userSchema = new mongoose.Schema({
     default: null
   },
   
-  // ✅ Sistema de Banimento
+  // Sistema de Banimento
   banned: {
     type: Boolean,
     default: false,
@@ -283,7 +283,7 @@ userSchema.methods.updateAchievementStats = function(stats) {
   }
 };
 
-// ✅ Métodos de Banimento
+// Métodos de Banimento
 userSchema.methods.isBanned = function() {
   if (!this.banned) return false;
   

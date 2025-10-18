@@ -2,7 +2,7 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 
 /**
- * ✅ SERVIÇO DE BANIMENTO EM TEMPO REAL
+ * SERVIÇO DE BANIMENTO EM TEMPO REAL
  * Gerencia banimentos e notifica todas as conexões ativas
  */
 class BanService {
@@ -15,11 +15,11 @@ class BanService {
    */
   setWebSocketServer(wsServer) {
     this.wsServer = wsServer;
-    logger.info('✅ BanService inicializado com WebSocket Server');
+    logger.info('BanService inicializado com WebSocket Server');
   }
 
   /**
-   * ✅ BANIR USUÁRIO E DESCONECTAR IMEDIATAMENTE
+   * BANIR USUÁRIO E DESCONECTAR IMEDIATAMENTE
    * @param {string} userId - ID do usuário a ser banido
    * @param {string} reason - Motivo do banimento
    * @param {string} bannedBy - ID do admin que baniu
@@ -52,7 +52,7 @@ class BanService {
         bannedAt: user.bannedAt
       });
 
-      // ✅ DESCONECTAR IMEDIATAMENTE DE TODAS AS CONEXÕES
+      // DESCONECTAR IMEDIATAMENTE DE TODAS AS CONEXÕES
       if (this.wsServer) {
         this.disconnectUserImmediately(userId, reason);
       } else {
@@ -74,7 +74,7 @@ class BanService {
   }
 
   /**
-   * ✅ DESBANIR USUÁRIO
+   * DESBANIR USUÁRIO
    */
   async unbanUser(userId) {
     try {
@@ -93,7 +93,7 @@ class BanService {
 
       await user.unbanUser();
       
-      logger.info(`✅ Usuário desbanido: ${userId}`);
+      logger.info(`Usuário desbanido: ${userId}`);
 
       return {
         success: true,
@@ -107,7 +107,7 @@ class BanService {
   }
 
   /**
-   * ✅ DESCONECTAR USUÁRIO IMEDIATAMENTE
+   * DESCONECTAR USUÁRIO IMEDIATAMENTE
    * Envia mensagem de banimento para TODAS as conexões ativas
    */
   disconnectUserImmediately(userId, reason) {
@@ -135,7 +135,7 @@ class BanService {
   }
 
   /**
-   * ✅ VERIFICAR SE USUÁRIO ESTÁ BANIDO
+   * VERIFICAR SE USUÁRIO ESTÁ BANIDO
    */
   async isUserBanned(userId) {
     try {
@@ -164,7 +164,7 @@ class BanService {
   }
 
   /**
-   * ✅ LISTAR USUÁRIOS BANIDOS
+   * LISTAR USUÁRIOS BANIDOS
    */
   async listBannedUsers(limit = 50, skip = 0) {
     try {

@@ -1707,4 +1707,40 @@ router.post('/withdraw/sync', auth, async (req, res) => {
   }
 });
 
+
+// GET /wallet/escrow - Retorna saldo bloqueado em escrow
+router.get('/escrow', auth, async (req, res) => {
+  try {
+    const Agreement = require('../models/Agreement');
+    
+    // Buscar agreements ativos onde o usuário é o cliente (quem pagou)
+    const clientEscrow = await Agreement.find({
+      'parties.client.userid': req.user._id,
+      status: { $in: ['pending', 'active'] },
+      'financial.paymentStatus': 'escrowed'
+    }).select('financial.totalAmount');
+    
+    // Calcular total em escrow
+    let totalEscrow = 0;
+    for (const agreement of clientEscrow) {
+      totalEscrow += agreement.financial?.totalAmount || 0;
+    }
+    
+    return res.json({
+      success: true,
+      data: {
+        escrowBalance: round2(totalEscrow),
+        activeAgreements: clientEscrow.length,
+        currency: 'BRL'
+      }
+    });
+  } catch (error) {
+    logger.error('Erro ao buscar saldo em escrow:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao obter saldo bloqueado'
+    });
+  }
+});
+
 module.exports = router;
