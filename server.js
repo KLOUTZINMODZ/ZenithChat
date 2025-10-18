@@ -35,6 +35,7 @@ const ratingsRoutes = require('./src/routes/ratingsRoutes');
 const achievementRoutes = require('./src/routes/achievementRoutes');
 const emailVerificationRoutes = require('./src/routes/emailVerificationRoutes');
 const imageServeMiddleware = require('./src/middleware/imageServeMiddleware');
+const homeRoutes = require('./src/routes/homeRoutes');
 
 const app = express();
 
@@ -169,13 +170,12 @@ app.get('/health', (req, res) => {
 
 
 const cacheRoutes = require('./src/routes/cache');
-const homeRoutes = require('./src/routes/homeRoutes');
 const checkBanned = require('./src/middleware/checkBanned');
 
 // Rotas de autenticação (não verificar banimento aqui)
 app.use('/api/auth', authRoutes);
 
-// Rotas públicas da homepage (não requer autenticação)
+// Rotas públicas da homepage (não requerem autenticação)
 app.use('/api/home', homeRoutes);
 
 // MIDDLEWARE GLOBAL: Verificar banimento em TODAS as rotas protegidas
