@@ -175,9 +175,6 @@ const checkBanned = require('./src/middleware/checkBanned');
 // Rotas de autenticação (não verificar banimento aqui)
 app.use('/api/auth', authRoutes);
 
-// Rotas públicas da homepage (não requerem autenticação)
-app.use('/api/home', homeRoutes);
-
 // MIDDLEWARE GLOBAL: Verificar banimento em TODAS as rotas protegidas
 // Aplicado após autenticação mas antes das rotas
 app.use('/api', checkBanned);
@@ -204,6 +201,7 @@ app.use('/api/ai/support', aiSupportRoutes);
 app.use('/api/ratings', ratingsRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/purchases', purchasesRoutes);
+app.use('/api/home', homeRoutes);
 
 // Support routes (tickets, detalhes)
 app.use('/api/support', supportRoutes);

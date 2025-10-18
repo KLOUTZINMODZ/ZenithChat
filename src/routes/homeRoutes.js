@@ -1,163 +1,159 @@
 const express = require('express');
 const router = express.Router();
+const { auth, optionalAuth } = require('../middleware/auth');
 const MarketItem = require('../models/MarketItem');
 const BoostingRequest = require('../models/BoostingRequest');
 const Review = require('../models/Review');
 const User = require('../models/User');
 
-// GET /api/home/featured-items - Buscar itens em destaque do marketplace
-router.get('/featured-items', async (req, res) => {
+// GET /api/home/data - Dados da homepage (público com limitações)
+router.get('/data', optionalAuth, async (req, res) => {
   try {
-    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit) || 12));
-    const filter = req.query.filter || 'newest'; // newest, popular, price_low, price_high
-
-    let sort = { createdAt: -1 }; // Default: mais novos
+    const userId = req.user?._id;
+    const userStatus = req.user?.status;
     
-    switch (filter) {
-      case 'popular':
-        sort = { views: -1, createdAt: -1 };
-        break;
-      case 'price_low':
-        sort = { price: 1 };
-        break;
-      case 'price_high':
-        sort = { price: -1 };
-        break;
-    }
-
-    const items = await MarketItem.find({ 
+    // Verificar se usuário está banido
+    const isBanned = userStatus === 'banned' || userStatus === 'suspended';
+    
+    // Limitar acesso para usuários não logados ou banidos
+    const canAccessDynamic = !!userId && !isBanned;
+    
+    // Buscar items do marketplace (últimos 12, ativos)
+    const marketplaceItems = await MarketItem.find({ 
       status: 'active',
       stock: { $gt: 0 }
     })
-      .sort(sort)
-      .limit(limit)
-      .select('_id title description price images game category stock createdAt views')
+      .sort({ createdAt: -1 })
+      .limit(12)
+      .select('title price images game description featured')
       .populate('sellerId', 'name username avatar')
       .lean();
-
-    const formatted = items.map(item => ({
-      _id: item._id,
-      title: item.title,
-      description: item.description,
-      price: item.price,
-      image: Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : null,
-      game: item.game || 'Outros',
-      category: item.category,
-      stock: item.stock,
-      seller: {
-        name: item.sellerId?.name || item.sellerId?.username || 'Vendedor',
-        avatar: item.sellerId?.avatar
-      },
-      isNew: (Date.now() - new Date(item.createdAt).getTime()) < 7 * 24 * 60 * 60 * 1000, // Menos de 7 dias
-      views: item.views || 0
-    }));
-
-    return res.json({ success: true, data: formatted });
-  } catch (error) {
-    console.error('[HOME] Error fetching featured items:', error);
-    return res.status(500).json({ success: false, message: 'Erro ao buscar itens em destaque', error: error.message });
-  }
-});
-
-// GET /api/home/featured-boostings - Buscar pedidos de boosting em destaque
-router.get('/featured-boostings', async (req, res) => {
-  try {
-    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
-
-    const boostings = await BoostingRequest.find({
-      status: { $in: ['open', 'pending'] }
+    
+    // Buscar pedidos de boosting (últimos 8, abertos)
+    const boostingRequests = await BoostingRequest.find({ 
+      status: 'open'
     })
       .sort({ createdAt: -1 })
-      .limit(limit)
-      .select('_id game title currentRank desiredRank price estimatedTime description status createdAt')
+      .limit(8)
+      .select('game title currentRank desiredRank price description')
       .populate('userId', 'name username avatar')
       .lean();
-
-    const formatted = boostings.map(boost => ({
-      _id: boost._id,
-      game: boost.game,
-      title: boost.title || `Boosting ${boost.game}`,
-      currentRank: boost.currentRank,
-      desiredRank: boost.desiredRank,
-      price: boost.price,
-      estimatedTime: boost.estimatedTime,
-      description: boost.description,
-      status: boost.status,
-      client: {
-        name: boost.userId?.name || boost.userId?.username || 'Cliente',
-        avatar: boost.userId?.avatar
-      },
-      isNew: (Date.now() - new Date(boost.createdAt).getTime()) < 3 * 24 * 60 * 60 * 1000 // Menos de 3 dias
-    }));
-
-    return res.json({ success: true, data: formatted });
-  } catch (error) {
-    console.error('[HOME] Error fetching featured boostings:', error);
-    return res.status(500).json({ success: false, message: 'Erro ao buscar boostings em destaque', error: error.message });
-  }
-});
-
-// GET /api/home/testimonials - Buscar avaliações em destaque
-router.get('/testimonials', async (req, res) => {
-  try {
-    const limit = Math.min(10, Math.max(1, parseInt(req.query.limit) || 6));
-
-    // Buscar reviews com rating >= 4 e que tenham comentário
-    const reviews = await Review.find({
+    
+    // Buscar avaliações recentes (top 6 avaliações 4-5 estrelas)
+    const reviews = await Review.find({ 
       status: 'approved',
-      rating: { $gte: 4 },
-      comment: { $ne: null, $ne: '' }
+      rating: { $gte: 4 }
     })
       .sort({ createdAt: -1 })
-      .limit(limit)
+      .limit(6)
       .select('rating title comment createdAt')
       .populate('userId', 'name username avatar')
       .populate('targetId', 'name username')
       .lean();
-
-    const formatted = reviews.map(review => ({
-      _id: review._id,
-      rating: review.rating,
-      title: review.title,
-      comment: review.comment,
-      reviewer: {
-        name: review.userId?.name || review.userId?.username || 'Usuário',
-        avatar: review.userId?.avatar
-      },
-      reviewedUser: review.targetId?.name || review.targetId?.username,
-      createdAt: review.createdAt
-    }));
-
-    return res.json({ success: true, data: formatted });
+    
+    // Estatísticas da plataforma
+    const stats = {
+      totalUsers: await User.countDocuments({ status: { $ne: 'banned' } }),
+      totalMarketItems: await MarketItem.countDocuments({ status: 'active' }),
+      totalBoostings: await BoostingRequest.countDocuments(),
+      totalReviews: await Review.countDocuments({ status: 'approved' })
+    };
+    
+    // Formatar response
+    const response = {
+      success: true,
+      data: {
+        canAccessDynamic, // Se pode ver conteúdo dinâmico
+        isBanned,
+        marketplace: canAccessDynamic ? marketplaceItems.map(item => ({
+          _id: item._id,
+          title: item.title,
+          price: item.price,
+          image: Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : null,
+          game: item.game,
+          description: item.description,
+          featured: item.featured || false,
+          seller: {
+            _id: item.sellerId?._id,
+            name: item.sellerId?.name || item.sellerId?.username || 'Vendedor',
+            avatar: item.sellerId?.avatar
+          }
+        })) : [],
+        boosting: canAccessDynamic ? boostingRequests.map(req => ({
+          _id: req._id,
+          game: req.game,
+          title: req.title || `${req.game} - Boost`,
+          currentRank: req.currentRank,
+          desiredRank: req.desiredRank,
+          price: req.price,
+          description: req.description,
+          client: {
+            _id: req.userId?._id,
+            name: req.userId?.name || req.userId?.username || 'Cliente',
+            avatar: req.userId?.avatar
+          }
+        })) : [],
+        reviews: reviews.map(review => ({
+          _id: review._id,
+          rating: review.rating,
+          title: review.title,
+          comment: review.comment,
+          createdAt: review.createdAt,
+          reviewer: {
+            name: review.userId?.name || review.userId?.username || 'Usuário',
+            avatar: review.userId?.avatar
+          },
+          target: {
+            name: review.targetId?.name || review.targetId?.username || 'Usuário'
+          }
+        })),
+        stats
+      }
+    };
+    
+    return res.json(response);
   } catch (error) {
-    console.error('[HOME] Error fetching testimonials:', error);
-    return res.status(500).json({ success: false, message: 'Erro ao buscar avaliações', error: error.message });
+    console.error('[HOME DATA ERROR]', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao carregar dados da homepage',
+      error: error.message 
+    });
   }
 });
 
-// GET /api/home/stats - Buscar estatísticas da plataforma
-router.get('/stats', async (req, res) => {
+// GET /api/home/featured - Items em destaque
+router.get('/featured', optionalAuth, async (req, res) => {
   try {
-    const [totalItems, totalBoostings, totalUsers, totalReviews] = await Promise.all([
-      MarketItem.countDocuments({ status: 'active' }),
-      BoostingRequest.countDocuments({ status: { $in: ['open', 'pending', 'in_progress'] } }),
-      User.countDocuments({ isBanned: { $ne: true } }),
-      Review.countDocuments({ status: 'approved' })
-    ]);
-
+    const userId = req.user?._id;
+    const isBanned = req.user?.status === 'banned';
+    
+    if (!userId || isBanned) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Acesso negado. Faça login para ver items em destaque.' 
+      });
+    }
+    
+    const featuredItems = await MarketItem.find({ 
+      status: 'active',
+      featured: true,
+      stock: { $gt: 0 }
+    })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .populate('sellerId', 'name username avatar')
+      .lean();
+    
     return res.json({
       success: true,
-      data: {
-        totalItems,
-        totalBoostings,
-        totalUsers,
-        totalReviews,
-        averageRating: 4.8 // Pode calcular dinamicamente se quiser
-      }
+      data: featuredItems
     });
   } catch (error) {
-    console.error('[HOME] Error fetching stats:', error);
-    return res.status(500).json({ success: false, message: 'Erro ao buscar estatísticas', error: error.message });
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao carregar items em destaque' 
+    });
   }
 });
 

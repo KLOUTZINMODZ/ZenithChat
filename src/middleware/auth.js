@@ -49,4 +49,34 @@ const auth = async (req, res, next) => {
   }
 };
 
-module.exports = { auth };
+// Optional auth - não bloqueia se não houver token, apenas adiciona user se existir
+const optionalAuth = async (req, res, next) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+
+    if (!token) {
+      // Sem token, mas permite continuar
+      req.user = null;
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id || decoded._id);
+
+    if (user) {
+      req.user = user;
+      req.token = token;
+      req.userId = user._id.toString();
+    } else {
+      req.user = null;
+    }
+
+    next();
+  } catch (error) {
+    // Token inválido, mas permite continuar sem usuário
+    req.user = null;
+    next();
+  }
+};
+
+module.exports = { auth, optionalAuth };
