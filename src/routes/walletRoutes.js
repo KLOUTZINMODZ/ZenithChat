@@ -1711,28 +1711,44 @@ router.post('/withdraw/sync', auth, async (req, res) => {
 // GET /wallet/escrow - Retorna saldo bloqueado em escrow
 router.get('/escrow', auth, async (req, res) => {
   try {
-    const Agreement = require('../models/Agreement');
+    const Purchase = require('../models/Purchase');
+    const AcceptedProposal = require('../models/AcceptedProposal');
     
-    // Buscar agreements ativos onde o usuário é o BOOSTER (vendedor/prestador)
-    // O saldo bloqueado representa o valor que o vendedor vai receber quando concluir
-    const boosterEscrow = await Agreement.find({
-      'parties.booster.userid': req.user._id,
-      status: { $in: ['pending', 'active'] },
-      'financial.paymentStatus': 'escrowed'
-    }).select('financial.totalAmount');
-    
-    // Calcular total em escrow
     let totalEscrow = 0;
-    for (const agreement of boosterEscrow) {
-      totalEscrow += agreement.financial?.totalAmount || 0;
+    let itemCount = 0;
+    
+    // 1. Buscar PURCHASES onde usuário é VENDEDOR com status em escrow
+    const purchases = await Purchase.find({
+      sellerId: req.user._id,
+      status: { $in: ['escrow_reserved', 'shipped', 'delivered'] }
+    }).select('sellerReceives status');
+    
+    for (const purchase of purchases) {
+      totalEscrow += purchase.sellerReceives || 0;
+      itemCount++;
+    }
+    
+    // 2. Buscar PROPOSTAS ACEITAS onde usuário é BOOSTER (prestador) ainda ativas
+    const proposals = await AcceptedProposal.find({
+      'booster.userid': req.user._id,
+      status: 'active'
+    }).select('price');
+    
+    for (const proposal of proposals) {
+      totalEscrow += proposal.price || 0;
+      itemCount++;
     }
     
     return res.json({
       success: true,
       data: {
         escrowBalance: round2(totalEscrow),
-        activeAgreements: boosterEscrow.length,
-        currency: 'BRL'
+        activeAgreements: itemCount,
+        currency: 'BRL',
+        breakdown: {
+          purchases: purchases.length,
+          proposals: proposals.length
+        }
       }
     });
   } catch (error) {
