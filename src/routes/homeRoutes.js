@@ -59,13 +59,14 @@ router.get('/data', optionalAuth, async (req, res) => {
       totalReviews: await Review.countDocuments({ status: 'approved' })
     };
     
-    // Formatar response
+    // Formatar response - SEMPRE retorna dados (mesmo para não logados)
     const response = {
       success: true,
       data: {
         canAccessDynamic, // Se pode ver conteúdo dinâmico
         isBanned,
-        marketplace: canAccessDynamic ? marketplaceItems.map(item => ({
+        // Marketplace - sempre retorna (público)
+        marketplace: marketplaceItems.map(item => ({
           _id: item._id,
           title: item.title,
           price: item.price,
@@ -78,8 +79,9 @@ router.get('/data', optionalAuth, async (req, res) => {
             name: item.sellerId?.name || item.sellerId?.username || 'Vendedor',
             avatar: item.sellerId?.avatar
           }
-        })) : [],
-        boosting: canAccessDynamic ? boostingRequests.map(req => ({
+        })),
+        // Boosting - sempre retorna (público)
+        boosting: boostingRequests.map(req => ({
           _id: req._id,
           game: req.game,
           title: req.title || `${req.game} - Boost`,
@@ -92,7 +94,8 @@ router.get('/data', optionalAuth, async (req, res) => {
             name: req.userId?.name || req.userId?.username || 'Cliente',
             avatar: req.userId?.avatar
           }
-        })) : [],
+        })),
+        // Reviews - sempre retorna (público)
         reviews: reviews.map(review => ({
           _id: review._id,
           rating: review.rating,
