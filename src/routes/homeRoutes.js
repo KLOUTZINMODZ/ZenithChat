@@ -35,8 +35,8 @@ router.get('/data', optionalAuth, async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(8)
-      .select('game title currentRank desiredRank price description')
-      .populate('userId', 'name username avatar')
+      .select('game title currentRank desiredRank price description clientId')
+      .populate('clientId', 'name username avatar')
       .lean();
     
     // Buscar avaliações recentes (top 6 avaliações 4-5 estrelas)
@@ -90,9 +90,9 @@ router.get('/data', optionalAuth, async (req, res) => {
           price: req.price,
           description: req.description,
           client: {
-            _id: req.userId?._id,
-            name: req.userId?.name || req.userId?.username || 'Cliente',
-            avatar: req.userId?.avatar
+            _id: req.clientId?._id,
+            name: req.clientId?.name || req.clientId?.username || 'Cliente',
+            avatar: req.clientId?.avatar
           }
         })),
         // Reviews - sempre retorna (público)
