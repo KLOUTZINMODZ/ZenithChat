@@ -295,6 +295,64 @@ async function sendBalanceUpdateEvent(app, userId, payload) {
   } catch (_) {}
 }
 
+async function sendEscrowUpdateEvent(app, userId, escrowBalance, balance) {
+  try {
+    const notificationService = app?.locals?.notificationService;
+    if (notificationService) {
+      notificationService.sendToUser(String(userId), {
+        type: 'wallet:escrow_updated',
+        data: {
+          escrowBalance: round2(escrowBalance),
+          balance: balance ? round2(balance) : undefined,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  } catch (_) {}
+}
+
+async function calculateAndSendEscrowUpdate(app, userId) {
+  try {
+    const Purchase = require('../models/Purchase');
+    const AcceptedProposal = require('../models/AcceptedProposal');
+    const User = require('../models/User');
+    
+    let totalEscrow = 0;
+    
+    // Buscar purchases em escrow
+    const purchases = await Purchase.find({
+      sellerId: userId,
+      status: { $in: ['escrow_reserved', 'shipped', 'delivered'] }
+    }).select('sellerReceives');
+    
+    for (const purchase of purchases) {
+      totalEscrow += purchase.sellerReceives || 0;
+    }
+    
+    // Buscar propostas ativas
+    const proposals = await AcceptedProposal.find({
+      'booster.userid': userId,
+      status: 'active'
+    }).select('price');
+    
+    for (const proposal of proposals) {
+      totalEscrow += proposal.price || 0;
+    }
+    
+    // Buscar saldo atual
+    const user = await User.findById(userId).select('walletBalance');
+    const balance = user?.walletBalance || 0;
+    
+    // Enviar evento
+    await sendEscrowUpdateEvent(app, userId, totalEscrow, balance);
+    
+    return totalEscrow;
+  } catch (error) {
+    logger.error('Erro ao calcular/enviar escrow update:', error);
+    return 0;
+  }
+}
+
 async function sendWalletNotification(app, userId, notification) {
   try {
     const notificationService = app?.locals?.notificationService;
@@ -1739,6 +1797,10 @@ router.get('/escrow', auth, async (req, res) => {
       itemCount++;
     }
     
+    // Enviar atualização via WebSocket em tempo real
+    const user = await User.findById(req.user._id).select('walletBalance');
+    await sendEscrowUpdateEvent(req.app, req.user._id, totalEscrow, user?.walletBalance);
+    
     return res.json({
       success: true,
       data: {
@@ -1761,3 +1823,4 @@ router.get('/escrow', auth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.calculateAndSendEscrowUpdate = calculateAndSendEscrowUpdate;
