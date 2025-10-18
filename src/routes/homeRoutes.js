@@ -35,7 +35,7 @@ router.get('/data', optionalAuth, async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(8)
-      .select('game title currentRank desiredRank price description clientId')
+      .select('game title currentRank desiredRank minPrice price description boostingCategory clientId')
       .populate('clientId', 'name username avatar')
       .lean();
     
@@ -87,8 +87,10 @@ router.get('/data', optionalAuth, async (req, res) => {
           title: req.title || `${req.game} - Boost`,
           currentRank: req.currentRank,
           desiredRank: req.desiredRank,
-          price: req.price,
+          minPrice: req.minPrice,
+          price: req.price || req.minPrice,
           description: req.description,
+          boostingCategory: req.boostingCategory,
           client: {
             _id: req.clientId?._id,
             name: req.clientId?.name || req.clientId?.username || 'Cliente',
