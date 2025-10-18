@@ -169,10 +169,14 @@ app.get('/health', (req, res) => {
 
 
 const cacheRoutes = require('./src/routes/cache');
+const homeRoutes = require('./src/routes/homeRoutes');
 const checkBanned = require('./src/middleware/checkBanned');
 
 // Rotas de autenticação (não verificar banimento aqui)
 app.use('/api/auth', authRoutes);
+
+// Rotas públicas da homepage (não requer autenticação)
+app.use('/api/home', homeRoutes);
 
 // MIDDLEWARE GLOBAL: Verificar banimento em TODAS as rotas protegidas
 // Aplicado após autenticação mas antes das rotas
