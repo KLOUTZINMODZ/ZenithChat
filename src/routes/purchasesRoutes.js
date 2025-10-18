@@ -241,11 +241,17 @@ router.get('/list', auth, async (req, res) => {
       ...(agreements || []).map(a => (a.parties?.booster?.userid || '').toString()).filter(Boolean)
     ]));
 
-    const [items, boostingRequests, buyers, sellers] = await Promise.all([
+    // Buscar reviews para verificar quais purchases já foram avaliadas
+    const purchaseIds = (purchases || []).map(p => p._id);
+    const agreementIds = (agreements || []).map(a => a._id);
+    
+    const [items, boostingRequests, buyers, sellers, purchaseReviews, agreementReviews] = await Promise.all([
       MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images').lean(),
       BoostingRequest.find({ _id: { $in: boostingIds } }).select('_id game title currentRank desiredRank price').lean(),
       User.find({ _id: { $in: allBuyerIds } }).select('_id name legalName username avatar').lean(),
-      User.find({ _id: { $in: allSellerIds } }).select('_id name legalName username avatar').lean()
+      User.find({ _id: { $in: allSellerIds } }).select('_id name legalName username avatar').lean(),
+      Review.find({ purchaseId: { $in: purchaseIds } }).select('purchaseId').lean(),
+      Review.find({ agreementId: { $in: agreementIds } }).select('agreementId').lean()
     ]);
 
     const itemMap = new Map((items || []).map(d => [String(d._id), d]));
@@ -253,6 +259,10 @@ router.get('/list', auth, async (req, res) => {
     const buyerMap = new Map((buyers || []).map(u => [String(u._id), u]));
     const sellerMap = new Map((sellers || []).map(u => [String(u._id), u]));
     const userName = (u) => (u?.name || u?.legalName || u?.username || 'Usuário');
+    
+    // Criar Maps de reviews para verificação rápida
+    const purchaseReviewSet = new Set((purchaseReviews || []).map(r => String(r.purchaseId)));
+    const agreementReviewSet = new Set((agreementReviews || []).map(r => String(r.agreementId)));
 
     // ========== FORMAT MARKETPLACE ORDERS ==========
     const marketplaceOrders = (purchases || []).map(p => {
@@ -270,6 +280,7 @@ router.get('/list', auth, async (req, res) => {
         sellerReceives: p.sellerReceives,
         createdAt: p.createdAt,
         type: 'marketplace',
+        hasReview: purchaseReviewSet.has(String(p._id)), // Verifica se já foi avaliado
         item: { _id: String(p.itemId || ''), title: String(item.title || ''), image: img },
         buyer: { _id: String(p.buyerId || ''), name: userName(buyer) },
         seller: { _id: String(p.sellerId || ''), name: userName(seller) }
@@ -307,6 +318,7 @@ router.get('/list', auth, async (req, res) => {
         sellerReceives: price,
         createdAt: a.completedAt || a.createdAt,
         type: 'boosting',
+        hasReview: agreementReviewSet.has(String(a._id)), // Verifica se já foi avaliado
         item: { _id: String(boostingRequestId || ''), title, image: '' },
         buyer: { _id: String(a.parties?.client?.userid || ''), name: userName(buyer) },
         seller: { _id: String(a.parties?.booster?.userid || ''), name: userName(seller) },
