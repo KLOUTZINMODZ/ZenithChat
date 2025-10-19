@@ -305,7 +305,6 @@ class BoostingChatController {
               }
             });
             notificationSuccess = true;
-            ');
           } catch (patchError) {
             if (patchError.response?.status === 405) {
               // Tentativa 2: PUT
