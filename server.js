@@ -19,6 +19,7 @@ const agreementRoutes = require('./src/routes/agreementRoutes');
 const compatibilityRoutes = require('./src/routes/compatibilityRoutes');
 const temporaryChatRoutes = require('./src/routes/temporaryChatRoutes');
 const proposalRoutes = require('./src/routes/proposalRoutes');
+const proposalWebhookRoutes = require('./src/routes/proposalWebhookRoutes');
 const offlineRoutes = require('./src/routes/offlineRoutes');
 const cache = require('./src/services/GlobalCache');
 const walletRoutes = require('./src/routes/walletRoutes');
@@ -198,6 +199,7 @@ app.use('/api/boosting-chat', temporaryChatRoutes);
 
 app.use('/api/temporary-chat', temporaryChatRoutes);
 app.use('/api/proposals', proposalRoutes);
+app.use('/api/proposal-webhook', proposalWebhookRoutes);
 app.use('/api/offline', offlineRoutes);
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
