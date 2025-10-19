@@ -9,7 +9,10 @@
     "backfill:marketitem-seller": "node ./scripts/backfill-marketitem-seller.js",
     "test": "node test-email-system.js",
     "test:email": "node test-email-system.js",
-    "create:test-users": "node create-test-users.js"
+    "create:test-users": "node create-test-users.js",
+    "images:migrate": "node ./scripts/migrateImagesToMongoDB.js",
+    "images:check": "node ./scripts/checkImagesHealth.js",
+    "images:clean": "node ./scripts/cleanCorruptedImages.js"
   },
   "keywords": [
     "websocket",

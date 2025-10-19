@@ -2,7 +2,8 @@ const UploadedImage = require('../models/UploadedImage');
 const path = require('path');
 
 /**
- * Middleware para servir imagens do banco de dados primeiro, depois do disco
+ * Middleware para servir imagens EXCLUSIVAMENTE do banco de dados
+ * Sistema de arquivos é efêmero no Vercel/serverless
  * Mantém compatibilidade total com URLs existentes
  * Suporta imagens de conversação e marketplace
  */
@@ -23,17 +24,13 @@ const imageServeMiddleware = async (req, res, next) => {
     const match = fileName.match(/^(\d+_[a-z0-9]+)(?:_thumb)?\.(?:avif|jpg|jpeg|png)$/i);
     
     if (!match) {
-      return next(); // Formato não reconhecido, deixa o static handle
+      return next();
     }
 
     const imageId = match[1];
     const isThumb = fileName.includes('_thumb');
     const isJpeg = fileName.match(/\.jpe?g$/i);
-    
-    // Detectar se é imagem de marketplace ou conversa
-    const isMarketplace = urlPath.includes('/marketplace/');
 
-    // Tentar buscar no banco de dados
     const uploadedImage = await UploadedImage.findOne({ imageId }).lean();
     
     if (uploadedImage) {
@@ -85,12 +82,12 @@ const imageServeMiddleware = async (req, res, next) => {
       return res.send(buffer);
     }
 
-    // Se não encontrou no banco, deixa o express.static servir do disco
-    next();
+    return res.status(404).json({ 
+      success: false, 
+      message: 'Image not found'
+    });
     
   } catch (error) {
-    console.error('[IMAGE_SERVE] Erro ao servir imagem:', error.message);
-    // Em caso de erro, tenta servir do disco
     next();
   }
 };
