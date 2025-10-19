@@ -36,6 +36,7 @@ const achievementRoutes = require('./src/routes/achievementRoutes');
 const emailVerificationRoutes = require('./src/routes/emailVerificationRoutes');
 const imageServeMiddleware = require('./src/middleware/imageServeMiddleware');
 const homeRoutes = require('./src/routes/homeRoutes');
+const heroBannerRoutes = require('./src/routes/heroBannerRoutes');
 
 const app = express();
 
@@ -202,6 +203,7 @@ app.use('/api/ratings', ratingsRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/purchases', purchasesRoutes);
 app.use('/api/home', homeRoutes);
+app.use('/api/hero-banners', heroBannerRoutes);
 
 // Support routes (tickets, detalhes)
 app.use('/api/support', supportRoutes);

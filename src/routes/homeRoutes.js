@@ -5,6 +5,7 @@ const MarketItem = require('../models/MarketItem');
 const BoostingRequest = require('../models/BoostingRequest');
 const Review = require('../models/Review');
 const User = require('../models/User');
+const HeroBanner = require('../models/HeroBanner');
 
 // GET /api/home/data - Dados da homepage (público com limitações)
 router.get('/data', optionalAuth, async (req, res) => {
@@ -17,6 +18,13 @@ router.get('/data', optionalAuth, async (req, res) => {
     
     // Limitar acesso para usuários não logados ou banidos
     const canAccessDynamic = !!userId && !isBanned;
+    
+    // Buscar hero banners ativos (público)
+    const heroBanners = await HeroBanner.find({ isActive: true })
+      .sort({ order: 1 })
+      .limit(6)
+      .select('-__v')
+      .lean();
     
     // Buscar items do marketplace (últimos 12, ativos)
     const marketplaceItems = await MarketItem.find({ 
@@ -65,6 +73,8 @@ router.get('/data', optionalAuth, async (req, res) => {
       data: {
         canAccessDynamic, // Se pode ver conteúdo dinâmico
         isBanned,
+        // Hero Banners - sempre retorna (público)
+        heroBanners,
         // Marketplace - sempre retorna (público)
         marketplace: marketplaceItems.map(item => ({
           _id: item._id,
