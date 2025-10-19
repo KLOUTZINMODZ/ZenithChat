@@ -14,12 +14,13 @@ router.get('/stats', auth, async (req, res) => {
     res.json({
       success: true,
       data: stats
-}
+    });
   } catch (error) {
     logger.error('Error getting cache stats:', error);
     res.status(500).json({
       success: false,
-}
+      error: 'Internal server error'
+    });
   }
 });
 
@@ -35,7 +36,8 @@ router.get('/sync/:userId', auth, async (req, res) => {
     if (req.user.id !== userId) {
       return res.status(403).json({
         success: false,
-}
+        error: 'Access denied'
+      });
     }
 
     const syncData = {
@@ -45,6 +47,7 @@ router.get('/sync/:userId', auth, async (req, res) => {
       version: Date.now().toString()
     };
 
+
     if (syncData.conversations) {
       syncData.messageCache = {};
       syncData.conversations.forEach(conv => {
@@ -52,19 +55,21 @@ router.get('/sync/:userId', auth, async (req, res) => {
         if (messages && messages.length > 0) {
           syncData.messageCache[conv._id] = messages;
         }
-}
+      });
     }
 
     res.json({
       success: true,
       data: syncData
-}
+    });
+
     logger.debug(`Cache sync requested for user ${userId}`);
   } catch (error) {
     logger.error('Error syncing cache:', error);
     res.status(500).json({
       success: false,
-}
+      error: 'Internal server error'
+    });
   }
 });
 
@@ -88,24 +93,29 @@ router.post('/invalidate', auth, async (req, res) => {
         } else {
           return res.status(403).json({
             success: false,
-}
+            error: 'Can only invalidate own cache'
+          });
         }
         break;
       default:
         return res.status(400).json({
           success: false,
-}
+          error: 'Invalid cache type'
+        });
     }
 
     res.json({
       success: true,
-}
+      message: `${type} cache invalidated`
+    });
+
     logger.debug(`Cache invalidated - type: ${type}, id: ${id}, by user: ${userId}`);
   } catch (error) {
     logger.error('Error invalidating cache:', error);
     res.status(500).json({
       success: false,
-}
+      error: 'Internal server error'
+    });
   }
 });
 
@@ -120,8 +130,10 @@ router.post('/warm/:userId', auth, async (req, res) => {
     if (req.user.id !== userId) {
       return res.status(403).json({
         success: false,
-}
+        error: 'Access denied'
+      });
     }
+
 
     const Conversation = require('../models/Conversation');
     const conversations = await Conversation.find({
@@ -132,7 +144,9 @@ router.post('/warm/:userId', auth, async (req, res) => {
       .sort('-lastMessageAt')
       .limit(50);
 
+
     cache.cacheConversations(userId, conversations);
+
 
     const Message = require('../models/Message');
     let cachedMessagesCount = 0;
@@ -158,13 +172,15 @@ router.post('/warm/:userId', auth, async (req, res) => {
         messagesCached: cachedMessagesCount,
         timestamp: new Date().toISOString()
       }
-}
+    });
+
     logger.info(`Cache warmed up for user ${userId} - ${conversations.length} conversations, ${cachedMessagesCount} messages`);
   } catch (error) {
     logger.error('Error warming cache:', error);
     res.status(500).json({
       success: false,
-}
+      error: 'Internal server error'
+    });
   }
 });
 
@@ -178,20 +194,24 @@ router.delete('/clear', auth, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-}
+        error: 'Admin access required'
+      });
     }
 
     cache.clear();
 
     res.json({
       success: true,
-}
+      message: 'Cache cleared completely'
+    });
+
     logger.warn(`Cache cleared by admin user ${req.user.id}`);
   } catch (error) {
     logger.error('Error clearing cache:', error);
     res.status(500).json({
       success: false,
-}
+      error: 'Internal server error'
+    });
   }
 });
 
@@ -213,6 +233,7 @@ router.get('/health', async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
+
     if (stats.cacheSize > stats.maxSize * 0.9) {
       health.status = 'warning';
       health.warning = 'Cache approaching size limit';
@@ -226,7 +247,7 @@ router.get('/health', async (req, res) => {
     res.json({
       success: true,
       data: health
-}
+    });
   } catch (error) {
     logger.error('Error checking cache health:', error);
     res.status(500).json({
@@ -236,7 +257,7 @@ router.get('/health', async (req, res) => {
         error: error.message,
         timestamp: new Date().toISOString()
       }
-}
+    });
   }
 });
 

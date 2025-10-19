@@ -66,7 +66,7 @@ async function runOnce(app) {
             }
           },
           { upsert: true }
-
+        );
       } catch (_) {}
       p.status = 'completed';
       p.logs.push({ level: 'info', message: 'Auto-release after 7 days from shipped (background)' });

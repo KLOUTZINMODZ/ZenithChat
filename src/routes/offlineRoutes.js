@@ -4,6 +4,7 @@ const { auth } = require('../middleware/auth');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 
+
 router.post('/activate', auth, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -29,15 +30,18 @@ router.post('/activate', auth, async (req, res) => {
         cacheEnabled: true,
         activatedAt: offlineStatus.activatedAt
       }
-}
+    });
+    
   } catch (error) {
     logger.error('❌ [Offline Mode] Error activating offline mode:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao ativar modo offline',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.post('/deactivate', auth, async (req, res) => {
   try {
@@ -64,7 +68,7 @@ router.post('/deactivate', auth, async (req, res) => {
           deactivatedAt: new Date().toISOString(),
           wasOfflineSince: offlineStatus.activatedAt
         }
-}
+      });
     } else {
       res.json({
         success: true,
@@ -73,7 +77,7 @@ router.post('/deactivate', auth, async (req, res) => {
           offlineMode: false,
           cachedMessagesCount: 0
         }
-}
+      });
     }
     
   } catch (error) {
@@ -81,9 +85,11 @@ router.post('/deactivate', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao desativar modo offline',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.get('/status', auth, async (req, res) => {
   try {
@@ -102,15 +108,18 @@ router.get('/status', auth, async (req, res) => {
         cachedMessagesCount: offlineMessages.length,
         offlineMessages: offlineMessages.slice(-5)
       }
-}
+    });
+    
   } catch (error) {
     logger.error('❌ [Offline Mode] Error getting offline status:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao verificar status offline',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.delete('/clear-cache', auth, async (req, res) => {
   try {
@@ -128,13 +137,15 @@ router.delete('/clear-cache', auth, async (req, res) => {
         clearedMessagesCount: messageCount,
         clearedAt: new Date().toISOString()
       }
-}
+    });
+    
   } catch (error) {
     logger.error('❌ [Offline Mode] Error clearing cache:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao limpar cache',
-}
+      error: error.message
+    });
   }
 });
 

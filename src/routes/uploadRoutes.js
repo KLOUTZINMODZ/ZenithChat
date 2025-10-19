@@ -5,6 +5,7 @@ const sharp = require('sharp');
 const { auth } = require('../middleware/auth');
 const UploadedImage = require('../models/UploadedImage');
 
+
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/avif']);
 const MAX_FILE_SIZE = 25 * 1024 * 1024; 
 
@@ -38,6 +39,7 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
     const image = sharp(req.file.buffer, { failOnError: false });
     const metadata = await image.metadata();
 
+
     const fullBuffer = await image.clone()
       .rotate()
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
@@ -49,6 +51,7 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80, progressive: true, mozjpeg: true })
       .toBuffer();
+
 
     const thumbBuffer = await image.clone()
       .rotate()
@@ -104,7 +107,8 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
       },
       uploadedBy: req.user?._id || req.user?.id,
       permanent: true
-}
+    });
+
     if (!savedImage || !savedImage.imageId) {
       return res.status(500).json({ success: false, message: 'Failed to save image' });
     }
@@ -124,11 +128,12 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
         uploadedAt: new Date().toISOString(),
         conversationId
       }
-}
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
+
 
 function decodeBase64Image(input, explicitMime) {
   if (!input || typeof input !== 'string') return { error: 'No base64 data provided' };
@@ -148,6 +153,7 @@ function decodeBase64Image(input, explicitMime) {
     return { error: 'Invalid base64 content' };
   }
 }
+
 
 router.post('/image-base64', auth, async (req, res) => {
   try {
@@ -180,6 +186,7 @@ router.post('/image-base64', auth, async (req, res) => {
     const image = sharp(decoded.buffer, { failOnError: false});
     const metadata = await image.metadata();
 
+
     const fullBuffer = await image.clone()
       .rotate()
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
@@ -191,6 +198,7 @@ router.post('/image-base64', auth, async (req, res) => {
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80, progressive: true, mozjpeg: true })
       .toBuffer();
+
 
     const thumbBuffer = await image.clone()
       .rotate()
@@ -246,7 +254,8 @@ router.post('/image-base64', auth, async (req, res) => {
       },
       uploadedBy: req.user?._id || req.user?.id,
       permanent: true
-}
+    });
+
     if (!savedImage || !savedImage.imageId) {
       return res.status(500).json({ success: false, message: 'Failed to save image' });
     }
@@ -266,7 +275,7 @@ router.post('/image-base64', auth, async (req, res) => {
         uploadedAt: new Date().toISOString(),
         conversationId
       }
-}
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
@@ -312,17 +321,20 @@ router.get('/serve/:imageId/:variant', async (req, res) => {
         'Cache-Control': 'public, max-age=31536000', // 1 ano
         'ETag': `"${uploadedImage.imageId}"`,
         'Last-Modified': uploadedImage.uploadedAt.toUTCString()
-}
+      });
+      
       return res.send(buffer);
     }
     
     return res.status(404).json({ 
       success: false, 
-}
+      message: 'Image not found' 
+    });
   } catch (error) {
     return res.status(500).json({ 
       success: false, 
-}
+      message: 'Error serving image' 
+    });
   }
 });
 
@@ -406,7 +418,8 @@ router.post('/marketplace-image', auth, upload.single('file'), async (req, res) 
       },
       uploadedBy: req.user?._id || req.user?.id,
       permanent: true
-}
+    });
+
     if (!savedImage || !savedImage.imageId) {
       return res.status(500).json({ success: false, message: 'Failed to save image' });
     }
@@ -425,7 +438,7 @@ router.post('/marketplace-image', auth, upload.single('file'), async (req, res) 
         height: metadata.height,
         uploadedAt: new Date().toISOString()
       }
-}
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }

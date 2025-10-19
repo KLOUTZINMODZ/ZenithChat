@@ -15,7 +15,7 @@ router.post('/send-verification', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Parâmetros obrigatórios: email, code, subject, userName'
-}
+      });
     }
 
     logger.info(`Sending verification email to ${email}`);
@@ -154,13 +154,15 @@ router.post('/send-verification', async (req, res) => {
       success: true,
       message: 'Email de verificação enviado com sucesso',
       messageId: result.messageId
-}
+    });
+
   } catch (error) {
     logger.error('Error sending verification email:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao enviar email de verificação',
-}
+      error: error.message
+    });
   }
 });
 

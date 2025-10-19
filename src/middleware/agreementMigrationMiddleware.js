@@ -23,6 +23,7 @@ class AgreementMigrationMiddleware {
         return existingAgreement;
       }
 
+
       const agreement = new Agreement({
         conversationId: acceptedProposal.conversationId,
         proposalId: acceptedProposal.proposalId,
@@ -86,6 +87,7 @@ class AgreementMigrationMiddleware {
           paymentStatus: acceptedProposal.status === 'completed' ? 'paid' : 'pending'
         }
       });
+
 
       agreement.addAction('created', acceptedProposal.client.userid, {
         migratedFrom: 'AcceptedProposal',
@@ -163,19 +165,23 @@ class AgreementMigrationMiddleware {
           return next();
         }
 
+
         const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
         
         if (!acceptedProposal) {
           return next();
         }
 
+
         let agreement = await Agreement.findOne({ 
           acceptedProposalId: acceptedProposal._id 
         });
 
+
         if (!agreement) {
           agreement = await this.migrateProposalToAgreement(acceptedProposal);
         }
+
 
         req.agreement = agreement;
         req.acceptedProposal = acceptedProposal;
@@ -218,6 +224,7 @@ class AgreementMigrationMiddleware {
         if (!agreement) {
           return res.status(404).json({ 
             success: false, 
+            message: 'Acordo não encontrado' 
           });
         }
         
@@ -242,6 +249,7 @@ class AgreementMigrationMiddleware {
           return next();
         }
 
+
         const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
         let agreement = null;
         
@@ -255,6 +263,7 @@ class AgreementMigrationMiddleware {
             agreement = await this.migrateProposalToAgreement(acceptedProposal);
           }
         }
+
 
         req.acceptedProposal = acceptedProposal;
         req.agreement = agreement;
@@ -313,6 +322,7 @@ class AgreementMigrationMiddleware {
             skippedCount++;
             continue;
           }
+
 
           await this.migrateProposalToAgreement(proposal);
           migratedCount++;

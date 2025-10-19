@@ -150,11 +150,13 @@ const agreementSchema = new mongoose.Schema({
   optimisticConcurrency: true
 });
 
+
 agreementSchema.index({ conversationId: 1, status: 1 });
 agreementSchema.index({ 'parties.client.userid': 1, status: 1 });
 agreementSchema.index({ 'parties.booster.userid': 1, status: 1 });
 agreementSchema.index({ status: 1, createdAt: -1 });
 agreementSchema.index({ version: 1, lastUpdatedAt: -1 });
+
 
 agreementSchema.pre('save', function(next) {
   if (this.isModified() && !this.isNew) {
@@ -163,6 +165,7 @@ agreementSchema.pre('save', function(next) {
   }
   next();
 });
+
 
 agreementSchema.methods.activate = function(performedBy, idempotencyKey) {
   if (this.status !== 'pending') {
@@ -212,12 +215,13 @@ agreementSchema.methods.expire = function(performedBy = null, idempotencyKey) {
   return this.save();
 };
 
+
 agreementSchema.methods.addAction = function(action, performedBy, details = {}, idempotencyKey = null) {
 
   if (idempotencyKey) {
     const existingAction = this.actionHistory.find(a => a.idempotencyKey === idempotencyKey);
     if (existingAction) {
-      
+      console.log(`Action already performed with key: ${idempotencyKey}`);
       return this;
     }
   }
@@ -232,6 +236,7 @@ agreementSchema.methods.addAction = function(action, performedBy, details = {}, 
   
   return this;
 };
+
 
 agreementSchema.methods.renegotiate = function(performedBy, newPrice, newEstimatedTime, reason, idempotencyKey) {
   if (this.status !== 'active') {
@@ -265,15 +270,18 @@ agreementSchema.methods.renegotiate = function(performedBy, newPrice, newEstimat
   return this.save();
 };
 
+
 agreementSchema.statics.findByAgreementId = function(agreementId) {
   return this.findOne({ agreementId });
 };
+
 
 agreementSchema.statics.findByConversation = function(conversationId, status = null) {
   const query = { conversationId };
   if (status) query.status = status;
   return this.find(query).sort({ createdAt: -1 });
 };
+
 
 agreementSchema.statics.findByUser = function(userId, role = null, status = null) {
   const query = {};

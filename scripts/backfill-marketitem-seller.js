@@ -21,15 +21,15 @@ function safeId(v) {
 }
 
 (async () => {
-  
+  console.log('[BACKFILL] Connecting to MongoDB...');
   await connectDB();
 
   const queryMissing = { $or: [ { userId: { $exists: false } }, { userId: null }, { sellerId: { $exists: false } }, { sellerId: null } ] };
   const totalMissing = await MarketItem.countDocuments(queryMissing);
-  
+  console.log(`[BACKFILL] Items missing seller userId: ${totalMissing}`);
 
   if (totalMissing === 0) {
-    
+    console.log('[BACKFILL] Nothing to do.');
     await mongoose.connection.close();
     process.exit(0);
   }
@@ -63,7 +63,7 @@ function safeId(v) {
       // Validate user exists
       const user = await User.findById(sellerId).select('_id');
       if (!user) {
-        
+        console.warn(`[BACKFILL] Seller user not found for item ${item._id}: ${sellerId}`);
         unresolved++;
         failures.push({ itemId: String(item._id), reason: 'seller user not found', sellerId });
         continue;
@@ -72,22 +72,22 @@ function safeId(v) {
       try { item.sellerId = user._id; } catch (_) {}
       await item.save();
       resolved++;
-      
+      console.log(`[BACKFILL] Set seller for item ${item._id} -> ${user._id}`);
     } else {
       unresolved++;
       failures.push({ itemId: String(item._id), reason: 'no candidate seller found' });
-      
+      console.warn(`[BACKFILL] No seller candidate for item ${item._id}`);
     }
   }
 
-  
+  console.log('[BACKFILL] Summary:', { totalMissing, resolved, unresolved });
   if (failures.length) {
-    );
+    console.log('[BACKFILL] Unresolved items:', failures.slice(0, 50));
     if (failures.length > 50) {
-      
+      console.log(`[BACKFILL] ...and ${failures.length - 50} more`);
     }
-    
-    
+    console.log('Use the admin endpoint to fix unresolved items individually:');
+    console.log('PATCH /api/admin/market-items/:itemId/seller  {"sellerUserId":"<userId>"} with header X-Admin-Key');
   }
 
   await mongoose.connection.close();

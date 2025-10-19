@@ -8,6 +8,10 @@ const AgreementMigrationMiddleware = require('../middleware/agreementMigrationMi
 const router = express.Router();
 const controller = new BoostingChatController();
 
+
+
+
+
 // Rotas de proposta/conversação
 router.get('/conversation/:conversationId/proposal', auth, AgreementMigrationMiddleware.autoMigrate(), controller.getAcceptedProposal);
 router.get('/conversations/:conversationId', auth, AgreementMigrationMiddleware.autoMigrate(), controller.getConversation);
@@ -18,7 +22,9 @@ router.post('/conversation/:conversationId/report', auth, AgreementMigrationMidd
 router.post('/conversation/:conversationId/unreport', auth, AgreementMigrationMiddleware.autoMigrate(), controller.unreportConversation);
 router.get('/conversation/:conversationId/status', auth, AgreementMigrationMiddleware.autoMigrate(), controller.getConversationStatus);
 
+
 router.post('/proposal/save', auth, controller.saveAcceptedProposal);
+
 
 router.post('/conversation/:conversationId/unblock', auth, conversationController.unblockConversation);
 

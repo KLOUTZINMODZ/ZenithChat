@@ -64,6 +64,7 @@ class AsaasService {
     return map[t] || 'EVP';
   }
 
+
   async getOrCreateCustomer({ name, email, cpfCnpj }) {
     await this.ensureOk();
     try {
@@ -80,6 +81,7 @@ class AsaasService {
           logger.warn('Asaas: get customers by cpfCnpj failed', { message: e.message });
         }
       }
+
 
       if (email) {
         const found = await this.client.get('/customers', { params: { email } });
@@ -106,6 +108,7 @@ class AsaasService {
     } catch (e) {
       logger.warn('Asaas: get customers failed, will try to create', { message: e.message });
     }
+
 
     const payload = { name, email };
     const sanitized = this.sanitizeCpfCnpj(cpfCnpj);
@@ -139,6 +142,7 @@ class AsaasService {
         return await this.getCustomer(customerId);
       }
 
+
       let current;
       try {
         current = await this.getCustomer(customerId);
@@ -150,6 +154,7 @@ class AsaasService {
         return current;
       }
 
+
       try {
         const fields = { cpfCnpj: doc };
         const ptype = this.personTypeFor(doc);
@@ -159,6 +164,7 @@ class AsaasService {
       } catch (e) {
         logger.warn('Asaas: updateCustomer cpfCnpj failed, will try search by document', { message: e.message });
       }
+
 
       try {
         const byDoc = await this.client.get('/customers', { params: { cpfCnpj: doc } });
@@ -170,12 +176,14 @@ class AsaasService {
         logger.warn('Asaas: search by document after failed update also failed', { message: e2.message });
       }
 
+
       return current || { id: customerId };
     } catch (err) {
       logger.warn('Asaas: ensureCustomerHasCpfCnpj unexpected error', { message: err.message });
       return { id: customerId };
     }
   }
+
 
   async createPixPayment({ customerId, value, description, externalReference, dueDate }) {
     await this.ensureOk();
@@ -220,6 +228,7 @@ class AsaasService {
     }
     throw lastError;
   }
+
 
   async createPixTransfer({ value, pixAddressKey, pixAddressKeyType, description, scheduleDate, externalReference }) {
     await this.ensureOk();
@@ -296,6 +305,7 @@ class AsaasService {
         const desc = e?.response?.data?.errors?.[0]?.description || e?.message || '';
         const code = e?.code;
 
+
         if (status === 409 || /já solicitado|already requested/i.test(desc)) {
           const found = await this.findTransferByExternalReference(externalReference);
           if (found) return found;
@@ -328,6 +338,7 @@ class AsaasService {
     const res = await this.client.get(`/transfers/${transferId}`);
     return res.data;
   }
+
 
   async createWalletTransfer({ value, walletId, description, scheduleDate }) {
     await this.ensureOk();

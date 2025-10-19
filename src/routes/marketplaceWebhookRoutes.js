@@ -6,10 +6,12 @@ const highlightRetryService = require('../services/highlightRetryService');
 const MarketItem = require('../models/MarketItem');
 const router = express.Router();
 
+
 const applyHighlightToMainAPI = async (externalReference, paymentData = null) => {
   let userId = null;
   
   try {
+
 
     const parts = externalReference.split('_');
     if (parts.length < 4 || parts[0] !== 'marketplace' || parts[1] !== 'highlight') {
@@ -45,7 +47,8 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
         'Authorization': `Bearer ${process.env.VERCEL_API_SECRET}`
       },
       timeout: 30000
-}
+    });
+    
     if (response.data.success) {
       logger.info('Highlight aplicado com sucesso na API principal:', response.data);
       return {
@@ -84,6 +87,7 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
   }
 };
 
+
 const processMercadoPagoNotification = async (notification) => {
   try {
     logger.info('💳 Processando notificação do Mercado Pago:', notification);
@@ -112,14 +116,16 @@ const processMercadoPagoNotification = async (notification) => {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`
           },
           timeout: 10000
-}
+        }
+      );
+      
       paymentDetails = mpResponse.data;
       logger.info('💰 Detalhes do pagamento obtidos da API do Mercado Pago:', {
         id: paymentDetails.id,
         status: paymentDetails.status,
         external_reference: paymentDetails.external_reference,
         transaction_amount: paymentDetails.transaction_amount
-}
+      });
     } catch (error) {
       logger.error('❌ Erro ao consultar API do Mercado Pago:', error.message);
       
@@ -143,6 +149,7 @@ const processMercadoPagoNotification = async (notification) => {
 
         try {
 
+
           const refParts = paymentDetails.external_reference.split('_');
           const userId = refParts.length >= 4 ? refParts[2] : null;
           
@@ -160,7 +167,8 @@ const processMercadoPagoNotification = async (notification) => {
                 totalItems: result.data?.totalItems || 0,
                 expiresAt: result.data?.highlightExpires
               }
-}
+            });
+            
             logger.info('Notificação de confirmação enviada ao usuário via WebSocket direto');
           } else {
             logger.warn('⚠️ UserId inválido extraído da referência externa');
@@ -198,6 +206,7 @@ const processMercadoPagoNotification = async (notification) => {
     };
   }
 };
+
 
 router.post('/mercadopago-webhook', async (req, res) => {
   logger.info('🔔 Webhook Mercado Pago recebido na ZenithChatApi');
@@ -237,7 +246,8 @@ router.post('/mercadopago-webhook', async (req, res) => {
 
       return res.status(200).json({
         success: true,
-}
+        message: 'Webhook recebido mas estrutura inválida'
+      });
     }
     
 
@@ -245,7 +255,8 @@ router.post('/mercadopago-webhook', async (req, res) => {
       logger.info(`⚠️ Tipo de notificação '${notification.type}' ignorado`);
       return res.status(200).json({
         success: true,
-}
+        message: 'Tipo de notificação ignorado'
+      });
     }
     
 
@@ -255,7 +266,8 @@ router.post('/mercadopago-webhook', async (req, res) => {
       success: true,
       message: result.message || 'Webhook processado',
       data: result.data || null
-}
+    });
+    
   } catch (error) {
     logger.error('❌ Erro no webhook marketplace Mercado Pago:', error);
     
@@ -263,9 +275,10 @@ router.post('/mercadopago-webhook', async (req, res) => {
     res.status(200).json({
       success: false,
       message: 'Erro processado, webhook recebido'
-}
+    });
   }
 });
+
 
 router.post('/test-webhook', async (req, res) => {
   logger.info('🧪 Teste de webhook recebido');
@@ -276,7 +289,8 @@ router.post('/test-webhook', async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-}
+        message: 'userId é obrigatório para o teste'
+      });
     }
     
 
@@ -296,15 +310,17 @@ router.post('/test-webhook', async (req, res) => {
       message: 'Teste de webhook processado',
       testNotification,
       result
-}
+    });
   } catch (error) {
     logger.error('❌ Erro no teste de webhook:', error);
     res.status(500).json({
       success: false,
       message: 'Erro no teste de webhook',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.get('/health', (req, res) => {
   res.json({
@@ -319,7 +335,7 @@ router.get('/health', (req, res) => {
       vercelApiUrl: process.env.VERCEL_API_URL || 'not configured',
       hasVercelSecret: !!process.env.VERCEL_API_SECRET
     }
-}
+  });
 });
 
 module.exports = router;

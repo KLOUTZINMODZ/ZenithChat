@@ -24,7 +24,10 @@ class AgreementController {
       if (!conversationId || !proposalId || !proposalData || !clientData || !boosterData) {
         return res.status(400).json({ 
           success: false, 
+          message: 'Dados obrigatórios não fornecidos' 
+        });
       }
+
 
       if (idempotencyKey) {
         const existingAgreement = await Agreement.findOne({
@@ -34,13 +37,16 @@ class AgreementController {
         if (existingAgreement) {
           return res.json({
             success: true,
+            message: 'Acordo já existe (idempotência)',
             agreement: {
               agreementId: existingAgreement.agreementId,
+              status: existingAgreement.status,
               version: existingAgreement.version
             }
           });
         }
       }
+
 
       const agreement = new Agreement({
         conversationId,
@@ -52,11 +58,13 @@ class AgreementController {
           currentRank: proposalData.currentRank,
           desiredRank: proposalData.desiredRank,
           description: proposalData.description,
+          price: proposalData.price,
           originalPrice: proposalData.originalPrice || proposalData.price,
           estimatedTime: proposalData.estimatedTime
         },
         parties: {
           client: {
+            userid: clientData.userid,
             name: clientData.name,
             email: clientData.email,
             avatar: clientData.avatar,
@@ -68,6 +76,7 @@ class AgreementController {
             ])
           },
           booster: {
+            userid: boosterData.userid,
             name: boosterData.name,
             email: boosterData.email,
             avatar: boosterData.avatar,
@@ -86,6 +95,9 @@ class AgreementController {
           currency: 'BRL',
           paymentStatus: 'pending'
         },
+        status: 'active'
+      });
+
 
       agreement.addAction('created', clientData.userid, {
         proposalId,
@@ -93,6 +105,7 @@ class AgreementController {
       }, idempotencyKey);
 
       await agreement.save();
+
 
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
@@ -108,17 +121,20 @@ class AgreementController {
 
       res.json({
         success: true,
+        message: 'Acordo criado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
+          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt
         }
       });
     } catch (error) {
-      
+      console.error('Erro ao criar acordo:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async getAgreement(req, res) {
     try {
@@ -140,7 +156,10 @@ class AgreementController {
       if (!agreement) {
         return res.status(404).json({ 
           success: false, 
+          message: 'Acordo não encontrado' 
+        });
       }
+
 
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
@@ -175,9 +194,12 @@ class AgreementController {
         data: {
           _id: agreement._id,
           agreementId: agreement.agreementId,
+          conversationId: agreement.conversationId,
+          price: agreement.price,
           boostingRequestId: agreement.boostingRequestId,
           proposalSnapshot: agreement.proposalSnapshot,
           parties: updatedParties,
+          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
           activatedAt: agreement.activatedAt,
@@ -188,10 +210,11 @@ class AgreementController {
         }
       });
     } catch (error) {
-      
+      console.error('Erro ao buscar acordo:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async completeAgreement(req, res) {
     try {
@@ -210,6 +233,7 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
+
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -218,13 +242,16 @@ class AgreementController {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
 
+
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
+          message: 'Conflito de versão. Dados foram modificados por outro processo.',
           currentVersion: agreement.version,
           requestedVersion: version
         });
       }
+
 
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
@@ -234,14 +261,17 @@ class AgreementController {
         if (existingAction) {
           return res.json({
             success: true,
+            message: 'Acordo já foi completado (idempotência)',
             agreement: {
               agreementId: agreement.agreementId,
+              status: agreement.status,
               version: agreement.version,
               completedAt: agreement.completedAt
             }
           });
         }
       }
+
 
       await agreement.complete(userId, {
         completionNotes,
@@ -253,8 +283,8 @@ class AgreementController {
         const User = require('../models/User');
         const boosterId = agreement.parties.booster.userid;
         
-        
-        
+        console.log(`🔍 [Agreement Complete] Tentando incrementar boosts para booster: ${boosterId}`);
+        console.log(`🔍 [Agreement Complete] Tipo do boosterId: ${typeof boosterId}`);
         
         const updateResult = await User.findByIdAndUpdate(
           boosterId,
@@ -268,18 +298,18 @@ class AgreementController {
         );
         
         if (updateResult) {
-          
-          
-          
-          
+          console.log(`[Agreement Complete] Booster stats updated successfully!`);
+          console.log(`   - User: ${updateResult.name}`);
+          console.log(`   - New totalBoosts: ${updateResult.totalBoosts}`);
+          console.log(`   - New completedBoosts: ${updateResult.completedBoosts}`);
         } else {
-          
+          console.error(`❌ [Agreement Complete] User not found with ID: ${boosterId}`);
         }
         
       } catch (statsError) {
-        
-        
-        
+        console.error('❌ [Agreement Complete] Error updating booster stats:');
+        console.error('   Message:', statsError.message);
+        console.error('   Stack:', statsError.stack);
         // Não falha a operação se não conseguir atualizar stats
       }
 
@@ -296,31 +326,36 @@ class AgreementController {
       });
       await systemMessage.save();
 
+
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/confirm-delivery`, {
+          conversationId: agreement.conversationId.toString(),
           agreementId: agreement.agreementId,
           completedBy: userId
         });
       } catch (apiError) {
-        
+        console.warn('Falha ao notificar API principal:', apiError.message);
       }
 
       res.json({
         success: true,
+        message: 'Acordo completado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
+          status: agreement.status,
           version: agreement.version,
           completedAt: agreement.completedAt
         }
       });
     } catch (error) {
-      
+      console.error('Erro ao completar acordo:', error);
       if (error.message.includes('Cannot complete agreement')) {
         return res.status(400).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async cancelAgreement(req, res) {
     try {
@@ -339,6 +374,7 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
+
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -347,13 +383,16 @@ class AgreementController {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
 
+
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
+          message: 'Conflito de versão. Dados foram modificados por outro processo.',
           currentVersion: agreement.version,
           requestedVersion: version
         });
       }
+
 
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
@@ -363,8 +402,10 @@ class AgreementController {
         if (existingAction) {
           return res.json({
             success: true,
+            message: 'Acordo já foi cancelado (idempotência)',
             agreement: {
               agreementId: agreement.agreementId,
+              status: agreement.status,
               version: agreement.version,
               cancelledAt: agreement.cancelledAt
             }
@@ -372,7 +413,9 @@ class AgreementController {
         }
       }
 
+
       await agreement.cancel(userId, cancelReason, idempotencyKey);
+
 
       const systemMessage = new Message({
         conversation: agreement.conversationId,
@@ -387,32 +430,37 @@ class AgreementController {
       });
       await systemMessage.save();
 
+
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/cancel`, {
+          conversationId: agreement.conversationId.toString(),
           agreementId: agreement.agreementId,
           cancelledBy: userId,
           reason: cancelReason
         });
       } catch (apiError) {
-        
+        console.warn('Falha ao notificar API principal:', apiError.message);
       }
 
       res.json({
         success: true,
+        message: 'Acordo cancelado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
+          status: agreement.status,
           version: agreement.version,
           cancelledAt: agreement.cancelledAt
         }
       });
     } catch (error) {
-      
+      console.error('Erro ao cancelar acordo:', error);
       if (error.message.includes('Cannot cancel agreement')) {
         return res.status(400).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async renegotiateAgreement(req, res) {
     try {
@@ -431,6 +479,7 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
+
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -439,13 +488,16 @@ class AgreementController {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
 
+
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
+          message: 'Conflito de versão. Dados foram modificados por outro processo.',
           currentVersion: agreement.version,
           requestedVersion: version
         });
       }
+
 
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
@@ -455,8 +507,10 @@ class AgreementController {
         if (existingAction) {
           return res.json({
             success: true,
+            message: 'Renegociação já processada (idempotência)',
             agreement: {
               agreementId: agreement.agreementId,
+              status: agreement.status,
               version: agreement.version,
               renegotiationData: agreement.renegotiationData
             }
@@ -464,7 +518,9 @@ class AgreementController {
         }
       }
 
+
       await agreement.renegotiate(userId, newPrice, newEstimatedTime, reason, idempotencyKey);
+
 
       const systemMessage = new Message({
         conversation: agreement.conversationId,
@@ -481,20 +537,23 @@ class AgreementController {
 
       res.json({
         success: true,
+        message: 'Acordo renegociado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
+          status: agreement.status,
           version: agreement.version,
           renegotiationData: agreement.renegotiationData
         }
       });
     } catch (error) {
-      
+      console.error('Erro ao renegociar acordo:', error);
       if (error.message.includes('Cannot renegotiate agreement')) {
         return res.status(400).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async getConversationAgreements(req, res) {
     try {
@@ -505,6 +564,7 @@ class AgreementController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
+
 
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
@@ -519,6 +579,7 @@ class AgreementController {
           agreementId: agreement.agreementId,
           proposalSnapshot: agreement.proposalSnapshot,
           parties: agreement.parties,
+          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
           completedAt: agreement.completedAt,
@@ -527,10 +588,11 @@ class AgreementController {
         }))
       });
     } catch (error) {
-      
+      console.error('Erro ao listar acordos:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async getUserAgreements(req, res) {
     try {
@@ -547,8 +609,10 @@ class AgreementController {
         success: true,
         agreements: agreements.map(agreement => ({
           agreementId: agreement.agreementId,
+          conversationId: agreement.conversationId,
           proposalSnapshot: agreement.proposalSnapshot,
           parties: agreement.parties,
+          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
           completedAt: agreement.completedAt,
@@ -557,7 +621,7 @@ class AgreementController {
         }))
       });
     } catch (error) {
-      
+      console.error('Erro ao listar acordos do usuário:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }

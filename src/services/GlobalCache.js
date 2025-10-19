@@ -1,6 +1,7 @@
 const CacheService = require('./CacheService');
 const logger = require('../utils/logger');
 
+
 class GlobalCache {
   constructor() {
     if (GlobalCache.instance) {
@@ -12,6 +13,7 @@ class GlobalCache {
     
     logger.info('🌐 Global Cache initialized');
   }
+
 
   set(key, value, ttlSeconds) {
     return this.cacheService.set(key, value, ttlSeconds);
@@ -25,6 +27,7 @@ class GlobalCache {
     return this.cacheService.delete(key);
   }
 
+
   cacheMessage(conversationId, message) {
     return this.cacheService.cacheMessage(conversationId, message);
   }
@@ -37,6 +40,7 @@ class GlobalCache {
     return this.cacheService.getCachedMessages(conversationId);
   }
 
+
   cacheConversations(userId, conversations) {
     return this.cacheService.cacheConversations(userId, conversations);
   }
@@ -45,6 +49,7 @@ class GlobalCache {
     return this.cacheService.getCachedConversations(userId);
   }
 
+
   cacheUserSession(userId, sessionData) {
     return this.cacheService.cacheUserSession(userId, sessionData);
   }
@@ -52,6 +57,7 @@ class GlobalCache {
   getUserSession(userId) {
     return this.cacheService.getUserSession(userId);
   }
+
 
   cacheOfflineMessage(userId, message) {
     return this.cacheService.cacheOfflineMessage(userId, message);
@@ -65,6 +71,7 @@ class GlobalCache {
     return this.cacheService.clearOfflineMessages(userId);
   }
 
+
   invalidateConversationCache(conversationId, participantIds) {
     return this.cacheService.invalidateConversationCache(conversationId, participantIds);
   }
@@ -72,6 +79,7 @@ class GlobalCache {
   invalidateUserCache(userId) {
     return this.cacheService.invalidateUserCache(userId);
   }
+
 
   getStats() {
     return this.cacheService.getStats();
@@ -95,5 +103,6 @@ class GlobalCache {
     }
   }
 }
+
 
 module.exports = new GlobalCache();

@@ -16,6 +16,7 @@ const auth = async (req, res, next) => {
     let user = await User.findById(decoded.id || decoded._id);
     
 
+
     if (!user && decoded.id) {
       user = await User.findOneAndUpdate(
         { _id: decoded.id },
@@ -26,7 +27,7 @@ const auth = async (req, res, next) => {
           lastSeen: new Date()
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
-
+      );
     }
 
     if (!user) {
@@ -43,6 +44,7 @@ const auth = async (req, res, next) => {
     res.status(401).json({
       success: false,
       message: 'Please authenticate',
+      error: error.message
     });
   }
 };

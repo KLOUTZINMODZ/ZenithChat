@@ -14,7 +14,8 @@ const authenticateCache = (req, res, next) => {
   if (source !== 'ZenithAPI') {
     return res.status(401).json({
       success: false,
-}
+      message: 'Fonte de cache não autorizada'
+    });
   }
   
 
@@ -23,7 +24,8 @@ const authenticateCache = (req, res, next) => {
     if (token !== process.env.VERCEL_API_SECRET && token !== process.env.JWT_SECRET) {
       return res.status(401).json({
         success: false,
-}
+        message: 'Token de cache inválido'
+      });
     }
   }
   
@@ -40,14 +42,16 @@ router.post('/marketplace-items', authenticateCache, async (req, res) => {
     logger.info('📥 Recebendo itens para cache:', {
       externalReference: req.body.externalReference,
       itemsCount: req.body.items?.length || 0
-}
+    });
+    
     const { externalReference, items, timestamp } = req.body;
     
 
     if (!externalReference || !items || !Array.isArray(items)) {
       return res.status(400).json({
         success: false,
-}
+        message: 'Dados de cache inválidos'
+      });
     }
     
 
@@ -57,7 +61,8 @@ router.post('/marketplace-items', authenticateCache, async (req, res) => {
       externalReference: cached.externalReference,
       itemsCount: cached.items.length,
       userId: cached.userId
-}
+    });
+    
     return res.status(200).json({
       success: true,
       message: 'Itens armazenados no cache com sucesso',
@@ -67,13 +72,15 @@ router.post('/marketplace-items', authenticateCache, async (req, res) => {
         userId: cached.userId,
         timestamp: cached.timestamp
       }
-}
+    });
+    
   } catch (error) {
     logger.error('❌ Erro ao armazenar itens no cache:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro interno ao armazenar cache',
-}
+      error: process.env.NODE_ENV === 'development' ? error.message : 'CACHE_ERROR'
+    });
   }
 });
 
@@ -94,23 +101,27 @@ router.get('/marketplace-items/:externalReference', authenticateCache, async (re
       logger.warn('⚠️ Itens não encontrados no cache:', { externalReference });
       return res.status(404).json({
         success: false,
-}
+        message: 'Itens não encontrados no cache'
+      });
     }
     
     logger.info('Itens encontrados no cache:', {
       externalReference: cached.externalReference,
       itemsCount: cached.items.length
-}
+    });
+    
     return res.status(200).json({
       success: true,
       message: 'Itens encontrados no cache',
       data: cached
-}
+    });
+    
   } catch (error) {
     logger.error('❌ Erro ao buscar itens no cache:', error);
     return res.status(500).json({
       success: false,
-}
+      message: 'Erro interno ao buscar cache'
+    });
   }
 });
 
@@ -127,12 +138,14 @@ router.get('/stats', authenticateCache, async (req, res) => {
       success: true,
       message: 'Estatísticas do cache obtidas com sucesso',
       data: stats
-}
+    });
+    
   } catch (error) {
     logger.error('❌ Erro ao obter estatísticas do cache:', error);
     return res.status(500).json({
       success: false,
-}
+      message: 'Erro interno ao obter estatísticas'
+    });
   }
 });
 
@@ -154,7 +167,7 @@ router.post('/retry-highlights', authenticateCache, async (req, res) => {
         success: true,
         message: success ? 'Retry executado com sucesso' : 'Falha no retry',
         data: { paymentId, retrySuccess: success }
-}
+      });
     } else {
 
       const highlightRetryService = require('../services/highlightRetryService');
@@ -162,14 +175,16 @@ router.post('/retry-highlights', authenticateCache, async (req, res) => {
       
       return res.status(200).json({
         success: true,
-}
+        message: 'Processamento de retries iniciado'
+      });
     }
     
   } catch (error) {
     logger.error('❌ Erro ao processar retries:', error);
     return res.status(500).json({
       success: false,
-}
+      message: 'Erro interno ao processar retries'
+    });
   }
 });
 
@@ -190,12 +205,14 @@ router.get('/user/:userId', authenticateCache, async (req, res) => {
       success: true,
       message: 'Dados do usuário obtidos com sucesso',
       data: results
-}
+    });
+    
   } catch (error) {
     logger.error('❌ Erro ao buscar dados por usuário:', error);
     return res.status(500).json({
       success: false,
-}
+      message: 'Erro interno ao buscar dados do usuário'
+    });
   }
 });
 

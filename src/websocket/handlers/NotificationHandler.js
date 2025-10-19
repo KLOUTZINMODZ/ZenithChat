@@ -18,6 +18,7 @@ class NotificationHandler {
     try {
       const { types = [], games = [] } = payload;
 
+
       const preferencesKey = `notification_prefs:${userId}`;
       const preferences = {
         types,
@@ -27,6 +28,7 @@ class NotificationHandler {
 
       cache.set(preferencesKey, preferences, 86400);
 
+
       this.sendToUser(userId, {
         type: 'notification:subscribed',
         data: {
@@ -35,6 +37,7 @@ class NotificationHandler {
           timestamp: new Date().toISOString()
         }
       });
+
 
       await this.notificationService.sendPendingNotifications(userId);
 
@@ -55,13 +58,16 @@ class NotificationHandler {
     try {
       const { types = [], games = [] } = payload;
 
+
       const preferencesKey = `notification_prefs:${userId}`;
       let preferences = cache.get(preferencesKey) || { types: [], games: [] };
+
 
       preferences.types = preferences.types.filter(t => !types.includes(t));
       preferences.games = preferences.games.filter(g => !games.includes(g));
 
       cache.set(preferencesKey, preferences, 86400);
+
 
       this.sendToUser(userId, {
         type: 'notification:unsubscribed',
@@ -89,7 +95,9 @@ class NotificationHandler {
     try {
       const { notificationId, action = 'received' } = payload;
 
+
       this.notificationService.markAsDelivered(userId, notificationId);
+
 
       this.sendToUser(userId, {
         type: 'notification:acknowledged',
@@ -117,13 +125,17 @@ class NotificationHandler {
     try {
       const { limit = 20, unreadOnly = false, types = [] } = payload;
 
+
       let notifications = this.notificationService.getCachedNotifications(userId, { limit: 100, unreadOnly });
+
 
       if (types.length > 0) {
         notifications = notifications.filter(n => types.includes(n.type));
       }
 
+
       notifications = notifications.slice(0, limit);
+
 
       this.sendToUser(userId, {
         type: 'notification:history',
@@ -151,6 +163,7 @@ class NotificationHandler {
     try {
       const { notificationIds = [] } = payload;
 
+
       const cacheKey = `notifications:${userId}`;
       let notifications = cache.get(cacheKey) || [];
 
@@ -163,10 +176,13 @@ class NotificationHandler {
         return n;
       });
 
+
       cache.set(cacheKey, notifications, 604800);
+
 
       const unreadCount = notifications.filter(n => !n.isRead).length;
       cache.set(`notifications:${userId}:unread`, unreadCount, 604800);
+
 
       this.sendToUser(userId, {
         type: 'notification:marked_read',
@@ -177,6 +193,7 @@ class NotificationHandler {
           timestamp: new Date().toISOString()
         }
       });
+
 
       await this.notificationService.sendUnreadCount(userId, unreadCount);
 
@@ -230,6 +247,7 @@ class NotificationHandler {
         timestamp: new Date().toISOString()
       };
 
+
       await this.notificationService.sendNotification(userId, testNotification, { persistent: false });
 
       logger.debug(`Sent test notification to user ${userId}`);
@@ -274,6 +292,7 @@ class NotificationHandler {
       if (unreadCount > 0) {
         await this.notificationService.sendUnreadCount(userId, unreadCount);
       }
+
 
       await this.notificationService.handleUserConnected(userId);
 

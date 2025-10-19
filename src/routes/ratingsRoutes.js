@@ -46,24 +46,28 @@ router.post('/', auth, async (req, res) => {
       title: title ? String(title).slice(0, 100) : null,
       comment: comment ? String(comment).slice(0, 1500) : null,
       isVerifiedPurchase: true,
-}
+      status: 'approved'
+    });
+
     // Atualizar rating do vendedor
     try {
       const allSellerReviews = await Review.find({ 
-        targetId: purchase.sellerId,);
-}
+        targetId: purchase.sellerId,
+        status: 'approved'
+      });
+      
       if (allSellerReviews.length > 0) {
         const totalRating = allSellerReviews.reduce((sum, r) => sum + (r.rating || 0), 0);
         const averageRating = totalRating / allSellerReviews.length;
         
-        }`);
+        console.log(`[RATING UPDATE] Seller ${purchase.sellerId}: ${allSellerReviews.length} reviews, avg: ${averageRating.toFixed(2)}`);
         
         await User.findByIdAndUpdate(purchase.sellerId, {
           rating: Number(averageRating.toFixed(2))
-}
+        });
       }
     } catch (err) {
-      
+      console.error('[RATING UPDATE] Erro ao atualizar rating do vendedor:', err);
     }
 
     const populated = await Review.findById(doc._id)
@@ -158,7 +162,8 @@ router.get('/user/:userId', async (req, res) => {
     const formatted = (ratings || []).map(r => {
       const { helpful, notHelpful } = summarizeVoteCounts(r);
       return { ...r, isHelpful: helpful, isNotHelpful: notHelpful, orderStatus: 'completed' };
-}
+    });
+
     return res.json({ success: true, data: {
       ratings: formatted,
       stats: { average: Number((avgFromDist || 0).toFixed(2)), count, distribution },
@@ -249,8 +254,9 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     // Verificar se já foi avaliado
     const existing = await Review.findOne({ 
       agreementId: agreement._id,
-      targetType: 'Boosting');
-}
+      targetType: 'Boosting'
+    });
+    
     if (existing) {
       return res.status(409).json({ success: false, message: 'Este boosting já foi avaliado' });
     }
@@ -265,19 +271,25 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
       rating: Math.max(1, Math.min(5, Number(rating))),
       comment: String(comment).trim().slice(0, 1500),
       isVerifiedPurchase: true,
-}
+      status: 'approved'
+    });
+
     // Atualizar rating do booster
     try {
-      
+      console.log(`[BOOSTING RATING] Atualizando rating para booster: ${boosterId}`);
       
       const allBoosterReviews = await Review.find({ 
-        targetId: boosterId,);
-}
+        targetId: boosterId,
+        status: 'approved'
+      });
+      
+      console.log(`[BOOSTING RATING] Encontradas ${allBoosterReviews.length} avaliações para o booster`);
+      
       if (allBoosterReviews.length > 0) {
         const totalRating = allBoosterReviews.reduce((sum, r) => sum + (r.rating || 0), 0);
         const averageRating = totalRating / allBoosterReviews.length;
         
-        } (${totalRating}/${allBoosterReviews.length})`);
+        console.log(`[BOOSTING RATING] Média calculada: ${averageRating.toFixed(2)} (${totalRating}/${allBoosterReviews.length})`);
         
         const updateResult = await User.findByIdAndUpdate(
           boosterId, 
@@ -286,16 +298,16 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
         );
         
         if (updateResult) {
-          
+          console.log(`[BOOSTING RATING] Rating atualizado com sucesso! Novo rating: ${updateResult.rating}`);
         } else {
-          
+          console.error(`[BOOSTING RATING] ❌ Usuário não encontrado: ${boosterId}`);
         }
       } else {
-        
+        console.log(`[BOOSTING RATING] Nenhuma avaliação encontrada ainda`);
       }
     } catch (err) {
-      
-      
+      console.error('[BOOSTING RATING] ❌ Erro ao atualizar rating do booster:', err);
+      console.error('[BOOSTING RATING] Stack:', err.stack);
     }
 
     const populated = await Review.findById(review._id)
@@ -312,9 +324,9 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
         isHelpful: helpful,
         isNotHelpful: notHelpful
       }
-}
+    });
   } catch (error) {
-    
+    console.error('Erro ao criar avaliação de boosting:', error);
     return res.status(500).json({ success: false, message: 'Erro ao criar avaliação', error: error.message });
   }
 });

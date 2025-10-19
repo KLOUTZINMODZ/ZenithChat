@@ -41,10 +41,12 @@ class WhatsAppMessageHandler {
     try {
       const { conversationId, content, type = 'text', attachments = [] } = payload;
 
+
       const conversation = await this.validateConversation(conversationId, userId);
       if (!conversation) {
         throw new Error('Invalid conversation or user not authorized');
       }
+
 
       const message = await this.createMessage({
         conversationId,
@@ -54,19 +56,24 @@ class WhatsAppMessageHandler {
         attachments
       });
 
+
       await this.updateConversationMetadata(conversation, message);
 
+
       const deliveryMessage = await this.prepareMessageForDelivery(message);
+
 
       const recipients = conversation.participants
         .filter(p => p._id.toString() !== userId)
         .map(p => p._id.toString());
+
 
       this.sendToUser(userId, {
         type: 'message:sent',
         data: { message: deliveryMessage, conversationId },
         timestamp: new Date().toISOString()
       });
+
 
       await this.deliverMessage(message._id.toString(), deliveryMessage, recipients, conversationId);
 
@@ -85,6 +92,7 @@ class WhatsAppMessageHandler {
     const onlineRecipients = [];
     const offlineRecipients = [];
 
+
     recipients.forEach(recipientId => {
       if (this.connectionManager.isUserOnline(recipientId)) {
         onlineRecipients.push(recipientId);
@@ -92,6 +100,7 @@ class WhatsAppMessageHandler {
         offlineRecipients.push(recipientId);
       }
     });
+
 
     const deliveryPromises = onlineRecipients.map(async (recipientId) => {
       try {
@@ -123,6 +132,7 @@ class WhatsAppMessageHandler {
       }
     });
 
+
     const recipientsToBuffer = [...offlineRecipients, ...failedDeliveries];
     
     if (recipientsToBuffer.length > 0) {
@@ -142,6 +152,7 @@ class WhatsAppMessageHandler {
       clearTimeout(existingTimeout);
     }
 
+
     this.messageBuffer.set(messageId, {
       message,
       recipients: [...recipients],
@@ -151,14 +162,17 @@ class WhatsAppMessageHandler {
       timeoutId: null
     });
 
+
     const delay = Math.min(
       this.baseRetryInterval * Math.pow(2, attempt - 1),
       this.maxRetryInterval
     );
 
+
     const timeoutId = setTimeout(() => {
       this.retryMessageDelivery(messageId);
     }, delay);
+
 
     const bufferedMessage = this.messageBuffer.get(messageId);
     if (bufferedMessage) {
@@ -178,11 +192,13 @@ class WhatsAppMessageHandler {
 
     const { message, recipients, conversationId, attempts } = bufferedMessage;
 
+
     if (attempts >= this.maxRetryAttempts) {
       logger.warn(`Message ${messageId} exceeded max retry attempts, removing from buffer`);
       this.removeFromBuffer(messageId);
       return;
     }
+
 
     const recipientsToRetry = recipients.filter(recipientId => {
 
@@ -210,6 +226,7 @@ class WhatsAppMessageHandler {
       return;
     }
 
+
     this.bufferMessage(messageId, message, recipientsToRetry, conversationId, attempts + 1);
   }
 
@@ -232,6 +249,7 @@ class WhatsAppMessageHandler {
           this.removeFromBuffer(messageId);
         }
       }
+
 
       const message = await Message.findById(messageId).populate('sender', '_id');
       if (message && message.sender._id.toString() !== userId) {
@@ -258,6 +276,7 @@ class WhatsAppMessageHandler {
       
       if (!Array.isArray(messageIds) || messageIds.length === 0) return;
 
+
       await Message.updateMany(
         { 
           _id: { $in: messageIds },
@@ -267,6 +286,7 @@ class WhatsAppMessageHandler {
           $push: { readBy: { user: userId, readAt: new Date() } }
         }
       );
+
 
       const messages = await Message.find({ _id: { $in: messageIds } })
         .populate('sender', '_id')
@@ -283,6 +303,7 @@ class WhatsAppMessageHandler {
           readConfirmations.get(senderId).push(message._id.toString());
         }
       });
+
 
       readConfirmations.forEach((messageIds, senderId) => {
         this.sendToUser(senderId, {
@@ -322,6 +343,7 @@ class WhatsAppMessageHandler {
         
         this.typingTimeouts.set(userId, timeoutId);
       }
+
 
       this.broadcastTyping(userId, conversationId, isTyping);
       
@@ -374,6 +396,7 @@ class WhatsAppMessageHandler {
 
     logger.info(`Sending ${pendingMessages.length} pending messages to user ${userId}`);
 
+
     for (const pending of pendingMessages) {
       try {
         const delivered = this.sendToUser(userId, {
@@ -405,6 +428,8 @@ class WhatsAppMessageHandler {
       }
     }
   }
+
+
 
   async validateConversation(conversationId, userId) {
     const conversation = await Conversation.findById(conversationId)
@@ -512,6 +537,7 @@ class WhatsAppMessageHandler {
       logger.debug(`${activeTypingUsers} users currently typing`);
     }
   }
+
 
   getStats() {
     return {

@@ -124,7 +124,7 @@ router.post('/analyze', auth, async (req, res) => {
         text,
         locale,
         meta: { violations: violations?.violations || [], contextSummary: { role: context?.role, walletBalance: context?.walletBalance } }
-}
+      });
     } catch (_) {}
 
     return res.json({ success: true, intent, confidence, entities, answer, citations, suggestedActions, violations: violations?.violations || [] });

@@ -6,6 +6,7 @@ const connectDB = async () => {
     const uri = process.env.MONGODB_URI;
     if (!uri) throw new Error('MONGODB_URI is not set');
 
+
     try {
       const masked = uri.replace(/\/\/([^:@/]+):([^@/]+)@/, '//$1:****@');
       logger.info(`MongoDB connecting to: ${masked}`);
@@ -23,6 +24,7 @@ const connectDB = async () => {
     const conn = await mongoose.connect(uri, options);
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
+
 
     mongoose.connection.on('error', (err) => {
       logger.error('MongoDB connection error:', err);

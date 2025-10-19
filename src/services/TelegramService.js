@@ -82,7 +82,7 @@ async function sendMessageToTelegram({ text, buttonUrl = null, buttonText = 'Ent
 
     if (!token || !chatId) {
       // Não logar token por segurança
-      
+      console.warn('[TelegramService] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID. Skipping notification.');
       return { skipped: true };
     }
 
@@ -107,7 +107,7 @@ async function sendMessageToTelegram({ text, buttonUrl = null, buttonText = 'Ent
     return { success: true };
   } catch (err) {
     try {
-      
+      console.error('[TelegramService] Failed to send message to Telegram:', err?.response?.data || err?.message || err);
     } catch (_) {}
     return { success: false, error: err?.message };
   }
@@ -142,7 +142,7 @@ async function sendSupportTicketNotification({ client = {}, reporter = {}, repor
 
     return await sendMessageToTelegram({ text: message, buttonUrl: waLink, buttonText: 'Prestar Suporte' });
   } catch (e) {
-    try {  } catch (_) {}
+    try { console.error('[TelegramService] Error building/sending support ticket notification:', e?.message || e); } catch (_) {}
     return { success: false, error: e?.message };
   }
 }

@@ -11,6 +11,7 @@ const logger = require('../utils/logger');
 const cache = require('../services/GlobalCache');
 const { cacheMiddleware, invalidationMiddleware, performanceMiddleware, invalidatePattern } = require('../middleware/cacheMiddleware');
 
+
 router.get('/sync/:conversationId', auth, async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -51,12 +52,15 @@ router.get('/sync/:conversationId', auth, async (req, res) => {
       syncedAt: new Date().toISOString(),
       messageCount: decryptedMessages.length,
       conversationId
-}
+    });
+    
   } catch (error) {
     logger.error('[SYNC] Erro no endpoint de sincronização:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
 
 router.get('/conversations/boosting/:boostingId', auth, async (req, res) => {
   try {
@@ -86,7 +90,9 @@ router.get('/conversations/boosting/:boostingId', auth, async (req, res) => {
   }
 });
 
+
 router.use(performanceMiddleware());
+
 
 router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
   try {
@@ -104,7 +110,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         success: true,
         data: cachedData,
         cached: true
-}
+      });
     }
 
     const skip = (page - 1) * limit;
@@ -127,8 +133,10 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
     const total = await Conversation.countDocuments({
       participants: userId,
       isActive: true
-}
+    });
+
     logger.info(`Found ${conversations.length} conversations for user ${userId}`);
+
 
     conversations.forEach(conv => {
       if (conv.isTemporary) {
@@ -140,9 +148,11 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           booster: conv.booster,
           metadata: conv.metadata,
           expiresAt: conv.expiresAt
-}
+        });
       }
-}
+    });
+
+
     // Enriquecimento apenas para marketplace
     const enriched = await Promise.all(conversations.map(async conv => {
       try {
@@ -332,7 +342,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
                 if (!id || seen.has(id)) return false;
                 seen.add(id);
                 return true;
-}
+              });
             } else if (Array.isArray(plain.participants)) {
               const seen = new Set();
               plain.participants = plain.participants.filter(p => {
@@ -340,7 +350,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
                 if (!id || seen.has(id)) return false;
                 seen.add(id);
                 return true;
-}
+              });
             }
           } catch {}
         } else {
@@ -363,8 +373,9 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         if (!isGroupChat && conv.participants.length >= 2) {
           otherParticipant = conv.participants.find(
             p => p && p._id && p._id.toString() !== userId.toString()
-
+          );
         }
+
 
         const userUnreadCount = (() => {
           const uc = conv.unreadCount;
@@ -374,6 +385,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           if (typeof uc === 'number') return uc;
           return 0;
         })();
+
 
         return {
           _id: conv._id,
@@ -413,7 +425,10 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       } catch (convError) {
         logger.error('Error formatting conversation:', { 
           conversationId: conv._id, 
-}
+          error: convError.message 
+        });
+        
+
         return {
           _id: conv._id,
           isGroupChat: false,
@@ -428,7 +443,8 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
           updatedAt: conv.updatedAt
         };
       }
-}
+    });
+
     const responseData = {
       conversations: formattedConversations,
       pagination: {
@@ -439,6 +455,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       }
     };
 
+
     cache.set(cacheKey, responseData, 120);
     logger.debug(`Cached conversations for user ${userId}`);
 
@@ -447,13 +464,14 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
     res.json({
       success: true,
       data: responseData
-}
+    });
   } catch (error) {
     logger.error('Error fetching conversations:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching conversations',
-}
+      error: error.message
+    });
   }
 });
 
@@ -470,25 +488,28 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ 
         success: false, 
-}
+        message: 'Conversa não encontrada' 
+      });
     }
 
     if (!conversation.isParticipant(userId)) {
       return res.status(403).json({ 
         success: false, 
-}
+        message: 'Acesso negado' 
+      });
     }
 
     return res.json({ 
       success: true, 
       conversation: conversation.toObject() 
-}
+    });
   } catch (error) {
     logger.error('[MSG:REST] Erro ao obter conversa:', error);
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao buscar conversa',
-}
+      error: error.message 
+    });
   }
 });
 
@@ -499,6 +520,7 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
     const userId = req.user._id || req.userId;
     const cacheKey = `messages:${conversationId}:page:${page}:limit:${limit}`;
 
+
     let cachedData = cache.get(cacheKey);
     if (cachedData) {
       logger.debug(`Cache hit for messages conversation ${conversationId}`);
@@ -506,17 +528,19 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
         success: true,
         data: cachedData,
         cached: true
-}
+      });
     }
 
     const skip = (page - 1) * limit;
+
 
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !conversation.isParticipant(userId)) {
       logger.warn('[MSG:REST] Access denied', { conversationId, userId });
       return res.status(403).json({
         success: false,
-}
+        message: 'Access denied'
+      });
     }
 
     const messages = await Message.find({
@@ -530,7 +554,9 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
 
     const total = await Message.countDocuments({
       conversation: conversationId
-}
+    });
+
+
     const decryptedMessages = messages.map(msg => ({
       ...msg,
       content: decryptMessage(msg.content)
@@ -546,21 +572,24 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
       }
     };
 
+
     cache.set(cacheKey, responseData, 300);
     logger.debug(`Cached messages for conversation ${conversationId}`);
 
     res.json({
       success: true,
       data: responseData
-}
+    });
   } catch (error) {
     logger.error('Error fetching messages:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching messages',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.post('/conversations/:conversationId/messages', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
@@ -574,12 +603,15 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       type,
       attachmentsCount: Array.isArray(attachments) ? attachments.length : 0,
       hasContent: !!content
-}
+    });
+
+
     const conversation = await Conversation.findById(conversationId);
     if (!conversation || !conversation.isParticipant(userId)) {
       return res.status(403).json({
         success: false,
-}
+        message: 'Access denied'
+      });
     }
 
     // VALIDAÇÃO 0: Usuário banido (prioritário)
@@ -591,7 +623,8 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
         userId,
         bannedAt: userDoc.bannedAt,
         banReason: userDoc.banReason
-}
+      });
+      
       return res.status(403).json({
         success: false,
         message: 'Usuário banido - não é possível enviar mensagens',
@@ -599,7 +632,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
         banned: true,
         bannedAt: userDoc.bannedAt,
         banReason: userDoc.banReason
-}
+      });
     }
 
     // VALIDAÇÃO 1: Chat bloqueado (isBlocked = true)
@@ -621,7 +654,8 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
         blockedReason: conversation.blockedReason,
         blockedAt: conversation.blockedAt,
         blockedBy: conversation.blockedBy
-}
+      });
+      
       return res.status(423).json({
         success: false,
         message: `${reason} - não é possível enviar mensagens`,
@@ -629,7 +663,7 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
         blocked: true,
         blockedReason: conversation.blockedReason,
         blockedAt: conversation.blockedAt
-}
+      });
     }
 
     // VALIDAÇÃO 2: Chat reportado
@@ -638,7 +672,8 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       return res.status(423).json({
         success: false,
         message: 'Chat reportado - não é possível enviar mensagens',
-}
+        error: 'CHAT_REPORTED'
+      });
     }
 
     // VALIDAÇÃO 3: Chat inativo
@@ -647,8 +682,10 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       return res.status(423).json({
         success: false,
         message: 'Chat finalizado - envie uma nova proposta para reativar',
-}
+        error: 'CHAT_FINALIZED'
+      });
     }
+
 
     if (conversation.boostingStatus === 'completed') {
 
@@ -663,7 +700,8 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
           { 'parties.client.userid': userId },
           { 'parties.booster.userid': userId }
         ]
-}
+      });
+      
       const activeProposal = await AcceptedProposal.findOne({
         conversationId: conversation._id,
         status: 'active',
@@ -671,15 +709,19 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
           { 'client.userid': userId },
           { 'booster.userid': userId }
         ]
-}
+      });
+
+
       if (!activeAgreement && !activeProposal) {
         logger.warn('[MSG:REST] Boosting completed without active agreement/proposal - blocking', { conversationId, userId });
         return res.status(423).json({
           success: false,
           message: 'Atendimento finalizado - aguardando nova proposta do booster',
-}
+          error: 'BOOSTING_COMPLETED'
+        });
       }
     }
+
 
     const encryptedContent = encryptMessage(content);
     const message = new Message({
@@ -689,14 +731,17 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       type,
       attachments,
       readBy: [{ user: userId, readAt: new Date() }]
-}
+    });
+
     await message.save();
+
 
     conversation.lastMessage = message._id;
     conversation.lastMessageAt = new Date();
     await conversation.incrementUnreadCount(userId);
 
     await message.populate('sender', 'name email avatar');
+
 
     const participantIds = conversation.participants.map(p => p.toString());
     cache.invalidateConversationCache(conversationId, participantIds);
@@ -710,7 +755,8 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
     cache.cacheMessage(conversationId, {
       ...message.toObject(),
       content: content
-}
+    });
+
     logger.info('[MSG:REST] Message saved', { conversationId, userId, messageId: message._id, type, attachmentsCount: (attachments || []).length });
     res.status(201).json({
       success: true,
@@ -718,13 +764,14 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
         ...message.toObject(),
         content: content
       }
-}
+    });
   } catch (error) {
     logger.error('[MSG:REST] Error sending message:', { message: error.message, stack: error.stack });
     res.status(500).json({
       success: false,
       message: 'Error sending message',
-}
+      error: error.message
+    });
   }
 });
 
@@ -732,6 +779,7 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
   try {
     let { participantIds, participantId, type = 'direct', metadata = {}, boostingRequestId, proposalId: proposalIdBody } = req.body;
     const userId = req.user._id || req.userId;
+
 
     let participants = Array.isArray(participantIds) ? [...participantIds] : [];
     if (participantId && !participants.includes(participantId)) {
@@ -741,6 +789,7 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
       participants.push(userId.toString());
     }
 
+
     metadata = metadata || {};
     if (boostingRequestId && !metadata.boostingId) {
       metadata.boostingId = boostingRequestId;
@@ -749,31 +798,36 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
       metadata.proposalId = proposalIdBody;
     }
 
+
     const conversation = await Conversation.findOrCreateByContext(participants, metadata);
     await conversation.populate('participants', 'name email avatar');
 
     participants.forEach(pid => {
       cache.invalidateUserCache(pid);
-}
+    });
+
     res.status(201).json({
       success: true,
       data: conversation,
       conversation
-}
+    });
   } catch (error) {
     logger.error('Error creating conversation:', error);
     res.status(500).json({
       success: false,
       message: 'Error creating conversation',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.put('/conversations/:conversationId/read', auth, invalidationMiddleware(['conversations:', 'messages:']), async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { messageIds = [] } = req.body;
     const userId = req.user._id || req.userId;
+
 
     await Message.updateMany(
       {
@@ -788,7 +842,10 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
             readAt: new Date()
           }
         }
-}
+      }
+    );
+
+
     const conversation = await Conversation.findById(conversationId);
     if (conversation && conversation.unreadCount) {
       conversation.unreadCount[userId.toString()] = 0;
@@ -800,15 +857,18 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
 
     res.json({
       success: true,
-}
+      message: 'Messages marked as read'
+    });
   } catch (error) {
     logger.error('Error marking messages as read:', error);
     res.status(500).json({
       success: false,
       message: 'Error marking messages as read',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:', 'conversations:']), async (req, res) => {
   try {
@@ -819,28 +879,34 @@ router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:',
     if (!message) {
       return res.status(404).json({
         success: false,
-}
+        message: 'Message not found'
+      });
     }
+
 
     if (message.sender.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
-}
+        message: 'Access denied'
+      });
     }
 
     await message.softDelete();
 
     res.json({
       success: true,
-}
+      message: 'Message deleted'
+    });
   } catch (error) {
     logger.error('Error deleting message:', error);
     res.status(500).json({
       success: false,
       message: 'Error deleting message',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.get('/cache/stats', auth, async (req, res) => {
   try {
@@ -852,15 +918,17 @@ router.get('/cache/stats', auth, async (req, res) => {
         cacheStats: stats,
         timestamp: new Date().toISOString()
       }
-}
+    });
   } catch (error) {
     logger.error('Error getting cache stats:', error);
     res.status(500).json({
       success: false,
       message: 'Error getting cache statistics',
-}
+      error: error.message
+    });
   }
 });
+
 
 router.delete('/cache/clear', auth, async (req, res) => {
   try {
@@ -868,13 +936,15 @@ router.delete('/cache/clear', auth, async (req, res) => {
     
     res.json({
       success: true,
-}
+      message: 'Cache cleared successfully'
+    });
   } catch (error) {
     logger.error('Error clearing cache:', error);
     res.status(500).json({
       success: false,
       message: 'Error clearing cache',
-}
+      error: error.message
+    });
   }
 });
 

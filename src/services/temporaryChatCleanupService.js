@@ -8,11 +8,14 @@ class TemporaryChatCleanupService {
     this.intervalId = null;
   }
 
+
   start() {
     if (this.isRunning) {
       logger.warn('Serviço de limpeza de chats temporários já está rodando');
       return;
     }
+
+
 
     this.cleanupExpiredChats().catch((err) => {
       logger.error('Erro na execução inicial da limpeza de chats temporários:', err);
@@ -28,6 +31,7 @@ class TemporaryChatCleanupService {
     logger.info('Serviço de limpeza de chats temporários iniciado (executa a cada hora)');
   }
 
+
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -36,6 +40,7 @@ class TemporaryChatCleanupService {
     this.isRunning = false;
     logger.info('🛑 Serviço de limpeza de chats temporários parado');
   }
+
 
   async cleanupExpiredChats() {
     try {
@@ -129,10 +134,12 @@ class TemporaryChatCleanupService {
     }
   }
 
+
   async manualCleanup() {
     logger.info('🧹 Executando limpeza manual de chats temporários...');
     return await this.cleanupExpiredChats();
   }
+
 
   async getStats() {
     try {
@@ -178,6 +185,7 @@ class TemporaryChatCleanupService {
       throw error;
     }
   }
+
 
   getStatus() {
     return {

@@ -17,6 +17,7 @@ class CacheService {
     logger.info('🧠 In-Memory Cache Service initialized');
   }
 
+
   set(key, value, ttlSeconds = null) {
     try {
       this.evictIfNecessary();
@@ -73,6 +74,7 @@ class CacheService {
     }
   }
 
+
   cacheMessage(conversationId, message) {
     try {
       const key = `messages:${conversationId}`;
@@ -112,6 +114,7 @@ class CacheService {
     }
   }
 
+
   cacheConversations(userId, conversations) {
     try {
       const key = `conversations:${userId}`;
@@ -132,6 +135,7 @@ class CacheService {
     }
   }
 
+
   cacheUserSession(userId, sessionData) {
     try {
       const key = `session:${userId}`;
@@ -151,6 +155,7 @@ class CacheService {
       return null;
     }
   }
+
 
   cacheOfflineMessage(userId, message) {
     try {
@@ -201,6 +206,7 @@ class CacheService {
     }
   }
 
+
   invalidateConversationCache(conversationId, participantIds = []) {
     try {
 
@@ -234,6 +240,7 @@ class CacheService {
       logger.error('Error invalidating user cache:', error);
     }
   }
+
 
   isExpired(key) {
     const expiresAt = this.ttlMap.get(key);
@@ -286,6 +293,7 @@ class CacheService {
     }
   }
 
+
   clearConversationCache(conversationId) {
     try {
       this.delete(`messages:${conversationId}`);
@@ -294,6 +302,7 @@ class CacheService {
       logger.error('Error clearing conversation cache:', error);
     }
   }
+
 
   getStats() {
     const hitRate = this.stats.hits + this.stats.misses > 0 
@@ -317,6 +326,7 @@ class CacheService {
     }
     return `${(totalSize / 1024 / 1024).toFixed(2)} MB`;
   }
+
 
   clear() {
     this.cache.clear();

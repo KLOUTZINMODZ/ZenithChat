@@ -51,6 +51,7 @@ class ProposalHandler {
       
       logger.info(`🔄 Proposta aceita: ${proposalId}`);
 
+
       const conversation = await Conversation.findOne({
         proposalId: proposalId
       });
@@ -60,12 +61,14 @@ class ProposalHandler {
         return;
       }
 
+
       conversation.isTemporary = false;
       conversation.status = 'accepted';
       conversation.boostingStatus = 'active';
       conversation.expiresAt = null;
       
       await conversation.save();
+
 
       const participants = conversation.participants;
       
@@ -89,6 +92,7 @@ class ProposalHandler {
           }
         });
       });
+
 
       participants.forEach(participantId => {
         const connections = this.connectionManager.getUserConnections(participantId.toString());
@@ -133,6 +137,7 @@ class ProposalHandler {
       if (conversation) {
         conversation.boostingStatus = status;
         await conversation.save();
+
 
         const participants = conversation.participants;
         

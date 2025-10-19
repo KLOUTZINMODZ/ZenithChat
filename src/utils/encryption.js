@@ -4,6 +4,7 @@ const algorithm = 'aes-256-gcm';
 const secretKey = process.env.MESSAGE_ENCRYPTION_KEY || 'default_32_character_encryption_key_change_me!!';
 const ENCRYPTION_ENABLED = String(process.env.MESSAGE_ENCRYPTION_ENABLED || 'true').toLowerCase() !== 'false';
 
+
 const key = crypto.scryptSync(secretKey, 'salt', 32);
 
 function encryptMessage(text) {
@@ -22,7 +23,7 @@ function encryptMessage(text) {
     
     return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
   } catch (error) {
-    
+    console.error('Encryption error:', error);
     return text;
   }
 }

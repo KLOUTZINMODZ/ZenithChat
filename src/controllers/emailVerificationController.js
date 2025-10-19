@@ -23,6 +23,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Email é obrigatório',
+        error: 'EMAIL_REQUIRED'
       });
     }
 
@@ -30,6 +31,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Telefone é obrigatório',
+        error: 'PHONE_REQUIRED'
       });
     }
 
@@ -40,6 +42,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: getUntrustedEmailMessage(emailLower),
+        error: 'UNTRUSTED_EMAIL_PROVIDER'
       });
     }
 
@@ -51,6 +54,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Telefone inválido. Use o formato brasileiro com DDD (10 ou 11 dígitos)',
+        error: 'INVALID_PHONE_FORMAT'
       });
     }
 
@@ -90,6 +94,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'DDD inválido. Use um código de área brasileiro válido',
+        error: 'INVALID_DDD'
       });
     }
 
@@ -99,6 +104,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Este email já está cadastrado',
+        error: 'EMAIL_ALREADY_EXISTS'
       });
     }
 
@@ -108,6 +114,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Este telefone já está cadastrado',
+        error: 'PHONE_ALREADY_EXISTS'
       });
     }
 
@@ -122,6 +129,7 @@ exports.sendVerificationCode = async (req, res) => {
       return res.status(429).json({
         success: false,
         message: 'Muitas tentativas. Aguarde 1 hora.',
+        error: 'TOO_MANY_REQUESTS'
       });
     }
 
@@ -154,6 +162,7 @@ exports.sendVerificationCode = async (req, res) => {
     logger.error('Error sending verification code:', error);
     res.status(500).json({
       success: false,
+      message: 'Erro ao enviar código de verificação'
     });
   }
 };
@@ -169,6 +178,7 @@ exports.verifyEmailCode = async (req, res) => {
     if (!email || !code) {
       return res.status(400).json({
         success: false,
+        message: 'Email e código são obrigatórios'
       });
     }
 
@@ -185,6 +195,7 @@ exports.verifyEmailCode = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Código não encontrado ou já foi usado',
+        error: 'CODE_NOT_FOUND'
       });
     }
 
@@ -193,6 +204,7 @@ exports.verifyEmailCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Código expirado. Solicite um novo.',
+        error: 'CODE_EXPIRED'
       });
     }
 
@@ -201,6 +213,7 @@ exports.verifyEmailCode = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Muitas tentativas incorretas. Solicite um novo código.',
+        error: 'TOO_MANY_ATTEMPTS'
       });
     }
 
@@ -233,6 +246,7 @@ exports.verifyEmailCode = async (req, res) => {
     logger.error('Error verifying email code:', error);
     res.status(500).json({
       success: false,
+      message: 'Erro ao verificar código'
     });
   }
 };
@@ -248,6 +262,7 @@ exports.resendVerificationCode = async (req, res) => {
     if (!email) {
       return res.status(400).json({
         success: false,
+        message: 'Email é obrigatório'
       });
     }
 
@@ -264,6 +279,7 @@ exports.resendVerificationCode = async (req, res) => {
       return res.status(429).json({
         success: false,
         message: 'Aguarde 60 segundos antes de solicitar novo código',
+        error: 'TOO_SOON'
       });
     }
 
@@ -274,6 +290,7 @@ exports.resendVerificationCode = async (req, res) => {
     logger.error('Error resending verification code:', error);
     res.status(500).json({
       success: false,
+      message: 'Erro ao reenviar código'
     });
   }
 };

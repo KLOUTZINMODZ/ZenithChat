@@ -1,9 +1,9 @@
 const axios = require('axios');
 
 const logger = {
-  info: () => {},
-  warn: () => {},
-  error: () => {}
+  info: (msg) => console.log(`[INFO] ${msg}`),
+  warn: (msg) => console.log(`[WARN] ${msg}`),
+  error: (msg) => console.log(`[ERROR] ${msg}`)
 };
 const paymentCacheService = require('./paymentCacheService');
 const MarketItem = require('../models/MarketItem');
@@ -77,6 +77,7 @@ class HighlightRetryService {
         retryCount: highlight.retryCount + 1
       });
 
+
       const apiSuccess = await this.tryMainAPI(highlightData);
       
       if (apiSuccess) {
@@ -84,6 +85,7 @@ class HighlightRetryService {
         await this.sendSuccessNotification(highlightData.userId, highlightData.externalReference);
         return true;
       }
+
 
       const fallbackSuccess = await this.tryLocalFallback(highlightData);
       
@@ -93,12 +95,14 @@ class HighlightRetryService {
         return true;
       }
 
+
       paymentCacheService.updateHighlightRetry(paymentId, false);
       return false;
 
     } catch (error) {
       logger.error('❌ Error during highlight retry:', {
         paymentId,
+        error: error.message
       });
       
       paymentCacheService.updateHighlightRetry(paymentId, false);
@@ -150,6 +154,7 @@ class HighlightRetryService {
         externalReference: highlightData.externalReference
       });
 
+
       let items = [];
       
 
@@ -179,6 +184,7 @@ class HighlightRetryService {
         return false;
       }
 
+
       const highlightUntil = new Date();
       highlightUntil.setDate(highlightUntil.getDate() + (highlightData.durationDays || 14));
 
@@ -200,6 +206,7 @@ class HighlightRetryService {
         } catch (itemError) {
           logger.warn('⚠️ Failed to highlight individual item:', {
             itemId: item._id || item.id,
+            error: itemError.message
           });
         }
       }
@@ -217,6 +224,7 @@ class HighlightRetryService {
     } catch (error) {
       logger.error('❌ Local fallback highlight failed:', {
         userId: highlightData.userId,
+        error: error.message
       });
       return false;
     }
@@ -282,6 +290,7 @@ class HighlightRetryService {
     };
   }
 }
+
 
 const highlightRetryService = new HighlightRetryService();
 

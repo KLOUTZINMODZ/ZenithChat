@@ -12,6 +12,7 @@ exports.getUserAchievements = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
+        message: 'Usuário não autenticado'
       });
     }
 
@@ -20,6 +21,7 @@ exports.getUserAchievements = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
+        message: 'Usuário não encontrado'
       });
     }
 
@@ -30,10 +32,11 @@ exports.getUserAchievements = async (req, res) => {
       data: achievements
     });
   } catch (error) {
-    
+    console.error('Error getting user achievements:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar conquistas',
+      error: error.message
     });
   }
 };
@@ -49,6 +52,7 @@ exports.updateStats = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
+        message: 'Usuário não autenticado'
       });
     }
 
@@ -57,6 +61,7 @@ exports.updateStats = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
+        message: 'Usuário não encontrado'
       });
     }
 
@@ -86,6 +91,7 @@ exports.updateStats = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: 'Erro ao processar conquistas',
+        error: result.error
       });
     }
 
@@ -99,10 +105,11 @@ exports.updateStats = async (req, res) => {
       }
     });
   } catch (error) {
-    
+    console.error('Error updating stats:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao atualizar estatísticas',
+      error: error.message
     });
   }
 };
@@ -118,6 +125,7 @@ exports.forceCheck = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
+        message: 'Usuário não autenticado'
       });
     }
 
@@ -126,6 +134,7 @@ exports.forceCheck = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
+        message: 'Usuário não encontrado'
       });
     }
 
@@ -135,6 +144,7 @@ exports.forceCheck = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: 'Erro ao verificar conquistas',
+        error: result.error
       });
     }
 
@@ -147,10 +157,11 @@ exports.forceCheck = async (req, res) => {
       }
     });
   } catch (error) {
-    
+    console.error('Error force checking achievements:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao verificar conquistas',
+      error: error.message
     });
   }
 };
@@ -167,6 +178,7 @@ exports.markAsNotified = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
+        message: 'Usuário não autenticado'
       });
     }
 
@@ -175,6 +187,7 @@ exports.markAsNotified = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
+        message: 'Usuário não encontrado'
       });
     }
 
@@ -186,6 +199,7 @@ exports.markAsNotified = async (req, res) => {
     if (!achievement) {
       return res.status(404).json({
         success: false,
+        message: 'Conquista não encontrada'
       });
     }
 
@@ -194,12 +208,14 @@ exports.markAsNotified = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      message: 'Conquista marcada como notificada'
     });
   } catch (error) {
-    
+    console.error('Error marking achievement as notified:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao marcar conquista',
+      error: error.message
     });
   }
 };
@@ -215,6 +231,7 @@ exports.getUnnotified = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
+        message: 'Usuário não autenticado'
       });
     }
 
@@ -223,6 +240,7 @@ exports.getUnnotified = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
+        message: 'Usuário não encontrado'
       });
     }
 
@@ -235,10 +253,11 @@ exports.getUnnotified = async (req, res) => {
       data: unnotified
     });
   } catch (error) {
-    
+    console.error('Error getting unnotified achievements:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar conquistas não notificadas',
+      error: error.message
     });
   }
 };
@@ -254,6 +273,7 @@ exports.getUserAchievementsById = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
+        message: 'ID do usuário é obrigatório'
       });
     }
 
@@ -262,6 +282,7 @@ exports.getUserAchievementsById = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
+        message: 'Usuário não encontrado'
       });
     }
 
@@ -273,11 +294,13 @@ exports.getUserAchievementsById = async (req, res) => {
       // Contar vendas completadas
       const totalSales = await Purchase.countDocuments({
         sellerId: userId,
+        status: 'completed'
       });
 
       // Contar compras completadas
       const totalPurchases = await Purchase.countDocuments({
         buyerId: userId,
+        status: 'completed'
       });
 
       // Buscar rating médio (reviews recebidas)
@@ -293,7 +316,13 @@ exports.getUserAchievementsById = async (req, res) => {
       const averageRating = reviews.length > 0 ? reviews[0].averageRating : 0;
       const ratingCount = reviews.length > 0 ? reviews[0].count : 0;
 
-      
+      console.log('[getUserAchievementsById] Stats calculadas:', {
+        userId,
+        totalSales,
+        totalPurchases,
+        averageRating,
+        ratingCount
+      });
 
       // Processar conquistas com os dados reais
       const stats = {
@@ -310,7 +339,7 @@ exports.getUserAchievementsById = async (req, res) => {
       await achievementService.processAchievements(user, stats);
 
     } catch (calcError) {
-      
+      console.error('Error calculating user stats:', calcError);
       // Continuar com dados salvos se o cálculo falhar
     }
 
@@ -322,10 +351,11 @@ exports.getUserAchievementsById = async (req, res) => {
       data: achievements
     });
   } catch (error) {
-    
+    console.error('Error getting user achievements by id:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar conquistas do usuário',
+      error: error.message
     });
   }
 };

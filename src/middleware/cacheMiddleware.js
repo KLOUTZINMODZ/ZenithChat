@@ -12,9 +12,11 @@ function cacheMiddleware(ttlSeconds = 300, keyGenerator = null) {
       return next();
     }
 
+
     const uid = req.userId || (req.user && (req.user._id || req.user.id));
     const defaultKey = `route:${req.originalUrl}:${uid || 'anonymous'}`;
     const cacheKey = keyGenerator ? keyGenerator(req) : defaultKey;
+
 
     const cachedData = cache.get(cacheKey);
     if (cachedData) {
@@ -25,6 +27,7 @@ function cacheMiddleware(ttlSeconds = 300, keyGenerator = null) {
         cacheKey: process.env.NODE_ENV === 'development' ? cacheKey : undefined
       });
     }
+
 
     const originalJson = res.json;
     res.json = function(data) {
@@ -52,6 +55,7 @@ function invalidationMiddleware(patterns = []) {
     if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
       return next();
     }
+
 
     const originalJson = res.json;
     res.json = function(data) {
