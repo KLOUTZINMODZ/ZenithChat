@@ -185,6 +185,10 @@ const checkBanned = require('./src/middleware/checkBanned');
 // Rotas de autenticação (não verificar banimento aqui)
 app.use('/api/auth', authRoutes);
 
+// Rotas de webhook (não requerem autenticação - validam por secret)
+app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
+app.use('/api/proposal-webhook', proposalWebhookRoutes);
+
 // MIDDLEWARE GLOBAL: Verificar banimento em TODAS as rotas protegidas
 // Aplicado após autenticação mas antes das rotas
 app.use('/api', checkBanned);
@@ -193,13 +197,11 @@ app.use('/api/messages', messageRoutes);
 
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);
 
 app.use('/api/temporary-chat', temporaryChatRoutes);
 app.use('/api/proposals', proposalRoutes);
-app.use('/api/proposal-webhook', proposalWebhookRoutes);
 app.use('/api/offline', offlineRoutes);
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
