@@ -5,7 +5,6 @@ const logger = require('../../utils/logger');
 const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
 const crypto = require('crypto');
-const { validateMessageContent, getValidationErrorMessage } = require('../../utils/messageContentValidator');
 
 const messageBuffer = new Map();
 const deliveryTimeouts = new Map();
@@ -72,34 +71,6 @@ class MessageHandler {
         logger.warn(`User ${userId} attempted to send message with ${content.length} characters (limit: 10,000). Banning user for exploit.`);
         await this.banUserForExploit(userId);
         throw new Error('Message exceeds character limit. User has been banned for exploit attempt.');
-      }
-
-      // ✅ VALIDAÇÃO DE CONTEÚDO - Bloquear telefones e URLs
-      if (content && finalType === 'text') {
-        const validation = validateMessageContent(content);
-        if (!validation.isValid) {
-          const errorMessage = getValidationErrorMessage(validation);
-          logger.warn(`🚫 Mensagem bloqueada (${validation.detectedType}): User ${userId}, Conversation ${conversationId}`);
-          
-          // Enviar erro ao cliente
-          const connections = this.connectionManager.getUserConnections(userId);
-          if (connections) {
-            connections.forEach(ws => {
-              if (ws.readyState === 1) {
-                ws.send(JSON.stringify({
-                  type: 'message:blocked',
-                  error: errorMessage,
-                  reason: validation.reason,
-                  detectedType: validation.detectedType,
-                  tempId: tempId,
-                  timestamp: new Date().toISOString()
-                }));
-              }
-            });
-          }
-          
-          throw new Error(errorMessage);
-        }
       }
 
       const [conversation] = await Promise.all([

@@ -468,7 +468,7 @@ class WhatsAppMessageHandler {
       {
         $addToSet: { deliveredTo: { user: userId, deliveredAt: new Date() } }
       }
-    );
+
   }
 
   sendToUser(userId, message) {
