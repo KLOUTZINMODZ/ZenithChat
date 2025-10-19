@@ -1,7 +1,37 @@
 const express = require('express');
 const router = express.Router();
 const HeroBanner = require('../models/HeroBanner');
-const { auth, adminAuth } = require('../middleware/auth');
+
+// Middleware para verificar chave de admin
+function requireAdminKey(req, res, next) {
+  try {
+    const normalize = (v) => (v == null ? '' : String(v).trim());
+    const headerPanel = normalize(req.headers['x-panel-proxy-secret']);
+    const headerAdmin = normalize(req.headers['x-admin-key'] || req.headers['x-api-key']);
+    const panelSecret = normalize(process.env.PANEL_PROXY_SECRET || '');
+    const adminKey = normalize(process.env.ADMIN_API_KEY || '');
+
+    // Allow trusted origin without additional headers
+    const origin = normalize(req.headers.origin || req.headers.referer || '');
+    const TRUSTED_ORIGINS = ['https://zenithpaineladm.vercel.app'];
+    if (TRUSTED_ORIGINS.some((o) => origin.startsWith(o))) {
+      return next();
+    }
+
+    // Prefer PANEL_PROXY_SECRET. If it matches, allow.
+    if (panelSecret && headerPanel && headerPanel === panelSecret) {
+      return next();
+    }
+    // Backward compatibility: accept ADMIN_API_KEY if present and matches
+    if (adminKey && headerAdmin && headerAdmin === adminKey) {
+      return next();
+    }
+
+    return res.status(403).json({ success: false, message: 'Acesso negado' });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: 'Erro na verificação de chave de admin', error: e?.message });
+  }
+}
 
 // GET - Buscar todos os banners ativos (público)
 router.get('/active', async (req, res) => {
@@ -26,7 +56,7 @@ router.get('/active', async (req, res) => {
 });
 
 // GET - Buscar todos os banners (admin)
-router.get('/all', adminAuth, async (req, res) => {
+router.get('/all', requireAdminKey, async (req, res) => {
   try {
     const banners = await HeroBanner.find()
       .sort({ order: 1 })
@@ -47,7 +77,7 @@ router.get('/all', adminAuth, async (req, res) => {
 });
 
 // GET - Buscar banner por ID (admin)
-router.get('/:id', adminAuth, async (req, res) => {
+router.get('/:id', requireAdminKey, async (req, res) => {
   try {
     const banner = await HeroBanner.findById(req.params.id);
     
@@ -72,7 +102,7 @@ router.get('/:id', adminAuth, async (req, res) => {
 });
 
 // POST - Criar novo banner (admin)
-router.post('/', adminAuth, async (req, res) => {
+router.post('/', requireAdminKey, async (req, res) => {
   try {
     const {
       order,
@@ -143,7 +173,7 @@ router.post('/', adminAuth, async (req, res) => {
 });
 
 // PUT - Atualizar banner (admin)
-router.put('/:id', adminAuth, async (req, res) => {
+router.put('/:id', requireAdminKey, async (req, res) => {
   try {
     const bannerId = req.params.id;
     const updates = req.body;
@@ -195,7 +225,7 @@ router.put('/:id', adminAuth, async (req, res) => {
 });
 
 // DELETE - Deletar banner (admin)
-router.delete('/:id', adminAuth, async (req, res) => {
+router.delete('/:id', requireAdminKey, async (req, res) => {
   try {
     const banner = await HeroBanner.findByIdAndDelete(req.params.id);
     
@@ -220,7 +250,7 @@ router.delete('/:id', adminAuth, async (req, res) => {
 });
 
 // PATCH - Alterar ordem dos banners (admin)
-router.patch('/reorder', adminAuth, async (req, res) => {
+router.patch('/reorder', requireAdminKey, async (req, res) => {
   try {
     const { banners } = req.body; // Array de { id, order }
 
