@@ -405,27 +405,8 @@ router.get('/serve/:imageId/:variant', async (req, res) => {
   }
 });
 
-// Middleware de autenticação admin (para uploads do painel)
-function adminOrAuth(req, res, next) {
-  // Verificar se tem headers de admin
-  const normalize = (v) => (v == null ? '' : String(v).trim());
-  const headerPanel = normalize(req.headers['x-panel-proxy-secret']);
-  const headerAdmin = normalize(req.headers['x-admin-key'] || req.headers['x-api-key']);
-  const panelSecret = normalize(process.env.PANEL_PROXY_SECRET || '');
-  const adminKey = normalize(process.env.ADMIN_API_KEY || '');
-
-  // Se tem credenciais de admin válidas, permite
-  if ((panelSecret && headerPanel && headerPanel === panelSecret) ||
-      (adminKey && headerAdmin && headerAdmin === adminKey)) {
-    return next();
-  }
-
-  // Caso contrário, usa autenticação JWT normal
-  return auth(req, res, next);
-}
-
 // Nova rota para upload de imagens de marketplace
-router.post('/marketplace-image', adminOrAuth, upload.single('file'), async (req, res) => {
+router.post('/marketplace-image', auth, upload.single('file'), async (req, res) => {
   console.log('[UPLOAD:MARKETPLACE] Handler start', {
     method: req.method,
     url: req.originalUrl || req.url,

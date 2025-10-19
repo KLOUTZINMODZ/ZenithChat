@@ -2,6 +2,19 @@ const express = require('express');
 const router = express.Router();
 const HeroBanner = require('../models/HeroBanner');
 
+// Middleware para aumentar limite de payload para imagens base64
+router.use(express.json({ limit: '50mb' }));
+router.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// OPTIONS handler para CORS preflight
+router.options('*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Admin-Key, X-API-Key, X-Panel-Proxy-Secret');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
+
 // Middleware para verificar chave de admin
 function requireAdminKey(req, res, next) {
   try {
