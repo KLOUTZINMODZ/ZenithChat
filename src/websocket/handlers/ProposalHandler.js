@@ -9,8 +9,9 @@ const Conversation = require('../../models/Conversation');
 class ProposalHandler {
   constructor(connectionManager) {
     this.connectionManager = connectionManager;
-    // Map: boostingId -> Set de userIds inscritos
+    // Map: boostingId -> Set<userId>
     this.boostingSubscriptions = new Map();
+    logger.info('ProposalHandler initialized with subscription system');
   }
 
   /**
@@ -22,6 +23,12 @@ class ProposalHandler {
         const message = JSON.parse(data.toString());
         
         switch (message.type) {
+          case 'proposal:subscribe':
+            this.handleSubscribe(ws, message);
+            break;
+          case 'proposal:unsubscribe':
+            this.handleUnsubscribe(ws, message);
+            break;
           case 'proposal:update_status':
             await this.handleProposalStatusUpdate(ws, message);
             break;
@@ -159,15 +166,23 @@ class ProposalHandler {
   }
 
   /**
-   * Subscribe para receber atualizações de propostas de um boosting específico
+   * Inscreve usuário para receber atualizações de um boosting
    */
-  async handleSubscribeToBoosting(ws, payload) {
+  handleSubscribe(ws, message) {
     try {
-      const { boostingId } = payload;
+      const { boostingId } = message;
       const userId = ws.userId;
 
       if (!boostingId) {
-        logger.warn('boostingId não fornecido no subscribe');
+        ws.send(JSON.stringify({
+          type: 'error',
+          error: 'boostingId is required for subscription'
+        }));
+        return;
+      }
+
+      if (!userId) {
+        logger.error('Attempt to subscribe without userId');
         return;
       }
 
@@ -176,153 +191,292 @@ class ProposalHandler {
         this.boostingSubscriptions.set(boostingId, new Set());
       }
 
-      // Adicionar usuário ao set
-      this.boostingSubscriptions.get(boostingId).add(userId);
+      // Adicionar userId ao set
+      this.boostingSubscriptions.get(boostingId).add(userId.toString());
 
-      logger.info(`✅ User ${userId} subscribed to boosting ${boostingId} proposals`);
+      logger.info(`User ${userId} subscribed to boosting ${boostingId}. Total subscribers: ${this.boostingSubscriptions.get(boostingId).size}`);
 
       // Confirmar inscrição
-      if (ws.readyState === 1) {
-        ws.send(JSON.stringify({
-          type: 'proposal:subscribed',
-          data: {
-            boostingId,
-            message: 'Inscrito para receber atualizações de propostas'
-          }
-        }));
-      }
+      ws.send(JSON.stringify({
+        type: 'proposal:subscribed',
+        boostingId,
+        timestamp: new Date().toISOString()
+      }));
+
     } catch (error) {
-      logger.error('Erro ao fazer subscribe em boosting:', error);
+      logger.error('Error in handleSubscribe:', error);
     }
   }
 
   /**
-   * Unsubscribe de atualizações de propostas
+   * Cancela inscrição de usuário
    */
-  async handleUnsubscribeFromBoosting(ws, payload) {
+  handleUnsubscribe(ws, message) {
     try {
-      const { boostingId } = payload;
+      const { boostingId } = message;
       const userId = ws.userId;
 
-      if (!boostingId) {
+      if (!boostingId || !userId) return;
+
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      if (subscribers) {
+        subscribers.delete(userId.toString());
+
+        logger.info(`User ${userId} unsubscribed from boosting ${boostingId}`);
+
+        // Remover set vazio
+        if (subscribers.size === 0) {
+          this.boostingSubscriptions.delete(boostingId);
+          logger.info(`No more subscribers for boosting ${boostingId}, removed from map`);
+        }
+      }
+
+      // Confirmar cancelamento
+      ws.send(JSON.stringify({
+        type: 'proposal:unsubscribed',
+        boostingId,
+        timestamp: new Date().toISOString()
+      }));
+
+    } catch (error) {
+      logger.error('Error in handleUnsubscribe:', error);
+    }
+  }
+
+  /**
+   * Broadcast: Nova proposta criada
+   */
+  broadcastNewProposal(boostingId, proposal) {
+    try {
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      
+      if (!subscribers || subscribers.size === 0) {
+        logger.debug(`No subscribers for boosting ${boostingId}, skipping broadcast`);
         return;
       }
 
-      if (this.boostingSubscriptions.has(boostingId)) {
-        this.boostingSubscriptions.get(boostingId).delete(userId);
+      const message = JSON.stringify({
+        type: 'proposal:new',
+        boostingId,
+        data: { 
+          proposal: proposal.toObject ? proposal.toObject() : proposal
+        },
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info(`Broadcasting new proposal to ${subscribers.size} subscribers of boosting ${boostingId}`);
+
+      let broadcastCount = 0;
+      subscribers.forEach(userId => {
+        const connections = this.connectionManager.getUserConnections(userId);
+        connections.forEach(conn => {
+          if (conn.readyState === 1) {
+            try {
+              conn.send(message);
+              broadcastCount++;
+            } catch (error) {
+              logger.error(`Error broadcasting to user ${userId}:`, error);
+            }
+          }
+        });
+      });
+
+      logger.info(`Successfully broadcasted new proposal to ${broadcastCount} connections`);
+
+    } catch (error) {
+      logger.error('Error in broadcastNewProposal:', error);
+    }
+  }
+
+  /**
+   * Broadcast: Proposta atualizada
+   */
+  broadcastProposalUpdated(boostingId, proposal) {
+    try {
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      if (!subscribers || subscribers.size === 0) return;
+
+      const message = JSON.stringify({
+        type: 'proposal:updated',
+        boostingId,
+        data: { 
+          proposal: proposal.toObject ? proposal.toObject() : proposal
+        },
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info(`Broadcasting updated proposal to ${subscribers.size} subscribers`);
+
+      subscribers.forEach(userId => {
+        const connections = this.connectionManager.getUserConnections(userId);
+        connections.forEach(conn => {
+          if (conn.readyState === 1) {
+            try {
+              conn.send(message);
+            } catch (error) {
+              logger.error(`Error broadcasting update:`, error);
+            }
+          }
+        });
+      });
+
+    } catch (error) {
+      logger.error('Error in broadcastProposalUpdated:', error);
+    }
+  }
+
+  /**
+   * Broadcast: Proposta rejeitada
+   */
+  broadcastProposalRejected(boostingId, proposalId) {
+    try {
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      if (!subscribers || subscribers.size === 0) return;
+
+      const message = JSON.stringify({
+        type: 'proposal:rejected',
+        boostingId,
+        data: { proposalId },
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info(`Broadcasting proposal rejected to ${subscribers.size} subscribers`);
+
+      subscribers.forEach(userId => {
+        const connections = this.connectionManager.getUserConnections(userId);
+        connections.forEach(conn => {
+          if (conn.readyState === 1) {
+            try {
+              conn.send(message);
+            } catch (error) {
+              logger.error(`Error broadcasting rejection:`, error);
+            }
+          }
+        });
+      });
+
+    } catch (error) {
+      logger.error('Error in broadcastProposalRejected:', error);
+    }
+  }
+
+  /**
+   * Broadcast: Proposta cancelada
+   */
+  broadcastProposalCancelled(boostingId, proposalId) {
+    try {
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      if (!subscribers || subscribers.size === 0) return;
+
+      const message = JSON.stringify({
+        type: 'proposal:cancelled',
+        boostingId,
+        data: { proposalId },
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info(`Broadcasting proposal cancelled to ${subscribers.size} subscribers`);
+
+      subscribers.forEach(userId => {
+        const connections = this.connectionManager.getUserConnections(userId);
+        connections.forEach(conn => {
+          if (conn.readyState === 1) {
+            try {
+              conn.send(message);
+            } catch (error) {
+              logger.error(`Error broadcasting cancellation:`, error);
+            }
+          }
+        });
+      });
+
+    } catch (error) {
+      logger.error('Error in broadcastProposalCancelled:', error);
+    }
+  }
+
+  /**
+   * Broadcast: Pedido de boosting cancelado
+   */
+  broadcastBoostingCancelled(boostingId) {
+    try {
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      if (!subscribers || subscribers.size === 0) {
+        logger.debug(`No subscribers for cancelled boosting ${boostingId}`);
+        return;
+      }
+
+      const message = JSON.stringify({
+        type: 'boosting:cancelled',
+        boostingId,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info(`Broadcasting boosting cancelled to ${subscribers.size} subscribers`);
+
+      subscribers.forEach(userId => {
+        const connections = this.connectionManager.getUserConnections(userId);
+        connections.forEach(conn => {
+          if (conn.readyState === 1) {
+            try {
+              conn.send(message);
+            } catch (error) {
+              logger.error(`Error broadcasting boosting cancellation:`, error);
+            }
+          }
+        });
+      });
+
+      // Limpar inscrições
+      this.boostingSubscriptions.delete(boostingId);
+      logger.info(`Cleaned up subscriptions for cancelled boosting ${boostingId}`);
+
+    } catch (error) {
+      logger.error('Error in broadcastBoostingCancelled:', error);
+    }
+  }
+
+  /**
+   * Obtém estatísticas
+   */
+  getStats() {
+    const stats = {
+      totalBoostings: this.boostingSubscriptions.size,
+      boostings: []
+    };
+
+    this.boostingSubscriptions.forEach((subscribers, boostingId) => {
+      stats.boostings.push({
+        boostingId,
+        subscribers: subscribers.size
+      });
+    });
+
+    return stats;
+  }
+
+  /**
+   * Quando usuário se desconecta
+   */
+  onUserDisconnect(userId) {
+    logger.info(`ProposalHandler: User ${userId} disconnecting, cleaning up subscriptions`);
+    
+    // Remover usuário de todas as inscrições
+    let removedCount = 0;
+    this.boostingSubscriptions.forEach((subscribers, boostingId) => {
+      if (subscribers.has(userId.toString())) {
+        subscribers.delete(userId.toString());
+        removedCount++;
         
-        // Limpar set vazio
-        if (this.boostingSubscriptions.get(boostingId).size === 0) {
+        // Remover set vazio
+        if (subscribers.size === 0) {
           this.boostingSubscriptions.delete(boostingId);
         }
       }
+    });
 
-      logger.info(`❌ User ${userId} unsubscribed from boosting ${boostingId} proposals`);
-
-      if (ws.readyState === 1) {
-        ws.send(JSON.stringify({
-          type: 'proposal:unsubscribed',
-          data: {
-            boostingId
-          }
-        }));
-      }
-    } catch (error) {
-      logger.error('Erro ao fazer unsubscribe de boosting:', error);
-    }
-  }
-
-  /**
-   * Notifica todos os usuários inscritos sobre uma nova proposta
-   */
-  notifyNewProposal(boostingId, proposalData) {
-    try {
-      if (!this.boostingSubscriptions.has(boostingId)) {
-        logger.info(`Nenhum usuário inscrito no boosting ${boostingId}`);
-        return;
-      }
-
-      const subscribers = this.boostingSubscriptions.get(boostingId);
-      let notifiedCount = 0;
-
-      subscribers.forEach(userId => {
-        const connections = this.connectionManager.getUserConnections(userId);
-        
-        connections.forEach(ws => {
-          if (ws.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: 'proposal:new',
-              data: {
-                boostingId,
-                proposal: proposalData,
-                timestamp: new Date().toISOString()
-              }
-            }));
-            notifiedCount++;
-          }
-        });
-      });
-
-      logger.info(`📢 Nova proposta notificada para ${notifiedCount} conexões no boosting ${boostingId}`);
-    } catch (error) {
-      logger.error('Erro ao notificar nova proposta:', error);
-    }
-  }
-
-  /**
-   * Notifica sobre atualização de uma proposta existente
-   */
-  notifyProposalUpdate(boostingId, proposalData) {
-    try {
-      if (!this.boostingSubscriptions.has(boostingId)) {
-        return;
-      }
-
-      const subscribers = this.boostingSubscriptions.get(boostingId);
-      
-      subscribers.forEach(userId => {
-        const connections = this.connectionManager.getUserConnections(userId);
-        
-        connections.forEach(ws => {
-          if (ws.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: 'proposal:updated',
-              data: {
-                boostingId,
-                proposal: proposalData,
-                timestamp: new Date().toISOString()
-              }
-            }));
-          }
-        });
-      });
-
-      logger.info(`🔄 Proposta atualizada notificada para boosting ${boostingId}`);
-    } catch (error) {
-      logger.error('Erro ao notificar atualização de proposta:', error);
-    }
-  }
-
-  /**
-   * Quando usuário se desconecta, remover de todas as inscrições
-   */
-  onUserDisconnect(userId) {
-    try {
-      // Remover usuário de todas as inscrições
-      this.boostingSubscriptions.forEach((subscribers, boostingId) => {
-        if (subscribers.has(userId)) {
-          subscribers.delete(userId);
-          
-          // Limpar set vazio
-          if (subscribers.size === 0) {
-            this.boostingSubscriptions.delete(boostingId);
-          }
-        }
-      });
-
-      logger.info(`ProposalHandler: User ${userId} disconnected and unsubscribed from all boostings`);
-    } catch (error) {
-      logger.error('Erro ao desconectar usuário do ProposalHandler:', error);
+    if (removedCount > 0) {
+      logger.info(`Removed user ${userId} from ${removedCount} boosting subscriptions`);
     }
   }
 }

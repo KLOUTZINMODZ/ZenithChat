@@ -123,6 +123,7 @@ class WebSocketServer {
           this.notificationHandler.handleUserDisconnected(userId);
           this.conversationHandler.onUserDisconnect(userId);
           this.presenceHandler.onUserDisconnected(userId);
+          this.proposalHandler.onUserDisconnect(userId); // ✅ Cleanup de inscrições
         } catch (error) {
           logger.error('Error handling user disconnection:', error);
         }
@@ -226,14 +227,6 @@ class WebSocketServer {
         this.presenceHandler.handleQuery(ws, payload);
         break;
 
-      // Proposal events
-      case 'proposal:subscribe':
-        await this.proposalHandler.handleSubscribeToBoosting(ws, payload);
-        break;
-
-      case 'proposal:unsubscribe':
-        await this.proposalHandler.handleUnsubscribeFromBoosting(ws, payload);
-        break;
 
       case 'proposal:accepted':
         await this.proposalHandler.handleProposalAccepted(ws, payload);
@@ -454,13 +447,6 @@ class WebSocketServer {
     
     // Remover todas as conexões do gerenciador
     this.connectionManager.removeUser(userId);
-  }
-
-  /**
-   * Getter para acessar ProposalHandler externamente
-   */
-  getProposalHandler() {
-    return this.proposalHandler;
   }
 
   close() {

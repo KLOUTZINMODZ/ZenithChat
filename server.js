@@ -19,7 +19,6 @@ const agreementRoutes = require('./src/routes/agreementRoutes');
 const compatibilityRoutes = require('./src/routes/compatibilityRoutes');
 const temporaryChatRoutes = require('./src/routes/temporaryChatRoutes');
 const proposalRoutes = require('./src/routes/proposalRoutes');
-const proposalWebhookRoutes = require('./src/routes/proposalWebhookRoutes');
 const offlineRoutes = require('./src/routes/offlineRoutes');
 const cache = require('./src/services/GlobalCache');
 const walletRoutes = require('./src/routes/walletRoutes');
@@ -185,10 +184,6 @@ const checkBanned = require('./src/middleware/checkBanned');
 // Rotas de autenticação (não verificar banimento aqui)
 app.use('/api/auth', authRoutes);
 
-// Rotas de webhook (não requerem autenticação - validam por secret)
-app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
-app.use('/api/proposal-webhook', proposalWebhookRoutes);
-
 // MIDDLEWARE GLOBAL: Verificar banimento em TODAS as rotas protegidas
 // Aplicado após autenticação mas antes das rotas
 app.use('/api', checkBanned);
@@ -197,6 +192,7 @@ app.use('/api/messages', messageRoutes);
 
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);
 
@@ -286,6 +282,10 @@ app.locals.notificationService = wsServer.notificationService;
 
 
 app.set('webSocketServer', wsServer);
+
+// ✅ Registrar ProposalHandler para broadcasts em tempo real
+app.set('proposalHandler', wsServer.proposalHandler);
+logger.info('ProposalHandler registered in app');
 
 // Inicializar BanService com WebSocket Server
 const banService = require('./src/services/BanService');

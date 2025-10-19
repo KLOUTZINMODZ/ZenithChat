@@ -595,6 +595,22 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         }
         
         console.log('[Proposal Accept] All WebSocket events emitted successfully');
+        
+        // ✅ BROADCAST VIA PROPOSAL HANDLER - Notifica todos os subscribers
+        try {
+          const proposalHandler = req.app.get('proposalHandler');
+          if (proposalHandler && boostingId) {
+            proposalHandler.broadcastProposalAccepted(
+              boostingId,
+              actualProposalId,
+              conversationId
+            );
+            console.log(`✅ [Proposal Accept] Broadcasted to all subscribers of boosting ${boostingId}`);
+          }
+        } catch (broadcastError) {
+          console.error('❌ [Proposal Accept] Error broadcasting via ProposalHandler:', broadcastError);
+        }
+        
       } else {
         console.warn('⚠️ [Proposal Accept] WebSocket server not available for real-time updates');
       }
