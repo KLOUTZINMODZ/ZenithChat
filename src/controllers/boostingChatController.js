@@ -319,7 +319,7 @@ class BoostingChatController {
                   }
                 });
                 notificationSuccess = true;
-                ');
+
               } catch (putError) {
                 if (putError.response?.status === 405) {
                   // Tentativa 3: DELETE com body (alguns endpoints usam isso)
@@ -335,7 +335,7 @@ class BoostingChatController {
                       }
                     });
                     notificationSuccess = true;
-                    ');
+
                   } catch (deleteError) {
                     throw deleteError; // Se DELETE também falhou, lança erro
                   }
@@ -356,7 +356,7 @@ class BoostingChatController {
         }
       } catch (apiError) {
         // Log detalhado do erro, mas não bloqueia o cancelamento
-        :', {
+
           status: apiError.response?.status,
           statusText: apiError.response?.statusText,
           message: apiError.message,
@@ -506,7 +506,6 @@ class BoostingChatController {
       const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
       const formattedBoosterReceives = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boosterReceives);
 
-      ,
         boosterId: boosterUserId?.toString(),
         price,
         feeAmount,
@@ -595,13 +594,11 @@ class BoostingChatController {
               originalEscrowId: existingEscrow._id.toString()
             }
           }], { session });
-          
-          ');
+
         } else {
           // ⚠️ Cliente NÃO FOI DEBITADO no escrow (boostings antigos ou fluxo legado)
           // Debitar agora
-          ');
-          
+
           const clientUser = await User.findById(clientUserId).session(session);
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           
@@ -639,7 +636,6 @@ class BoostingChatController {
             }
           }], { session });
 
-          :', {
             clientId: clientUserId?.toString(),
             amount: price,
             balanceBefore: clientBalanceBefore,
@@ -678,7 +674,6 @@ class BoostingChatController {
           }
         }], { session });
 
-        ,
           amount: boosterReceives,
           balanceBefore: boosterBalanceBefore,
           balanceAfter: boosterBalanceAfter
@@ -758,7 +753,6 @@ class BoostingChatController {
               }
             }], { session });
 
-            ,
               amount: feeAmount,
               balanceBefore: mediatorBalanceBefore,
               balanceAfter: mediatorBalanceAfter
@@ -978,14 +972,11 @@ class BoostingChatController {
         return res.status(404).json({ success: false, message: 'Conversa não encontrada' });
       }
 
-      
-      :', conversation.participants);
       : p.toString();
         `);
         return id;
       }));
-      ');
-      
+
       const isParticipant = conversation.isParticipant(userId);
       
       
@@ -1144,7 +1135,7 @@ class BoostingChatController {
             });
             clientApi = resp?.data?.user || null;
           } catch (e) {
-            :', e?.message || e);
+
           }
         }
 

@@ -186,8 +186,6 @@ module.exports = {
       return res.status(500).json({ success: false, message: 'Erro interno ao responder pergunta' });
     }
   }
-  ,
-
   // POST /api/qa/questions/:id/report
   async reportQuestion(req, res) {
     try {

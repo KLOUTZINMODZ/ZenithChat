@@ -387,8 +387,6 @@ class TemporaryChatController {
       const boosterData = conversation.metadata.get('boosterData');
 
       const finalProposalId = proposalId || extractValidObjectId(conversation.proposal);
-      
-      ,
         finalProposalId
       });
 
