@@ -1,9 +1,10 @@
 const axios = require('axios');
 
 const logger = {
-  info: (msg) => ,
-  warn: (msg) => ,
-  error: (msg) => };
+  info: (msg) => console.log(`[INFO] ${msg}`),
+  warn: (msg) => console.log(`[WARN] ${msg}`),
+  error: (msg) => console.log(`[ERROR] ${msg}`)
+};
 const paymentCacheService = require('./paymentCacheService');
 const MarketItem = require('../models/MarketItem');
 
@@ -76,6 +77,7 @@ class HighlightRetryService {
         retryCount: highlight.retryCount + 1
       });
 
+
       const apiSuccess = await this.tryMainAPI(highlightData);
       
       if (apiSuccess) {
@@ -84,6 +86,7 @@ class HighlightRetryService {
         return true;
       }
 
+
       const fallbackSuccess = await this.tryLocalFallback(highlightData);
       
       if (fallbackSuccess) {
@@ -91,6 +94,7 @@ class HighlightRetryService {
         await this.sendSuccessNotification(highlightData.userId, highlightData.externalReference);
         return true;
       }
+
 
       paymentCacheService.updateHighlightRetry(paymentId, false);
       return false;
@@ -150,6 +154,7 @@ class HighlightRetryService {
         externalReference: highlightData.externalReference
       });
 
+
       let items = [];
       
 
@@ -178,6 +183,7 @@ class HighlightRetryService {
         logger.warn('⚠️ No items found for local fallback highlight');
         return false;
       }
+
 
       const highlightUntil = new Date();
       highlightUntil.setDate(highlightUntil.getDate() + (highlightData.durationDays || 14));
@@ -284,6 +290,7 @@ class HighlightRetryService {
     };
   }
 }
+
 
 const highlightRetryService = new HighlightRetryService();
 

@@ -73,6 +73,7 @@ class MessageHandler {
         throw new Error('Message exceeds character limit. User has been banned for exploit attempt.');
       }
 
+
       const [conversation] = await Promise.all([
         Conversation.findById(conversationId).populate('participants', 'name email'),
       ]);
@@ -88,6 +89,7 @@ class MessageHandler {
       if (!isParticipant) {
         throw new Error('User is not a participant in this conversation');
       }
+
 
       const canReceive = typeof conversation.canReceiveMessages === 'function'
         ? conversation.canReceiveMessages()
@@ -114,6 +116,7 @@ class MessageHandler {
         readBy: [{ user: userId, readAt: now }]
       });
 
+
       conversation.lastMessage = message._id;
       conversation.lastMessageAt = now;
       conversation.unreadCount = conversation.unreadCount || {};
@@ -125,14 +128,17 @@ class MessageHandler {
         }
       });
 
+
       await Promise.all([
         message.save(),
         conversation.save()
       ]);
 
+
       if (this.conversationHandler) {
         await this.conversationHandler.onNewMessage(conversationId);
       }
+
 
       await message.populate('sender', 'name email avatar');
 
@@ -140,6 +146,7 @@ class MessageHandler {
         ...message.toObject(),
         content: content
       };
+
 
       const broadcastMessage = {
         type: 'message:new',
@@ -150,6 +157,7 @@ class MessageHandler {
         timestamp: now.toISOString()
       };
 
+
       this.sendToUser(userId, {
         type: 'message:sent',
         data: {
@@ -158,6 +166,7 @@ class MessageHandler {
         },
         timestamp: now.toISOString()
       });
+
 
       conversation.participants.forEach(participant => {
         if (participant._id.toString() !== userId) {
@@ -174,11 +183,13 @@ class MessageHandler {
         logger.warn('sendCompactUpdateToParticipants failed from MessageHandler', { error: e?.message });
       }
 
+
       setImmediate(() => {
         const participantIds = conversation.participants.map(p => p._id.toString());
         cache.invalidateConversationCache(conversationId, participantIds);
         cache.cacheMessage(conversationId, messageToSend);
       });
+
 
     } catch (error) {
       logger.error('Error handling send message:', error);
@@ -225,6 +236,7 @@ class MessageHandler {
     try {
       const { messageIds, conversationId } = payload;
 
+
       await Message.updateMany(
         {
           _id: { $in: messageIds },
@@ -241,11 +253,13 @@ class MessageHandler {
         }
       );
 
+
       const conversation = await Conversation.findById(conversationId);
       if (conversation && conversation.unreadCount) {
         conversation.unreadCount[userId] = 0;
         await conversation.save();
       }
+
 
       const readReceipt = {
         type: 'message:read',
@@ -265,6 +279,7 @@ class MessageHandler {
         });
       }
 
+
     } catch (error) {
       logger.error('Error marking messages as read:', error);
       this.sendError(userId, error.message);
@@ -275,18 +290,22 @@ class MessageHandler {
     try {
       const { conversationId } = payload;
 
+
       this.connectionManager.setActiveConversation(userId, conversationId);
+
 
       await this.handleMarkAsRead(userId, { 
         conversationId,
         messageIds: await this.getUnreadMessageIds(userId, conversationId)
       });
 
+
       this.sendToUser(userId, {
         type: 'conversation:opened',
         data: { conversationId },
         timestamp: new Date().toISOString()
       });
+
 
     } catch (error) {
       logger.error('Error opening conversation:', error);
@@ -298,13 +317,16 @@ class MessageHandler {
     try {
       const { conversationId } = payload;
 
+
       this.connectionManager.removeActiveConversation(userId);
+
 
       this.sendToUser(userId, {
         type: 'conversation:closed',
         data: { conversationId },
         timestamp: new Date().toISOString()
       });
+
 
     } catch (error) {
       logger.error('Error closing conversation:', error);
@@ -333,6 +355,7 @@ class MessageHandler {
       const { conversationId, limit = 50, before = null } = payload;
       const cacheKey = `messages:${conversationId}:history:${limit}:${before || 'latest'}`;
 
+
       let cachedMessages = cache.get(cacheKey);
       if (cachedMessages) {
         this.sendToUser(userId, {
@@ -347,11 +370,13 @@ class MessageHandler {
         return;
       }
 
+
       const conversation = await Conversation.findById(conversationId).select('_id participants').lean();
       const partIds = Array.isArray(conversation?.participants) ? conversation.participants.map(p => p?.toString?.()) : [];
       if (!conversation || !partIds.includes(userId?.toString?.())) {
         throw new Error('Conversation not found or access denied');
       }
+
 
       const query = { conversation: conversationId };
       if (before) {
@@ -364,10 +389,12 @@ class MessageHandler {
         .limit(limit)
         .lean();
 
+
       const decryptedMessages = messages.map(msg => ({
         ...msg,
         content: decryptMessage(msg.content)
       }));
+
 
       cache.set(cacheKey, decryptedMessages, 600);
 
@@ -390,6 +417,7 @@ class MessageHandler {
     try {
       logger.info(`🔄 CACHE: Sending pending messages for user ${userId}`);
 
+
       const offlineMessages = cache.getOfflineMessages(userId);
       if (offlineMessages.length > 0) {
         logger.info(`📤 CACHE: Found ${offlineMessages.length} cached offline messages for user ${userId}`);
@@ -405,6 +433,7 @@ class MessageHandler {
             messagesByConversation.get(convId).push(msg);
           }
         });
+
 
         for (const [conversationId, messages] of messagesByConversation) {
           this.sendToUser(userId, {
@@ -425,6 +454,7 @@ class MessageHandler {
           logger.info(`🧹 CACHE: Cleared offline messages cache for user ${userId}`);
         }, 30000);
       }
+
 
       // Additional server-side replay using indexed strategy (limited) to avoid dynamic map key queries
       if (this.pendingStrategy === 'indexed') {
@@ -556,6 +586,10 @@ class MessageHandler {
     });
   }
 
+
+
+
+
   /**
    * Send message with WhatsApp-like delivery confirmation
    * Stores message in buffer until delivery is confirmed
@@ -564,6 +598,7 @@ class MessageHandler {
     const messageId = message._id || crypto.randomUUID();
     const timestamp = Date.now();
 
+
     messageBuffer.set(messageId, {
       message,
       recipients: recipients.filter(r => r !== userId),
@@ -571,6 +606,7 @@ class MessageHandler {
       timestamp,
       senderId: userId
     });
+
 
     await this.attemptDelivery(messageId);
 
@@ -588,6 +624,7 @@ class MessageHandler {
     const onlineRecipients = [];
     const offlineRecipients = [];
 
+
     recipients.forEach(recipientId => {
       if (this.connectionManager.isUserOnline(recipientId)) {
         onlineRecipients.push(recipientId);
@@ -595,6 +632,7 @@ class MessageHandler {
         offlineRecipients.push(recipientId);
       }
     });
+
 
     const deliveryPromises = onlineRecipients.map(recipientId => {
       return new Promise((resolve) => {
@@ -610,9 +648,11 @@ class MessageHandler {
 
         this.sendToUser(recipientId, deliveryMessage);
 
+
         const ackTimeout = setTimeout(() => {
           resolve({ recipientId, delivered: false });
         }, 5000);
+
 
         deliveryTimeouts.set(`${messageId}_${recipientId}`, ackTimeout);
         resolve({ recipientId, delivered: true });
@@ -622,6 +662,7 @@ class MessageHandler {
     const deliveryResults = await Promise.all(deliveryPromises);
     const failedDeliveries = deliveryResults.filter(r => !r.delivered);
 
+
     if (failedDeliveries.length > 0 || offlineRecipients.length > 0) {
       const allFailedRecipients = [
         ...failedDeliveries.map(f => f.recipientId),
@@ -630,6 +671,7 @@ class MessageHandler {
 
       bufferData.recipients = allFailedRecipients;
       bufferData.attempts += 1;
+
 
       if (bufferData.attempts < this.maxRetryAttempts) {
         const retryDelay = Math.min(
@@ -652,6 +694,7 @@ class MessageHandler {
       this.handleDeliverySuccess(messageId);
     }
 
+
     this.sendDeliveryStatus(senderId, messageId, onlineRecipients, offlineRecipients.concat(failedDeliveries.map(f => f.recipientId)));
   }
 
@@ -662,6 +705,7 @@ class MessageHandler {
     const bufferData = messageBuffer.get(messageId);
     if (!bufferData) return;
 
+
     const timeoutKey = `${messageId}_${recipientId}`;
     const timeout = deliveryTimeouts.get(timeoutKey);
     if (timeout) {
@@ -669,7 +713,9 @@ class MessageHandler {
       deliveryTimeouts.delete(timeoutKey);
     }
 
+
     bufferData.recipients = bufferData.recipients.filter(r => r !== recipientId);
+
 
     this.sendToUser(bufferData.senderId, {
       type: 'message:delivered',
@@ -679,6 +725,7 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       }
     });
+
 
     if (bufferData.recipients.length === 0) {
       this.handleDeliverySuccess(messageId);
@@ -779,6 +826,7 @@ class MessageHandler {
         return;
       }
 
+
       const wsMessage = {
         type: 'message:new',
         data: {
@@ -791,6 +839,7 @@ class MessageHandler {
         messageId
       };
 
+
       recipients.forEach((recipientId) => {
         cache.cacheOfflineMessage(recipientId, {
           ...wsMessage,
@@ -798,6 +847,7 @@ class MessageHandler {
           cached_at: new Date().toISOString()
         });
       });
+
 
       try {
         await Message.findByIdAndUpdate(
@@ -827,6 +877,7 @@ class MessageHandler {
     const bufferData = messageBuffer.get(messageId);
     if (!bufferData) return;
 
+
     this.sendToUser(bufferData.senderId, {
       type: 'message:delivery_failed',
       data: {
@@ -835,6 +886,7 @@ class MessageHandler {
         timestamp: new Date().toISOString()
       }
     });
+
 
     this.storePendingMessage(messageId, failedRecipients);
   }
@@ -868,6 +920,7 @@ class MessageHandler {
 
       await User.findByIdAndUpdate(userId, { banned: true });
 
+
       const BanRecord = require('../../models/BanRecord');
       
       const banRecord = new BanRecord({
@@ -895,6 +948,7 @@ class MessageHandler {
       await banRecord.save();
 
       logger.warn(`User ${userId} banned for exploit attempt: message length exceeded 10,000 characters`);
+
 
       if (this.connectionManager.isUserOnline(userId)) {
         const connections = this.connectionManager.getUserConnections(userId);

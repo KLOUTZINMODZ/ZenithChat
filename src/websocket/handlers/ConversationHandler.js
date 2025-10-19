@@ -252,10 +252,12 @@ class ConversationHandler {
         this.userLastCheck.set(userId, parseInt(lastCheck));
       }
 
+
       this.activePolling.set(userId, {
         socketId: socket.id,
         startTime: Date.now()
       });
+
 
       await this.sendConversationsUpdate(userId);
 
@@ -268,6 +270,7 @@ class ConversationHandler {
       logger.error('Error starting conversation polling:', error);
       socket.emit('conversations:error', {
         message: 'Erro ao iniciar polling de conversas',
+        error: error.message
       });
     }
   }
@@ -311,6 +314,7 @@ class ConversationHandler {
       logger.error('Error getting conversations:', error);
       socket.emit('conversations:error', {
         message: 'Erro ao buscar conversas',
+        error: error.message
       });
     }
   }
@@ -339,6 +343,7 @@ class ConversationHandler {
       })
       .sort({ updatedAt: -1 })
       .lean();
+
 
       const conversationsWithUnread = await Promise.all(
         conversations.map(async (conv) => {
@@ -392,6 +397,7 @@ class ConversationHandler {
         })
       );
 
+
       const hasUpdates = conversationsWithUnread.some(c => c.hasUpdate);
 
       return {
@@ -418,6 +424,7 @@ class ConversationHandler {
       const lastCheck = this.userLastCheck.get(userId);
       const conversationsData = await this.getConversationsData(userId, lastCheck);
 
+
       if (conversationsData.hasUpdates) {
         this.sendToUser(userId, {
           type: 'conversations:update',
@@ -426,6 +433,7 @@ class ConversationHandler {
             timestamp: conversationsData.timestamp
           }
         });
+
 
         this.userLastCheck.set(userId, conversationsData.timestamp);
 
@@ -541,6 +549,7 @@ class ConversationHandler {
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) return;
 
+
       for (const participant of conversation.participants) {
         const userId = participant.user?.toString() || participant.toString();
         // If compact updates are enabled, we prefer letting MessageHandler emit them.
@@ -578,7 +587,7 @@ class ConversationHandler {
 
     await Promise.all(
       activeUsers.map(userId => this.sendConversationsUpdate(userId))
-
+    );
   }
 }
 

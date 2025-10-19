@@ -80,7 +80,7 @@ class BoostingChatController {
         conversation: conversation.toObject() 
       });
     } catch (error) {
-      
+      console.error('[BoostingChatController] Erro ao obter conversa:', error);
       return res.status(500).json({ 
         success: false, 
         message: 'Erro ao buscar conversa',
@@ -98,13 +98,16 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
+
       let agreement = await Agreement.findOne({ conversationId, status: { $in: ['active', 'completed'] } })
         .sort({ createdAt: -1 });
+
 
       let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
       
@@ -114,9 +117,10 @@ class BoostingChatController {
           const AgreementMigration = require('../middleware/agreementMigrationMiddleware');
           agreement = await AgreementMigration.migrateProposalToAgreement(acceptedProposal);
         } catch (migrationError) {
-          
+          console.warn('Falha na migração automática:', migrationError);
         }
       }
+
 
       if (!acceptedProposal && !agreement) {
         return res.status(404).json({ 
@@ -124,6 +128,7 @@ class BoostingChatController {
           message: 'Nenhuma proposta aceita encontrada para esta conversa' 
         });
       }
+
 
       const response = {
         success: true,
@@ -149,6 +154,7 @@ class BoostingChatController {
         }
       };
 
+
       if (agreement) {
         response.agreement = {
           agreementId: agreement.agreementId,
@@ -161,10 +167,11 @@ class BoostingChatController {
 
       res.json(response);
     } catch (error) {
-      
+      console.error('Erro ao obter proposta:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async renegotiateProposal(req, res) {
     try {
@@ -176,10 +183,12 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
+
 
       const systemMessage = new Message({
         conversation: conversationId,
@@ -196,9 +205,11 @@ class BoostingChatController {
 
       await systemMessage.save();
 
+
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
+
 
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
       
@@ -214,7 +225,7 @@ class BoostingChatController {
           }
         });
       } catch (apiError) {
-        
+        console.error('Erro ao notificar renegociação:', apiError);
       }
 
       res.json({
@@ -223,10 +234,11 @@ class BoostingChatController {
         systemMessage
       });
     } catch (error) {
-      
+      console.error('Erro ao renegociar proposta:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async cancelService(req, res) {
     try {
@@ -238,10 +250,12 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
+
 
       const systemMessage = new Message({
         conversation: conversationId,
@@ -257,6 +271,8 @@ class BoostingChatController {
 
       await systemMessage.save();
 
+
+
       conversation.isActive = false;
       conversation.boostingStatus = 'cancelled';
       conversation.lastMessage = systemMessage._id;
@@ -264,6 +280,7 @@ class BoostingChatController {
       conversation.metadata.set('status', 'cancelled');
       conversation.metadata.set('cancelledAt', new Date());
       conversation.metadata.set('cancelledBy', userId);
+
 
       try {
         const clientId = (conversation.client?.userid && conversation.client.userid.toString)
@@ -281,6 +298,7 @@ class BoostingChatController {
 
       await conversation.save();
 
+
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
       
       // Tenta notificar a API principal (não-bloqueante)
@@ -288,7 +306,7 @@ class BoostingChatController {
         const itemId = conversation.marketplaceItem || conversation.proposal;
         
         if (itemId) {
-          
+          console.log(`🔔 Tentando notificar API principal - itemId: ${itemId}`);
           
           // Tenta métodos HTTP diferentes
           let notificationSuccess = false;
@@ -305,7 +323,7 @@ class BoostingChatController {
               }
             });
             notificationSuccess = true;
-            ');
+            console.log('API principal notificada com sucesso (PATCH)');
           } catch (patchError) {
             if (patchError.response?.status === 405) {
               // Tentativa 2: PUT
@@ -320,7 +338,7 @@ class BoostingChatController {
                   }
                 });
                 notificationSuccess = true;
-                ');
+                console.log('API principal notificada com sucesso (PUT)');
               } catch (putError) {
                 if (putError.response?.status === 405) {
                   // Tentativa 3: DELETE com body (alguns endpoints usam isso)
@@ -336,7 +354,7 @@ class BoostingChatController {
                       }
                     });
                     notificationSuccess = true;
-                    ');
+                    console.log('API principal notificada com sucesso (DELETE)');
                   } catch (deleteError) {
                     throw deleteError; // Se DELETE também falhou, lança erro
                   }
@@ -350,14 +368,14 @@ class BoostingChatController {
           }
           
           if (!notificationSuccess) {
-            
+            console.warn('⚠️ Não foi possível notificar a API principal, mas o cancelamento local foi efetuado');
           }
         } else {
-          
+          console.log('ℹ️ Nenhum marketplaceItem ou proposal encontrado - notificação ignorada');
         }
       } catch (apiError) {
         // Log detalhado do erro, mas não bloqueia o cancelamento
-        :', {
+        console.error('❌ Erro ao notificar API principal (cancelamento local mantido):', {
           status: apiError.response?.status,
           statusText: apiError.response?.statusText,
           message: apiError.message,
@@ -365,6 +383,7 @@ class BoostingChatController {
           method: apiError.config?.method
         });
       }
+
 
       try {
         let agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
@@ -385,8 +404,9 @@ class BoostingChatController {
           await conversation.save();
         } catch (_) {}
       } catch (cleanupErr) {
-        
+        console.warn('⚠️ Erro ao cancelar/remover proposta/termo:', cleanupErr?.message || cleanupErr);
       }
+
 
       try {
         const webSocketServer = req.app.get('webSocketServer');
@@ -432,7 +452,7 @@ class BoostingChatController {
           });
         }
       } catch (wsErr) {
-        
+        console.error('❌ Erro ao emitir eventos de cancelamento:', wsErr);
       }
 
       res.json({
@@ -441,10 +461,11 @@ class BoostingChatController {
         systemMessage
       });
     } catch (error) {
-      
+      console.error('Erro ao cancelar atendimento:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async confirmDelivery(req, res) {
     try {
@@ -471,7 +492,7 @@ class BoostingChatController {
           const AgreementMigration = require('../middleware/agreementMigrationMiddleware');
           agreement = await AgreementMigration.migrateProposalToAgreement(acceptedProposal);
         } catch (migrationError) {
-          
+          console.warn('Falha na migração durante confirmDelivery:', migrationError);
         }
       }
 
@@ -507,7 +528,10 @@ class BoostingChatController {
       const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
       const formattedBoosterReceives = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boosterReceives);
 
-      ,
+      console.log('[BOOSTING] Iniciando confirmação de entrega:', {
+        conversationId,
+        agreementId: agreement?.agreementId || agreement?._id,
+        clientId: clientUserId?.toString(),
         boosterId: boosterUserId?.toString(),
         price,
         feeAmount,
@@ -516,7 +540,7 @@ class BoostingChatController {
 
       // IDEMPOTÊNCIA: verificar se já completado
       if (agreement && agreement.status === 'completed') {
-        
+        console.log(`Agreement ${agreement.agreementId} já está completado - operação idempotente`);
         return res.json({
           success: true,
           message: 'Entrega já foi confirmada anteriormente',
@@ -527,7 +551,7 @@ class BoostingChatController {
       
       // IDEMPOTÊNCIA: verificar se conversation já está bloqueada por finalização
       if (conversation.isBlocked && conversation.blockedReason === 'pedido_finalizado') {
-        
+        console.log(`Conversation ${conversationId} já está finalizada - operação idempotente`);
         return res.json({
           success: true,
           message: 'Entrega já foi confirmada anteriormente',
@@ -538,7 +562,7 @@ class BoostingChatController {
       
       // IDEMPOTÊNCIA: verificar se conversation já tem deliveryConfirmedAt
       if (conversation.deliveryConfirmedAt) {
-        
+        console.log(`Conversation ${conversationId} já tem deliveryConfirmedAt - operação idempotente`);
         return res.json({
           success: true,
           message: 'Entrega já foi confirmada anteriormente',
@@ -563,7 +587,11 @@ class BoostingChatController {
         
         if (existingEscrow) {
           // Cliente JÁ FOI DEBITADO ao aceitar proposta (novo fluxo)
-          
+          console.log('[BOOSTING] Cliente já foi debitado no escrow:', {
+            escrowId: existingEscrow._id,
+            amount: existingEscrow.amount,
+            date: existingEscrow.createdAt
+          });
           
           // Apenas registrar a liberação do escrow (não altera saldo)
           const clientUser = await User.findById(clientUserId).session(session);
@@ -597,11 +625,11 @@ class BoostingChatController {
             }
           }], { session });
           
-          ');
+          console.log('[BOOSTING] Escrow liberado (saldo não alterado)');
         } else {
           // ⚠️ Cliente NÃO FOI DEBITADO no escrow (boostings antigos ou fluxo legado)
           // Debitar agora
-          ');
+          console.warn('[BOOSTING] Cliente NÃO foi debitado no escrow, debitando agora (fluxo legado)');
           
           const clientUser = await User.findById(clientUserId).session(session);
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
@@ -640,7 +668,7 @@ class BoostingChatController {
             }
           }], { session });
 
-          :', {
+          console.log('[BOOSTING] Cliente debitado (fluxo legado):', {
             clientId: clientUserId?.toString(),
             amount: price,
             balanceBefore: clientBalanceBefore,
@@ -679,7 +707,8 @@ class BoostingChatController {
           }
         }], { session });
 
-        ,
+        console.log('[BOOSTING] Saldo transferido ao booster:', {
+          boosterId: boosterUserId?.toString(),
           amount: boosterReceives,
           balanceBefore: boosterBalanceBefore,
           balanceAfter: boosterBalanceAfter
@@ -725,7 +754,7 @@ class BoostingChatController {
             const mediatorUser = await User.findOne({ email: mediatorEmail }).session(session);
             
             if (!mediatorUser) {
-              . Taxa não creditada.`);
+              console.warn(`[BOOSTING] Mediador não encontrado (email: ${mediatorEmail}). Taxa não creditada.`);
             }
 
           if (mediatorUser) {
@@ -759,7 +788,8 @@ class BoostingChatController {
               }
             }], { session });
 
-            ,
+            console.log('[BOOSTING] Taxa transferida ao mediador:', {
+              mediatorId: mediatorUser._id?.toString(),
               amount: feeAmount,
               balanceBefore: mediatorBalanceBefore,
               balanceAfter: mediatorBalanceAfter
@@ -797,7 +827,7 @@ class BoostingChatController {
             } catch (_) {}
           }
           } catch (mediatorError) {
-            
+            console.error('[BOOSTING] Erro ao creditar mediador:', mediatorError.message);
           }
         }
 
@@ -864,7 +894,7 @@ class BoostingChatController {
           });
         }
       } catch (apiError) {
-        
+        console.error('Erro ao notificar Main API:', apiError.message);
         // Não faz rollback pois a transação já foi commitada com sucesso
       }
 
@@ -930,7 +960,7 @@ class BoostingChatController {
         }
       } catch (_) {}
 
-      
+      console.log('[BOOSTING] Confirmação de entrega concluída com sucesso');
 
       return res.json({
         success: true,
@@ -945,7 +975,7 @@ class BoostingChatController {
         }
       });
     } catch (error) {
-      
+      console.error('[BOOSTING] Erro ao confirmar entrega:', error);
       return res.status(500).json({ 
         success: false, 
         message: 'Erro interno do servidor ao processar confirmação',
@@ -954,57 +984,62 @@ class BoostingChatController {
     }
   }
 
+
   async reportService(req, res) {
     try {
       const { conversationId } = req.params;
       const { reason, description, type = 'other', evidence } = req.body;
       const userId = req.user?.id || req.user?._id;
 
-      
-      
-      
-      
-      
+      console.log('🚨 [DEBUG] Iniciando reportService...');
+      console.log('   Conversation ID:', conversationId);
+      console.log('   User ID:', userId);
+      console.log('   Request body:', { reason, description, type, evidence });
+      console.log('   Headers:', req.headers.authorization ? 'Token presente' : 'Token ausente');
 
       if (!userId) {
-        
+        console.log('❌ [DEBUG] Usuário não autenticado');
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
-      
+
+      console.log('🔍 [DEBUG] Buscando conversa...');
       const conversation = await Conversation.findById(conversationId).populate('participants');
       
       if (!conversation) {
-        
+        console.log('❌ [DEBUG] Conversa não encontrada');
         return res.status(404).json({ success: false, message: 'Conversa não encontrada' });
       }
 
-      
-      :', conversation.participants);
-      : p.toString();
-        `);
+      console.log('[DEBUG] Conversa encontrada');
+      console.log('   Participants (raw):', conversation.participants);
+      console.log('   Participants IDs:', conversation.participants.map(p => {
+        const id = p._id ? p._id.toString() : p.toString();
+        console.log(`     Participant: ${id} (type: ${typeof p}, has _id: ${!!p._id})`);
         return id;
       }));
-      ');
+      console.log('   Verificando se userId é participante:', userId, '(type:', typeof userId, ')');
       
       const isParticipant = conversation.isParticipant(userId);
-      
+      console.log('   É participante?', isParticipant);
       
 
       conversation.participants.forEach((p, index) => {
         const participantId = p._id ? p._id.toString() : p.toString();
         const match = participantId === userId.toString();
-        } ? ${match}`);
+        console.log(`   Participant ${index}: ${participantId} === ${userId.toString()} ? ${match}`);
       });
 
       if (!isParticipant) {
-        
+        console.log('❌ [DEBUG] Usuário não é participante da conversa');
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      
+      console.log('[DEBUG] Usuário autorizado, continuando...');
+
 
       const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
+
 
       const reporter = conversation.participants.find(p => p._id.toString() === userId.toString());
       const reported = conversation.participants.find(p => p._id.toString() !== userId.toString());
@@ -1012,6 +1047,7 @@ class BoostingChatController {
       if (!reporter || !reported) {
         return res.status(400).json({ success: false, message: 'Erro ao identificar participantes' });
       }
+
 
       let reporterData = null;
       let reportedData = null;
@@ -1026,8 +1062,9 @@ class BoostingChatController {
           });
           reporterData = reporterResponse.data.user;
         } catch (apiError) {
-          
+          console.log('Erro ao buscar dados do denunciante:', apiError.message);
         }
+
 
         try {
           const reportedResponse = await axios.get(`${apiUrl}/api/users/${reported._id}`, {
@@ -1035,11 +1072,12 @@ class BoostingChatController {
           });
           reportedData = reportedResponse.data.user;
         } catch (apiError) {
-          
+          console.log('Erro ao buscar dados do denunciado:', apiError.message);
         }
       } catch (error) {
-        
+        console.log('Erro na comunicação com API principal:', error.message);
       }
+
 
       // Try to resolve a marketplace purchaseId linked to this conversation
       const resolvedPurchaseId = (() => {
@@ -1145,7 +1183,7 @@ class BoostingChatController {
             });
             clientApi = resp?.data?.user || null;
           } catch (e) {
-            :', e?.message || e);
+            console.log('Erro ao buscar dados do cliente na MAIN_API (boosting report):', e?.message || e);
           }
         }
 
@@ -1189,13 +1227,15 @@ class BoostingChatController {
         });
       } catch (_) {}
 
+
       await Conversation.findByIdAndUpdate(conversationId, {
         isReported: true,
         reportedAt: new Date(),
         reportedBy: userId
       });
 
-      
+      console.log('[DEBUG] Conversa bloqueada após denúncia');
+
 
       const systemMessage = new Message({
         conversation: conversationId,
@@ -1213,6 +1253,7 @@ class BoostingChatController {
 
       await systemMessage.save();
 
+
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       conversation.boostingStatus = 'disputed';
@@ -1221,6 +1262,7 @@ class BoostingChatController {
       conversation.metadata.set('reportedBy', userId);
       conversation.metadata.set('reportId', reportData._id);
       await conversation.save();
+
 
       try {
         const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
@@ -1243,7 +1285,7 @@ class BoostingChatController {
           });
         }
       } catch (apiError) {
-        
+        console.log('Erro ao notificar backend sobre denúncia:', apiError.message);
       }
 
       res.json({
@@ -1253,10 +1295,12 @@ class BoostingChatController {
         systemMessage
       });
     } catch (error) {
-      
+      console.error('Erro ao registrar denúncia:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
+
 
   async saveAcceptedProposal(req, res) {
     try {
@@ -1277,6 +1321,8 @@ class BoostingChatController {
         });
       }
 
+
+
       const existingProposal = await AcceptedProposal.findOne({ conversationId });
       
 
@@ -1292,6 +1338,7 @@ class BoostingChatController {
           agreementId: existingAgreement.agreementId
         });
       }
+
 
       const acceptedProposal = new AcceptedProposal({
         conversationId,
@@ -1329,12 +1376,14 @@ class BoostingChatController {
         acceptedAt: new Date()
       });
 
+
       if (!existingProposal) {
         await acceptedProposal.save();
       } else {
 
         acceptedProposal = null;
       }
+
 
       // Buscar boostingRequestId da conversa
       const conv = await Conversation.findById(conversationId).select('metadata').lean();
@@ -1396,12 +1445,14 @@ class BoostingChatController {
         status: 'active'
       });
 
+
       agreement.addAction('created', clientData.userid, {
         proposalId,
         isMultiple: !!existingProposal
       }, idempotencyKey);
 
       await agreement.save();
+
 
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
@@ -1421,7 +1472,7 @@ class BoostingChatController {
         }
         
         await conversation.save();
-        
+        console.log(`Mensagens reativadas para nova proposta do booster na conversa ${conversationId}`);
       }
 
       res.json({
@@ -1437,10 +1488,11 @@ class BoostingChatController {
         isMultiple: !!existingProposal
       });
     } catch (error) {
-      
+      console.error('Erro ao salvar proposta aceita:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async getConversationStatus(req, res) {
     try {
@@ -1476,10 +1528,11 @@ class BoostingChatController {
         timeRemaining
       });
     } catch (error) {
-      
+      console.error('Erro ao obter status da conversa:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
+
 
   async unreportConversation(req, res) {
     try {
@@ -1490,10 +1543,12 @@ class BoostingChatController {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
+
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
+
 
       await Conversation.findByIdAndUpdate(conversationId, {
         $unset: { 
@@ -1506,6 +1561,7 @@ class BoostingChatController {
           boostingStatus: 'active'
         }
       });
+
 
       const systemMessage = new Message({
         conversation: conversationId,
@@ -1521,6 +1577,7 @@ class BoostingChatController {
 
       await systemMessage.save();
 
+
       conversation.lastMessage = systemMessage._id;
       conversation.lastMessageAt = new Date();
       conversation.metadata.set('status', 'active');
@@ -1533,11 +1590,12 @@ class BoostingChatController {
       });
 
     } catch (error) {
-      
+      console.error('Erro ao desbloquear conversa:', error);
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
 }
+
 
 function calculateReportPriority(type, previousReportsCount) {
 

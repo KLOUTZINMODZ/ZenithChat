@@ -1,8 +1,9 @@
 
 const logger = {
-  info: (msg) => ,
-  warn: (msg) => ,
-  error: (msg) => };
+  info: (msg) => console.log(`[INFO] ${msg}`),
+  warn: (msg) => console.log(`[WARN] ${msg}`),
+  error: (msg) => console.log(`[ERROR] ${msg}`)
+};
 
 /**
  * Sistema de Cache para Pagamentos e Marketplace
@@ -163,6 +164,7 @@ class PaymentCacheService {
       return true;
     }
 
+
     entry.retryCount++;
     entry.lastRetry = Date.now();
     
@@ -287,6 +289,7 @@ class PaymentCacheService {
     return results;
   }
 }
+
 
 const paymentCacheService = new PaymentCacheService();
 
