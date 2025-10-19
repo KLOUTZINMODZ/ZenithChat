@@ -12,7 +12,7 @@ router.post('/validate', async (req, res) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-      });
+}
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -24,13 +24,13 @@ router.post('/validate', async (req, res) => {
         email: decoded.email,
         name: decoded.name
       }
-    });
+}
   } catch (error) {
     logger.error('Token validation error:', error);
     res.status(401).json({
       success: false,
       message: 'Invalid token',
-    });
+}
   }
 });
 
@@ -41,7 +41,7 @@ router.get('/ws-token', async (req, res) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-      });
+}
     }
 
     jwt.verify(token, process.env.JWT_SECRET);
@@ -58,13 +58,13 @@ router.get('/ws-token', async (req, res) => {
         token: token,
         connectionString: `${wsUrl}?token=${token}`
       }
-    });
+}
   } catch (error) {
     logger.error('WebSocket token error:', error);
     res.status(401).json({
       success: false,
       message: 'Invalid token',
-    });
+}
   }
 });
 

@@ -74,7 +74,7 @@ async function sendBalanceUpdate(app, userId) {
       notificationService.sendToUser(String(userId), {
         type: 'wallet:balance_updated',
         data: { userId: String(userId), balance: round2(u?.walletBalance || 0), timestamp: new Date().toISOString() }
-      });
+}
     }
   } catch (_) {}
 }
@@ -90,7 +90,7 @@ async function updateConversationMarketplaceStatus(session, purchase, status) {
 
   } catch (e) {
     try { logger?.warn?.('[PURCHASES] Failed to update conversation marketplace status', { purchaseId: String(purchase?._id), status, error: e?.message }); } catch (_) {}
-  }
+  });
 }
 
 // Helper: emit consistent WS events and refresh conversations for both participants
@@ -118,13 +118,13 @@ async function emitMarketplaceStatusChanged(app, purchase, status) {
         ws.sendToUser(uid, {
           type: 'marketplace:status_changed',
           data: wsData
-        });
+}
       }
       
       if (ws.conversationHandler) {
         for (const uid of participants) {
           await ws.conversationHandler.sendConversationsUpdate(uid);
-        }
+        });
       }
     }
     participants.forEach(pid => cache.invalidateUserCache(pid));
@@ -138,8 +138,9 @@ async function getOrCreateConversation(buyerId, sellerId, metadata) {
   }
   let conv = await Conversation.findOne({
     participants: { $all: unique, $size: unique.length },
-    'metadata.purchaseId': metadata.purchaseId);
-  });
+    'metadata.purchaseId': metadata.purchaseId
+);
+}
   if (!conv) {
     let meta = metadata instanceof Map ? metadata : new Map(Object.entries(metadata || {}));
     try {
@@ -285,8 +286,7 @@ router.get('/list', auth, async (req, res) => {
         buyer: { _id: String(p.buyerId || ''), name: userName(buyer) },
         seller: { _id: String(p.sellerId || ''), name: userName(seller) }
       };
-    });
-
+}
     // ========== FORMAT BOOSTING ORDERS ==========
     const boostingOrders = (agreements || []).map(a => {
       // Fallback: buscar boostingRequestId da conversa se não estiver no agreement
@@ -329,8 +329,7 @@ router.get('/list', auth, async (req, res) => {
           desiredRank: boost.desiredRank || a.proposalSnapshot?.desiredRank
         }
       };
-    });
-
+}
     // ========== MERGE AND PAGINATE ==========
     const allOrders = [...marketplaceOrders, ...boostingOrders].sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -345,7 +344,7 @@ router.get('/list', auth, async (req, res) => {
         orders: paginatedOrders,
         pagination: { total, page, limit, pages: Math.ceil(total / limit) }
       }
-    });
+}
   } catch (error) {
     
     return res.status(500).json({ success: false, message: 'Erro ao listar compras/vendas', error: error.message });
@@ -495,7 +494,7 @@ router.post('/initiate', auth, async (req, res) => {
         }
         itemInTx.reservedAt = new Date();
         await itemInTx.save({ session });
-      }
+      });
 
       let p = await Purchase.create([{
         buyerId, sellerId: sellerUserIdFromItem, itemId, price: Number(priceUsed), feePercent, feeAmount: platformFee, sellerReceives,
@@ -532,8 +531,7 @@ router.post('/initiate', auth, async (req, res) => {
       // cpf already ensured above
 
       return p;
-    });
-
+}
     // create or fetch conversation
     const conv = await getOrCreateConversation(buyerId, sellerUserIdFromItem, { purchaseId: purchase._id.toString(), marketplaceItemId: itemId, context: 'marketplace_purchase' });
     purchase.conversationId = conv._id;
@@ -622,7 +620,7 @@ router.post('/initiate', auth, async (req, res) => {
       if (ws?.conversationHandler) {
         for (const uid of participants) {
           await ws.conversationHandler.sendConversationsUpdate(uid);
-        }
+        });
       }
       participants.forEach(pid => cache.invalidateUserCache(pid));
     } catch (_) {}
@@ -635,13 +633,13 @@ router.post('/initiate', auth, async (req, res) => {
           title: 'Compra iniciada',
           message: `Você iniciou a compra de ${itemTitle || 'um item'}.`,
           data: { purchaseId: purchase._id, conversationId: conv._id, itemId }
-        });
+}
         await ns.sendNotification(String(sellerUserIdFromItem), {
           type: 'purchase:new',
           title: 'Novo pedido',
           message: `Um comprador iniciou a compra de ${itemTitle || 'seu item'}.`,
           data: { purchaseId: purchase._id, conversationId: conv._id, itemId }
-        });
+}
       }
     } catch (_) {}
 
@@ -677,8 +675,7 @@ router.post('/:purchaseId/ship', auth, async (req, res) => {
       await purchase.save({ session });
 
       await updateConversationMarketplaceStatus(session, purchase, 'shipped');
-    });
-
+}
     await emitMarketplaceStatusChanged(req.app, purchase, 'shipped');
 
     try {
@@ -755,10 +752,10 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
           const envEmail = process.env.MEDIATOR_EMAIL;
           if (envId) {
             try { mediatorUser = await User.findById(envId).session(session); } catch (_) {}
-          }
+          });
           if (!mediatorUser && envEmail) {
             try { mediatorUser = await User.findOne({ email: envEmail }).session(session); } catch (_) {}
-          }
+          });
           if (mediatorUser) {
             const medBefore = round2(mediatorUser.walletBalance || 0);
             const medAfter = round2(medBefore + feeAmount);
@@ -851,12 +848,11 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
             }
           }
           await item.save({ session });
-        }
+        });
       } catch (e) {
         try { logger?.warn?.('[PURCHASES] Failed to finalize MarketItem status on confirm', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
       }
-    });
-
+}
     await emitMarketplaceStatusChanged(req.app, purchase, 'completed');
 
     await sendBalanceUpdate(req.app, purchase.sellerId);
@@ -895,8 +891,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
       purchase.logs.push({ level: 'warn', message: 'Buyer declared NOT RECEIVED. Reverted to escrow.', data: { buyerId: buyerId.toString(), comment: comment || undefined } });
       await purchase.save({ session });
       await updateConversationMarketplaceStatus(session, purchase, 'escrow_reserved');
-    });
-
+}
     await emitMarketplaceStatusChanged(req.app, purchase, 'escrow_reserved');
 
     // Cria um relatório para arbitragem
@@ -936,7 +931,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
         },
         status: 'pending',
         priority: 'high'
-      });
+}
       try {
       await report.save();
     } catch (e) {
@@ -953,7 +948,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
         try {
           const resp = await axios.get(`${apiUrl}/api/users/${buyerId}`, {
             headers: { 'Authorization': req.headers.authorization }
-          });
+}
           clientApi = resp?.data?.user || null;
         } catch (e) {
           try { logger?.warn?.('[PURCHASES] Falha ao obter dados do cliente na MAIN_API', { error: e?.message }); } catch (_) {}
@@ -989,7 +984,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
             conversationId: purchase?.conversationId?.toString?.() || purchase.conversationId || null,
             purchaseId: purchase?._id?.toString?.() || String(purchaseId)
           }
-        });
+}
       } catch (_) {}
 
       // Notifica o vendedor
@@ -1000,7 +995,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
           title: 'Pedido não recebido',
           message: 'O comprador declarou que não recebeu o item. A liberação foi pausada e a mediação foi aberta.',
           data: { purchaseId }
-        });
+}
       } catch (_) {}
 
       return res.json({ success: true, message: 'Status retornado ao escrow. Vendedor notificado e arbitragem aberta.' });
@@ -1033,7 +1028,7 @@ router.get('/:purchaseId/support-ticket/status', auth, async (req, res) => {
         { purchaseId: purchase ? purchase._id : null },
         ...(conversationId ? [{ conversationId }] : [])
       ]
-    });
+}
     return res.json({ success: true, data: { exists: !!existing, reportId: existing ? existing._id : null } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Erro ao verificar status do ticket', error: error.message });
@@ -1074,7 +1069,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
         { purchaseId: purchase._id },
         ...(convIdForCheck ? [{ conversationId: convIdForCheck }] : [])
       ]
-    });
+}
     if (existing) {
       return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: existing._id } });
     }
@@ -1125,8 +1120,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
         userAgent: req.headers['user-agent'] || null,
         receivedAt: new Date()
       }
-    });
-
+}
     try {
       await report.save();
     } catch (e) {
@@ -1145,7 +1139,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
         if (clientUserId) {
           const resp = await axios.get(`${apiUrl}/api/users/${clientUserId}`, {
             headers: { 'Authorization': req.headers.authorization }
-          });
+}
           clientApi = resp?.data?.user || null;
         }
       } catch (e) {
@@ -1181,7 +1175,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
           conversationId: (conversationId && conversationId.toString) ? conversationId.toString() : conversationId,
           purchaseId: purchase?._id?.toString?.() || String(purchaseId)
         }
-      });
+}
     } catch (_) {}
 
     // Atualiza conversa com marcações leves, se existir
@@ -1193,7 +1187,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
             reportedAt: new Date(),
             reportedBy: userId
           }
-        });
+}
       }
     } catch (_) {}
 
@@ -1212,7 +1206,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
               issueType: report.type,
               timestamp: new Date().toISOString()
             }
-          });
+}
         }
       }
       const ns = req.app?.locals?.notificationService;
@@ -1223,7 +1217,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
             title: 'Ticket de suporte aberto',
             message: 'Um ticket de suporte foi aberto para esta compra. Nossa equipe irá avaliar em breve.',
             data: { purchaseId: purchase._id, conversationId, reportId: report._id }
-          });
+}
         }
       }
     } catch (_) {}
@@ -1293,11 +1287,11 @@ router.post('/:purchaseId/cancel', auth, async (req, res) => {
             item.status = 'active';
           }
           await item.save({ session });
-        }
+        });
       } catch (e) {
         try { logger?.warn?.('[PURCHASES] Failed to restore MarketItem on cancel', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
       }
-    });
+}
     await emitMarketplaceStatusChanged(req.app, purchase, 'cancelled');
 
     await sendBalanceUpdate(req.app, purchase.buyerId);
@@ -1387,9 +1381,9 @@ router.post('/auto-release/run', auth, async (req, res) => {
                 }
               }
               await item.save({ session });
-            }
+            });
           } catch (_) {}
-        });
+}
         released++;
         await sendBalanceUpdate(req.app, p.sellerId);
         await emitMarketplaceStatusChanged(req.app, p, 'completed');

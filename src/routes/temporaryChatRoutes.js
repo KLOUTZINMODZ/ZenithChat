@@ -8,7 +8,7 @@ router.get('/test', (req, res) => {
     success: true,
     message: 'Temporary chat routes are working',
     timestamp: new Date().toISOString()
-  });
+}
 });
 
 router.post('/create-temporary-chat', authMiddleware, temporaryChatController.createTemporaryChat);

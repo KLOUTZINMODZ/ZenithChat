@@ -59,7 +59,7 @@ router.get('/tickets', auth, async (req, res) => {
           pages: Math.ceil(total / parseInt(limit))
         }
       }
-    });
+}
   } catch (error) {
     logger.error('[SUPPORT] Error listing tickets', error);
     res.status(500).json({ success: false, message: 'Erro ao listar tickets', error: error.message });

@@ -21,21 +21,21 @@ const internalAuth = (req, res, next) => {
     logger.error('[Internal Auth] INTERNAL_API_KEY not configured in .env');
     return res.status(500).json({ 
       success: false, 
-    });
+}
   }
   
   if (!token) {
     logger.warn('[Internal Auth] No token provided');
     return res.status(401).json({ 
       success: false, 
-    });
+}
   }
   
   if (token !== internalKey) {
     logger.warn('[Internal Auth] Invalid token provided');
     return res.status(403).json({ 
       success: false, 
-    });
+}
   }
   
   logger.info('[Internal Auth] Authentication successful');
@@ -62,13 +62,13 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
     if (!type) {
       return res.status(400).json({ 
         success: false, 
-      });
+}
     }
     
     if (!boostingId) {
       return res.status(400).json({ 
         success: false, 
-      });
+}
     }
     
     // Obter ProposalHandler
@@ -78,7 +78,7 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
       logger.error('[Internal Broadcast] ProposalHandler not available');
       return res.status(500).json({ 
         success: false, 
-      });
+}
     }
     
     logger.info(`[Internal Broadcast] Type: ${type}, BoostingId: ${boostingId}`);
@@ -89,7 +89,7 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposal) {
           return res.status(400).json({ 
             success: false, 
-          });
+}
         }
         proposalHandler.broadcastNewProposal(boostingId, proposal);
         logger.info(`✅ [Internal Broadcast] New proposal broadcasted for boosting ${boostingId}`);
@@ -99,7 +99,7 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposal) {
           return res.status(400).json({ 
             success: false, 
-          });
+}
         }
         proposalHandler.broadcastProposalUpdated(boostingId, proposal);
         logger.info(`✅ [Internal Broadcast] Updated proposal broadcasted for boosting ${boostingId}`);
@@ -109,7 +109,7 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposalId) {
           return res.status(400).json({ 
             success: false, 
-          });
+}
         }
         proposalHandler.broadcastProposalRejected(boostingId, proposalId);
         logger.info(`✅ [Internal Broadcast] Rejected proposal ${proposalId} broadcasted`);
@@ -119,7 +119,7 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposalId) {
           return res.status(400).json({ 
             success: false, 
-          });
+}
         }
         proposalHandler.broadcastProposalCancelled(boostingId, proposalId);
         logger.info(`✅ [Internal Broadcast] Cancelled proposal ${proposalId} broadcasted`);
@@ -135,7 +135,7 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
           success: false, 
           message: `Invalid broadcast type: ${type}`,
           validTypes: ['new', 'updated', 'rejected', 'cancelled', 'boosting_cancelled']
-        });
+}
     }
     
     // Obter estatísticas para logging
@@ -149,14 +149,13 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         totalBoostings: stats.totalBoostings,
         thisBoostingSubscribers: stats.boostings.find(b => b.boostingId === boostingId)?.subscribers || 0
       }
-    });
-    
+}
   } catch (error) {
     logger.error('[Internal Broadcast] Error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error during broadcast',
-    });
+}
   }
 });
 
@@ -171,7 +170,7 @@ router.get('/proposal/stats', internalAuth, (req, res) => {
     if (!proposalHandler) {
       return res.status(500).json({ 
         success: false, 
-      });
+}
     }
     
     const stats = proposalHandler.getStats();
@@ -179,13 +178,12 @@ router.get('/proposal/stats', internalAuth, (req, res) => {
     res.json({
       success: true,
       data: stats
-    });
-    
+}
   } catch (error) {
     logger.error('[Internal Stats] Error:', error);
     res.status(500).json({ 
       success: false, 
-    });
+}
   }
 });
 
@@ -203,7 +201,7 @@ router.get('/health', (req, res) => {
       stats: 'GET /api/internal/proposal/stats',
       health: 'GET /api/internal/health'
     }
-  });
+}
 });
 
 module.exports = router;

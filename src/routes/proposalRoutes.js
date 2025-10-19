@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
       accept: 'POST /:proposalId/accept'
     },
     timestamp: new Date().toISOString()
-  });
+}
 });
 
 router.get('/:proposalId/accept', auth, async (req, res) => {
@@ -31,14 +31,13 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
       allowedMethods: ['POST'],
       endpoint: `POST /api/proposals/${proposalId}/accept`,
       timestamp: new Date().toISOString()
-    });
-    
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor',
-    });
+}
   }
 });
 
@@ -83,9 +82,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         const lookupResponse = await axios.get(proposalLookupUrl, {
           headers: { Authorization: req.headers.authorization }
-        });
-        
-        
+}
         lookupData = lookupResponse.data;
         boostingId = lookupResponse.data.boostingId;
         
@@ -113,7 +110,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               lookupUrl: `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/proposals/${proposalId}/boosting-id`,
               originalError: lookupError.response?.data || lookupError.message
             }
-          });
+}
         }
       }
     }
@@ -131,7 +128,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           boostingId: boostingId,
           metadata: metadata
         }
-      });
+}
     }
 
     // Se proposalId contém underscore, é o formato composto (boostingId_boosterId_timestamp)
@@ -146,8 +143,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         const proposalsResponse = await axios.get(proposalsUrl, {
           headers: { Authorization: req.headers.authorization }
-        });
-        
+}
         const proposals = proposalsResponse.data.data || proposalsResponse.data.proposals || [];
         
         
@@ -159,8 +155,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           const proposalBoosterId = String(p.boosterId?._id || p.boosterId || p.booster?._id || p.booster);
           
           return proposalBoosterId === boosterIdStr;
-        });
-        
+}
         if (matchingProposal) {
           actualProposalId = String(matchingProposal._id || matchingProposal.id);
           
@@ -181,7 +176,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 status: p.status
               }))
             }
-          });
+}
         }
       } catch (error) {
         
@@ -196,8 +191,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       try {
         const conversationResponse = await axios.get(`https://zenith.enrelyugi.com.br/api/conversations/${conversationId}`, {
           headers: { Authorization: req.headers.authorization }
-        });
-        
+}
         const conversationData = conversationResponse.data;
         );
         
@@ -231,7 +225,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             { proposal: proposalId },
             { proposal: actualProposalId }
           ]);
-        });
+}
       }
 
       if (!acceptedConv) {
@@ -333,8 +327,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                   currency: 'BRL',
                   paymentStatus: 'pending'
                 },
-              });
-              
+}
               agreement.addAction('created', clientId, { proposalId: actualProposalId });
               await agreement.save();
               
@@ -389,8 +382,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                     providerName: boosterUser.name || 'Booster',
                     status: 'escrowed' // Indica que está em escrow
                   }
-                });
-                
+}
                 // Atualizar Agreement para indicar que pagamento foi reservado
                 agreement.financial.paymentStatus = 'escrowed';
                 await agreement.save();
@@ -400,7 +392,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                   amount: proposalPrice,
                   balanceBefore: clientBalanceBefore,
                   balanceAfter: clientBalanceAfter,
-                });
+}
               } catch (escrowError) {
                 :', escrowError.message);
                 
@@ -424,8 +416,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         
         // Log dados detalhados para debug
-        });
-        
+}
         // ⚠️ IMPORTANTE: Agreement é CRÍTICO para confirmação de entrega
         // Propagar erro para impedir aceitação
         throw agreementError;
@@ -449,7 +440,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         message: 'Erro crítico ao aceitar proposta. Por favor, tente novamente.',
         error: localError.message,
         details: 'O Agreement não pôde ser criado. Isso é necessário para confirmar a entrega posteriormente.'
-      });
+}
     }
     
     // Tenta sincronizar com API principal (não-bloqueante)
@@ -476,9 +467,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           'Content-Type': 'application/json'
         },
         timeout: 10000 // 10s timeout
-      });
-      
-      
+}
       apiSyncSuccess = true;
       
     } catch (apiError) {
@@ -615,7 +604,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           mainApi: apiSyncSuccess,
           warning: !apiSyncSuccess ? 'Main API sync failed, but proposal was accepted locally' : null
         }
-      });
+}
     }
     
   } catch (error) {
@@ -629,7 +618,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro interno do servidor ao aceitar proposta',
-    });
+}
   }
 });
 

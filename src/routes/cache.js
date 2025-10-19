@@ -14,12 +14,12 @@ router.get('/stats', auth, async (req, res) => {
     res.json({
       success: true,
       data: stats
-    });
+}
   } catch (error) {
     logger.error('Error getting cache stats:', error);
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -35,7 +35,7 @@ router.get('/sync/:userId', auth, async (req, res) => {
     if (req.user.id !== userId) {
       return res.status(403).json({
         success: false,
-      });
+}
     }
 
     const syncData = {
@@ -52,20 +52,19 @@ router.get('/sync/:userId', auth, async (req, res) => {
         if (messages && messages.length > 0) {
           syncData.messageCache[conv._id] = messages;
         }
-      });
+}
     }
 
     res.json({
       success: true,
       data: syncData
-    });
-
+}
     logger.debug(`Cache sync requested for user ${userId}`);
   } catch (error) {
     logger.error('Error syncing cache:', error);
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -89,25 +88,24 @@ router.post('/invalidate', auth, async (req, res) => {
         } else {
           return res.status(403).json({
             success: false,
-          });
+}
         }
         break;
       default:
         return res.status(400).json({
           success: false,
-        });
+}
     }
 
     res.json({
       success: true,
-    });
-
+}
     logger.debug(`Cache invalidated - type: ${type}, id: ${id}, by user: ${userId}`);
   } catch (error) {
     logger.error('Error invalidating cache:', error);
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -122,7 +120,7 @@ router.post('/warm/:userId', auth, async (req, res) => {
     if (req.user.id !== userId) {
       return res.status(403).json({
         success: false,
-      });
+}
     }
 
     const Conversation = require('../models/Conversation');
@@ -160,14 +158,13 @@ router.post('/warm/:userId', auth, async (req, res) => {
         messagesCached: cachedMessagesCount,
         timestamp: new Date().toISOString()
       }
-    });
-
+}
     logger.info(`Cache warmed up for user ${userId} - ${conversations.length} conversations, ${cachedMessagesCount} messages`);
   } catch (error) {
     logger.error('Error warming cache:', error);
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -181,21 +178,20 @@ router.delete('/clear', auth, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-      });
+}
     }
 
     cache.clear();
 
     res.json({
       success: true,
-    });
-
+}
     logger.warn(`Cache cleared by admin user ${req.user.id}`);
   } catch (error) {
     logger.error('Error clearing cache:', error);
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -230,7 +226,7 @@ router.get('/health', async (req, res) => {
     res.json({
       success: true,
       data: health
-    });
+}
   } catch (error) {
     logger.error('Error checking cache health:', error);
     res.status(500).json({
@@ -240,7 +236,7 @@ router.get('/health', async (req, res) => {
         error: error.message,
         timestamp: new Date().toISOString()
       }
-    });
+}
   }
 });
 

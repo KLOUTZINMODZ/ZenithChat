@@ -286,7 +286,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
         tickets: mapped,
         pagination: { total, page, limit, pages: Math.ceil(total / limit) }
       }
-    });
+}
   } catch (error) {
     try { logger.error('[ADMIN][SUPPORT] Error listing tickets', error); } catch (_) {}
     return res.status(500).json({ success: false, message: 'Erro ao listar tickets', error: error.message });
@@ -362,7 +362,7 @@ router.patch('/support/tickets/:id', requireAdminKey, async (req, res) => {
         note: String(note),
         visibility: ['internal','parties'].includes(String(noteVisibility)) ? String(noteVisibility) : 'internal',
         createdAt: new Date()
-      });
+}
     }
 
     if (moderationAction && typeof moderationAction === 'object') {
@@ -374,7 +374,7 @@ router.patch('/support/tickets/:id', requireAdminKey, async (req, res) => {
         reason: ma.reason || '',
         actionDate: ma.actionDate ? new Date(ma.actionDate) : new Date(),
         notes: ma.notes || ''
-      });
+}
     }
 
     await report.save();
@@ -401,7 +401,7 @@ router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-      });
+}
     }
 
     const banService = req.app.get('banService');
@@ -409,7 +409,7 @@ router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
     if (!banService) {
       return res.status(500).json({
         success: false,
-      });
+}
     }
 
     const result = await banService.banUser(
@@ -424,8 +424,7 @@ router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
       reason,
       duration,
       ...result
-    });
-
+}
     return res.json(result);
 
   } catch (error) {
@@ -433,7 +432,7 @@ router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao banir usuário',
-    });
+}
   }
 });
 
@@ -450,7 +449,7 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-      });
+}
     }
 
     const banService = req.app.get('banService');
@@ -458,7 +457,7 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
     if (!banService) {
       return res.status(500).json({
         success: false,
-      });
+}
     }
 
     const result = await banService.unbanUser(userId);
@@ -466,8 +465,7 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
     logger.info(`[ADMIN] Usuário desbanido por ${adminName}:`, {
       userId,
       ...result
-    });
-
+}
     return res.json(result);
 
   } catch (error) {
@@ -475,7 +473,7 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao desbanir usuário',
-    });
+}
   }
 });
 
@@ -491,7 +489,7 @@ router.get('/users/:userId/ban-status', requireAdminKey, async (req, res) => {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-      });
+}
     }
 
     const banService = req.app.get('banService');
@@ -500,14 +498,13 @@ router.get('/users/:userId/ban-status', requireAdminKey, async (req, res) => {
     return res.json({
       success: true,
       ...status
-    });
-
+}
   } catch (error) {
     logger.error('[ADMIN] Erro ao verificar banimento:', error);
     return res.status(500).json({
       success: false,
       message: 'Erro ao verificar banimento',
-    });
+}
   }
 });
 
@@ -532,7 +529,7 @@ router.get('/users/banned', requireAdminKey, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao listar usuários banidos',
-    });
+}
   }
 });
 
@@ -556,8 +553,7 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
     const emailPrefsMap = new Map();
     allPreferences.forEach(pref => {
       emailPrefsMap.set(pref.userId.toString(), pref.emailNotifications);
-    });
-
+}
     // Análise minuciosa de cada usuário
     const detailedAnalysis = {
       total: allUsersRaw.length,
@@ -647,14 +643,14 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
         allEligible: eligibleUsers,
         allNotEligible: notEligibleUsers
       }
-    });
+}
   } catch (error) {
     logger.error('ERRO na análise de usuários:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar estatísticas',
       error: error.message,
-    });
+}
   }
 });
 
@@ -695,13 +691,13 @@ router.post('/revert-email-preferences', requireAdminKey, async (req, res) => {
         reverted: revertedCount,
         errors: errorCount
       }
-    });
+}
   } catch (error) {
     logger.error('Error during revert:', error);
     res.status(500).json({
       success: false,
       message: 'Erro durante a reversão',
-    });
+}
   }
 });
 
@@ -720,8 +716,7 @@ router.get('/email-users-debug', requireAdminKey, async (req, res) => {
     const emailPrefsMap = new Map();
     allPreferences.forEach(pref => {
       emailPrefsMap.set(pref.userId.toString(), pref.emailNotifications);
-    });
-
+}
     const detailedList = allUsers.map(user => {
       const userId = user._id.toString();
       const emailNotif = emailPrefsMap.get(userId);
@@ -734,8 +729,7 @@ router.get('/email-users-debug', requireAdminKey, async (req, res) => {
         emailNotificationsType: typeof emailNotif,
         isEligible: emailNotif === true
       };
-    });
-
+}
     const summary = {
       total: detailedList.length,
       eligible: detailedList.filter(u => u.isEligible).length,
@@ -753,13 +747,13 @@ router.get('/email-users-debug', requireAdminKey, async (req, res) => {
       success: true,
       summary,
       users: detailedList
-    });
+}
   } catch (error) {
     logger.error('Error fetching email users debug:', error);
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar debug',
-    });
+}
   }
 });
 
@@ -772,7 +766,7 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Parâmetros obrigatórios: templateType, subject, customMessage'
-      });
+}
     }
 
     // Validar tipo de template
@@ -781,7 +775,7 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Tipo de template inválido. Use: warning, news ou announcement'
-      });
+}
     }
 
     logger.info('=== INICIANDO CAMPANHA DE EMAIL ===');
@@ -799,8 +793,7 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
     const emailPrefsMap = new Map();
     allPreferences.forEach(pref => {
       emailPrefsMap.set(pref.userId.toString(), pref.emailNotifications);
-    });
-
+}
     // Filtrar usando EXATAMENTE a mesma lógica do endpoint de stats
     const eligibleUsers = [];
     
@@ -813,7 +806,7 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
         eligibleUsers.push({
           name: user.name,
           email: user.email
-        });
+}
       }
     }
 
@@ -823,15 +816,14 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
     logger.info(`Usuários elegíveis: ${users.length}/${allUsersRaw.length}`);
     users.forEach((user, index) => {
       logger.info(`${index + 1}. ${user.name} (${user.email})`);
-    });
-
+}
     if (users.length === 0) {
       return res.json({
         success: true,
         message: 'Nenhum usuário elegível encontrado para enviar emails',
         sentCount: 0,
         totalUsers: allUsersRaw.length
-      });
+}
     }
 
     const emailService = require('../services/emailService');
@@ -841,8 +833,7 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       success: true,
       message: `Iniciando envio de emails para ${users.length} usuários...`,
       totalUsers: users.length
-    });
-
+}
     // Processar emails em background de forma assíncrona
     setImmediate(async () => {
       let successCount = 0;
@@ -896,8 +887,7 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
             failCount++;
             logger.error(`Failed to send email to ${batch[index].email}:`, result.reason);
           }
-        });
-
+}
         logger.info(`Batch ${batchNumber} completed: ${successCount} total sent, ${failCount} total failed`);
         
         // Delay between batches to avoid rate limiting (except for last batch)
@@ -908,13 +898,12 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
       }
 
       logger.info(`Email campaign completed: ${successCount} success, ${failCount} failed out of ${users.length} total`);
-    });
-
+}
   } catch (error) {
     logger.error('Error sending custom emails:', error);
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 

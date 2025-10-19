@@ -33,8 +33,7 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
     const total = await Conversation.countDocuments({
       participants: userId,
       isActive: true
-    });
-
+}
     logger.info(`[COMPATIBILITY] Found ${conversations.length} conversations`);
 
     const enriched = await Promise.all(conversations.map(async (conv) => {
@@ -109,7 +108,7 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
                 if (!id || seen.has(id)) return false;
                 seen.add(id);
                 return true;
-              });
+}
             }
           } catch (_) { }
         } else {
@@ -169,8 +168,7 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
           updatedAt: conv.updatedAt
         };
       }
-    });
-
+}
     const response = {
       success: true,
       data: {
@@ -192,7 +190,7 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching conversations',
-    });
+}
   }
 });
 
@@ -209,12 +207,11 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
       _id: conversationId,
       participants: userId,
       isActive: true
-    });
-
+}
     if (!conversation) {
       return res.status(404).json({
         success: false,
-      });
+}
     }
 
     const messages = await Message.find({
@@ -230,8 +227,7 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
     const total = await Message.countDocuments({
       conversation: conversationId,
       isDeleted: { $ne: true }
-    });
-
+}
     const formattedMessages = messages.map(msg => ({
       _id: msg._id,
       conversationId: msg.conversation,
@@ -258,14 +254,13 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
         limit: parseInt(limit),
         pages: Math.ceil(total / limit)
       }
-    });
-
+}
   } catch (error) {
     logger.error('[COMPATIBILITY] Error fetching messages:', error);
     res.status(500).json({
       success: false,
       message: 'Error fetching messages',
-    });
+}
   }
 });
 

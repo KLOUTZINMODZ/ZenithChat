@@ -58,12 +58,12 @@ router.get('/active', async (req, res) => {
     res.json({
       success: true,
       data: banners
-    });
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -78,12 +78,12 @@ router.get('/all', requireAdminKey, async (req, res) => {
     res.json({
       success: true,
       data: banners
-    });
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -95,18 +95,18 @@ router.get('/:id', requireAdminKey, async (req, res) => {
     if (!banner) {
       return res.status(404).json({
         success: false,
-      });
+}
     }
 
     res.json({
       success: true,
       data: banner
-    });
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -130,13 +130,13 @@ router.post('/', requireAdminKey, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Título, descrição e imagem são obrigatórios'
-      });
+}
     }
 
     if (!primaryButton || !primaryButton.text || !primaryButton.link) {
       return res.status(400).json({
         success: false,
-      });
+}
     }
 
     // Verificar limite de 6 banners ativos
@@ -145,7 +145,7 @@ router.post('/', requireAdminKey, async (req, res) => {
       if (activeBannersCount >= 6) {
         return res.status(400).json({
           success: false,
-        });
+}
       }
     }
 
@@ -160,21 +160,20 @@ router.post('/', requireAdminKey, async (req, res) => {
       primaryButton,
       secondaryButton,
       isActive: isActive !== false
-    });
-
+}
     await newBanner.save();
 
     res.status(201).json({
       success: true,
       message: 'Banner criado com sucesso',
       data: newBanner
-    });
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
       message: 'Erro ao criar banner',
-    });
+}
   }
 });
 
@@ -189,7 +188,7 @@ const updateBannerHandler = async (req, res) => {
     if (!banner) {
       return res.status(404).json({
         success: false,
-      });
+}
     }
 
     // Validar limite de banners ativos se estiver ativando
@@ -197,12 +196,11 @@ const updateBannerHandler = async (req, res) => {
       const activeBannersCount = await HeroBanner.countDocuments({ 
         isActive: true,
         _id: { $ne: bannerId }
-      });
-      
+}
       if (activeBannersCount >= 6) {
         return res.status(400).json({
           success: false,
-        });
+}
       }
     }
 
@@ -217,13 +215,13 @@ const updateBannerHandler = async (req, res) => {
       success: true,
       message: 'Banner atualizado com sucesso',
       data: updatedBanner
-    });
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
       message: 'Erro ao atualizar banner',
-    });
+}
   }
 };
 
@@ -235,7 +233,7 @@ router.patch('/reorder', requireAdminKey, async (req, res) => {
     if (!Array.isArray(banners)) {
       return res.status(400).json({
         success: false,
-      });
+}
     }
 
     // Atualizar ordem de cada banner
@@ -247,12 +245,12 @@ router.patch('/reorder', requireAdminKey, async (req, res) => {
 
     res.json({
       success: true,
-    });
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
@@ -270,17 +268,17 @@ router.delete('/:id', requireAdminKey, async (req, res) => {
     if (!banner) {
       return res.status(404).json({
         success: false,
-      });
+}
     }
 
     res.json({
       success: true,
-    });
+}
   } catch (error) {
     
     res.status(500).json({
       success: false,
-    });
+}
   }
 });
 
