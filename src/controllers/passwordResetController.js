@@ -268,7 +268,7 @@ exports.resetPassword = async (req, res) => {
       const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
       const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
       
-      console.log(`[SYNC] Tentando sincronizar senha para ${user.email} com ${mainApiUrl}/api/v1/admin/sync-password`);
+      
       
       const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-password`, {
         email: user.email,
@@ -280,15 +280,10 @@ exports.resetPassword = async (req, res) => {
         timeout: 5000
       });
       
-      console.log(`[SYNC] Senha sincronizada com sucesso: ${response.data.message}`);
+      
       logger.info(`Password synced to main API for user: ${user.email}`);
     } catch (syncError) {
-      console.error(`[SYNC] ❌ Erro ao sincronizar senha para ${user.email}:`, {
-        message: syncError.message,
-        response: syncError.response?.data,
-        status: syncError.response?.status,
-        url: syncError.config?.url
-      });
+      
       logger.error(`Failed to sync password to main API for ${user.email}:`, syncError.message);
       // NÃO falhar o reset mesmo se sincronização falhar
       // Usuário pode fazer reset novamente se necessário

@@ -220,7 +220,6 @@ const reportSchema = new mongoose.Schema({
   timestamps: true
 });
 
-
 reportSchema.index({ status: 1, priority: -1, createdAt: -1 });
 reportSchema.index({ 'reporter.userid': 1, createdAt: -1 });
 reportSchema.index({ 'reported.userid': 1, createdAt: -1 });
@@ -263,7 +262,6 @@ reportSchema.post('save', async function(doc, next) {
   }
 });
 
-
 reportSchema.methods.escalate = function(reason) {
   this.status = 'escalated';
   this.priority = this.priority === 'critical' ? 'critical' : 'high';
@@ -274,7 +272,6 @@ reportSchema.methods.escalate = function(reason) {
   });
   return this.save();
 };
-
 
 reportSchema.methods.resolve = function(outcome, resolvedBy, notes, compensation = null) {
   this.status = 'resolved';
@@ -290,7 +287,6 @@ reportSchema.methods.resolve = function(outcome, resolvedBy, notes, compensation
   return this.save();
 };
 
-
 reportSchema.methods.addModerationAction = function(actionType, moderatorId, moderatorName, reason, notes = '') {
   this.moderationActions.push({
     actionType,
@@ -301,7 +297,6 @@ reportSchema.methods.addModerationAction = function(actionType, moderatorId, mod
   });
   return this.save();
 };
-
 
 reportSchema.methods.addInternalNote = function(authorId, authorName, note, visibility = 'internal') {
   this.internalNotes.push({

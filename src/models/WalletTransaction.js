@@ -4,7 +4,6 @@ const walletTransactionSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   type: { type: String, enum: ['deposit', 'withdraw', 'fee_transfer'], required: true },
 
-
   amountGross: { type: Number, required: true },
   feePercent: { type: Number, default: 0 },
   feeAmount: { type: Number, default: 0 },
@@ -12,17 +11,14 @@ const walletTransactionSchema = new mongoose.Schema({
 
   currency: { type: String, default: 'BRL' },
 
-
   asaasPaymentId: { type: String, index: true },
   asaasTransferId: { type: String, index: true },
   externalReference: { type: String, index: true },
 
   idempotencyKey: { type: String, index: true },
 
-
   withdrawPixKey: { type: String },
   withdrawPixKeyType: { type: String },
-
 
   status: { 
     type: String, 
@@ -48,7 +44,6 @@ const walletTransactionSchema = new mongoose.Schema({
     data: { type: Object }
   }]
 }, { timestamps: true });
-
 
 walletTransactionSchema.index(
   { userId: 1, type: 1, idempotencyKey: 1 },

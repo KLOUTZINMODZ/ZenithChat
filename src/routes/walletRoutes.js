@@ -17,7 +17,6 @@ function round2(v) {
   return Math.round(Number(v) * 100) / 100;
 }
 
-
 async function applyLedgerCreditDeposit(app, userId, tx) {
   const opId = `deposit:${tx._id.toString()}`;
   return runWithTransactionOrFallback(async (session) => {
@@ -55,7 +54,6 @@ async function applyLedgerCreditDeposit(app, userId, tx) {
   });
 }
 
-
 function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -66,7 +64,6 @@ function startOfTomorrow() {
   d.setDate(d.getDate() + 1);
   return d;
 }
-
 
 async function expireStalePendingWithdrawsForUser(app, userId) {
   try {
@@ -87,7 +84,6 @@ async function expireStalePendingWithdrawsForUser(app, userId) {
   } catch (_) {}
 }
 
-
 async function runWithTransactionOrFallback(executor) {
   let session;
   try {
@@ -106,7 +102,6 @@ async function runWithTransactionOrFallback(executor) {
     return executor(null);
   }
 }
-
 
 async function applyLedgerDebitReserve(app, userId, tx, amount) {
   const opId = `reserve:${tx._id.toString()}`;
@@ -147,7 +142,6 @@ async function applyLedgerDebitReserve(app, userId, tx, amount) {
     return { applied: true, balance: u.walletBalance };
   });
 }
-
 
 async function applyLedgerCreditRefund(app, userId, tx) {
   const opId = `refund:${tx._id.toString()}`;
@@ -191,7 +185,6 @@ async function applyLedgerCreditRefund(app, userId, tx) {
     return { applied: true, balance: u.walletBalance };
   });
 }
-
 
 async function applyLedgerDebitSettle(app, userId, tx) {
   const opId = `settle:${tx._id.toString()}`;
@@ -267,7 +260,6 @@ function maskPixKey(type, normalizedKey) {
 }
 
 const IS_ASAAS_PROD = (process.env.ASAAS_API_BASE || '').includes('api.asaas.com');
-
 
 function addBusinessDays(start, days) {
   const d = new Date(start);
@@ -374,7 +366,6 @@ function afterResponse(res, fn) {
   }
 }
 
-
 async function reconcilePendingWithdrawsForUser(app, userId, { limit = 10, timeoutMs = 4500 } = {}) {
   const result = { checked: 0, completed: 0, failed: 0, unchanged: 0 };
   try {
@@ -453,7 +444,6 @@ async function handleWithdrawTimeoutsForUser(app, userId) {
       const deadline = addBusinessDays(tx.createdAt || tx.updatedAt || new Date(0), 1);
       if (now < deadline) continue;
 
-
       let tStatus = 'UNKNOWN';
       if (tx.asaasTransferId) {
         try {
@@ -461,7 +451,6 @@ async function handleWithdrawTimeoutsForUser(app, userId) {
           tStatus = String(t?.status || '').toUpperCase();
         } catch (_) {}
       }
-
 
       if (['DONE','CONFIRMED','COMPLETED','PAID'].some(s => tStatus.includes(s))) {
         if (tx.status !== 'withdraw_completed') {
@@ -479,7 +468,6 @@ async function handleWithdrawTimeoutsForUser(app, userId) {
         continue;
       }
 
-
       const resu = await applyLedgerCreditRefund(app, userId, tx);
       if (resu && resu.applied) {
         tx.status = 'failed';
@@ -496,7 +484,6 @@ async function handleWithdrawTimeoutsForUser(app, userId) {
   } catch (_) {}
 }
 
-
 router.post('/deposits/initiate', auth, async (req, res) => {
   try {
     const user = req.user;
@@ -509,7 +496,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
 
     const feeAmount = round2((amountNum * FEE_PERCENT) / 100);
     const amountNet = round2(amountNum - feeAmount);
-
 
     let cpfCnpj = user.cpfCnpj || cpfCnpjBody || undefined;
     if (IS_ASAAS_PROD) {
@@ -530,7 +516,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
       }
     }
 
-
     const customer = await AsaasService.getOrCreateCustomer({
       name: user.name || user.email,
       email: user.email,
@@ -542,7 +527,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
       cpfCnpj
     );
     let customerId = ensuredCustomer?.id || customer.id || customer._id || customer.customer || customer.customerId;
-
 
     const tx = await WalletTransaction.create({
       userId: user._id,
@@ -556,7 +540,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
     });
 
     const externalReference = `wallet_tx_${tx._id.toString()}`;
-
 
     let payment;
     try {
@@ -588,12 +571,10 @@ router.post('/deposits/initiate', auth, async (req, res) => {
       }
     }
 
-
     tx.asaasPaymentId = payment.id;
     tx.externalReference = externalReference;
     tx.logs.push({ level: 'info', message: 'Asaas payment created', data: { paymentId: payment.id } });
     await tx.save();
-
 
     try {
       const qr = await AsaasService.getPixQrCodeWithRetry(payment.id, { attempts: 2, delayMs: 750, timeoutMs: 4000 });
@@ -641,8 +622,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Erro ao iniciar depósito', error: error.message });
   }
 });
-
-
 
 router.get('/deposits/qr', auth, async (req, res) => {
   try {
@@ -692,7 +671,6 @@ router.get('/deposits/qr', auth, async (req, res) => {
   }
 });
 
-
 router.get('/pix-key', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('pixKeyType pixKeyNormalized pixKeyLocked pixKeyLinkedAt pixKeyFirstWithdrawAt');
@@ -712,7 +690,6 @@ router.get('/pix-key', auth, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Erro ao consultar chave PIX', error: error.message });
   }
 });
-
 
 router.post('/pix-key', auth, async (req, res) => {
   try {
@@ -756,8 +733,6 @@ router.post('/pix-key', auth, async (req, res) => {
   }
 });
 
-
-
 router.post('/withdraw/reconcile', auth, async (req, res) => {
   try {
     const userId = req.user._id;
@@ -766,7 +741,6 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
     if (!transferId && !transactionId) {
       return res.status(400).json({ success: false, message: 'Informe transferId ou transactionId' });
     }
-
 
     const txQuery = transactionId
       ? { _id: transactionId, userId }
@@ -781,7 +755,6 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
           const tVal = Number(t?.value || t?.netValue || t?.totalValue || 0);
           const desc = String(t?.description || '');
 
-
           if (extRef) {
             try {
               const byExt = await WalletTransaction.findOne({ externalReference: extRef, userId });
@@ -793,7 +766,6 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
               }
             } catch (_) {}
           }
-
 
           if (!tx) {
             const m = desc.match(/\btx\s+([0-9a-fA-F]{24})\b/);
@@ -809,7 +781,6 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
               } catch (_) {}
             }
           }
-
 
           if (!tx && tVal > 0) {
             try {
@@ -839,7 +810,6 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
       }
     }
 
-
     if (['withdraw_completed', 'failed'].includes(tx.status)) {
       const u = await User.findById(userId);
       return res.json({ success: true, data: { status: tx.status, balance: round2(u?.walletBalance || 0) } });
@@ -849,7 +819,6 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
     if (!asaasTransferId) {
       return res.status(400).json({ success: false, message: 'transferId ausente para reconciliação' });
     }
-
 
     let t;
     try {
@@ -951,8 +920,6 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
   }
 });
 
-
-
 router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) => {
   try {
     const hdr = req.headers || {};
@@ -980,13 +947,11 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
 
     logger.info('[Asaas Webhook] Received event', { eventType });
 
-
     const evUpper = String(eventType).toUpperCase();
     const isDepositEvent = evUpper === 'PAYMENT_RECEIVED' || evUpper === 'PAYMENT_CONFIRMED' || evUpper.startsWith('PAYMENT');
     if (isDepositEvent) {
       let payment = event.payment || event.data || {};
       const paymentId = payment.id || event.paymentId || event.id;
-
 
       // If minimal payload received, fetch full payment details from Asaas to get externalReference/status
       if ((!payment || !payment.externalReference || !payment.billingType) && paymentId) {
@@ -1006,7 +971,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         logger.warn('Webhook payment without id');
         return res.json({ received: true });
       }
-
 
       let tx = await WalletTransaction.findOne({ asaasPaymentId: paymentId });
       if (!tx) {
@@ -1069,7 +1033,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       const txLocked = await WalletTransaction.findById(tx._id);
       if (!txLocked) return res.json({ received: true });
 
-
       const providerValue = Number(payment.value || 0);
       const providerNet = Number(payment.netValue || 0);
       const approx = (a, b) => Math.abs(Number(a) - Number(b)) <= 0.01;
@@ -1080,7 +1043,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         txLocked.logs.push({ level: 'warn', message: 'Payment value mismatch (ignored)', data: { providerValue, providerNet, expectedGross: txLocked.amountGross, expectedNet: txLocked.amountNet } });
         // Continue processing to avoid missing credit due to provider fee differences
       }
-
 
       txLocked.status = 'paid';
       txLocked.logs.push({ level: 'info', message: 'Payment confirmed', at: new Date().toISOString() });
@@ -1097,11 +1059,9 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       txLocked.status = 'credited';
       txLocked.logs.push({ level: 'info', message: 'Wallet credited', data: { newBalance: dep?.balance }, at: new Date().toISOString() });
 
-
       txLocked.logs.push({ level: 'info', message: 'Mediator fee transfer disabled — skipping', at: new Date().toISOString() });
 
       await txLocked.save();
-
 
       try {
         const notificationService = req.app?.locals?.notificationService;
@@ -1121,7 +1081,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
             }
           });
 
-
           await notificationService.sendNotification(txLocked.userId.toString(), {
             title: 'Depósito confirmado',
             body: `R$ ${txLocked.amountNet.toFixed(2)} creditados.`,
@@ -1140,7 +1099,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       return res.json({ received: true });
     }
 
-
     if (evUpper.includes('TRANSFER')) {
       const transfer = event.transfer || event.data || {};
       const transferId = transfer.id || event.transferId || event.id;
@@ -1148,7 +1106,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         logger.warn('[Asaas Webhook] TRANSFER event without id');
         return res.json({ received: true });
       }
-
 
       let tx = await WalletTransaction.findOne({ asaasTransferId: transferId });
       if (!tx) {
@@ -1168,7 +1125,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
           }
         }
 
-
         if (!tx) {
           const desc = String(transfer.description || '');
           const m = desc.match(/\btx\s+([0-9a-fA-F]{24})\b/);
@@ -1185,7 +1141,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
               logger.warn('[Asaas Webhook] Fallback lookup by description failed', { message: e.message, transferId });
             }
           }
-
 
           if (!tx) {
             const tValue = Number(transfer.value || transfer.netValue || transfer.totalValue || 0);
@@ -1219,7 +1174,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         }
       }
 
-
       await WalletTransaction.updateOne(
         { _id: tx._id, status: { $in: ['withdraw_pending', 'withdraw_completed', 'failed'] } },
         { $push: { logs: { level: 'info', message: 'Asaas transfer webhook processing started', at: new Date().toISOString() } } }
@@ -1232,7 +1186,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       if (tStatus.includes('DONE') || tStatus.includes('CONFIRMED') || tStatus === 'COMPLETED' || tStatus === 'PAID') {
         txLocked.status = 'withdraw_completed';
         txLocked.logs.push({ level: 'info', message: 'Withdraw transfer confirmed via webhook', data: { transferId, status: tStatus }, at: new Date().toISOString() });
-
 
         const user = await User.findById(txLocked.userId);
         if (user) {
@@ -1285,7 +1238,6 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         txLocked.status = 'failed';
         txLocked.logs.push({ level: 'error', message: 'Withdraw transfer failed via webhook', data: { transferId, status: tStatus }, at: new Date().toISOString() });
 
-
         const refunded = await applyLedgerCreditRefund(req.app, txLocked.userId, txLocked);
         if (refunded?.applied) {
           txLocked.logs.push({ level: 'warn', message: 'Wallet refunded', data: { reason: 'transfer_failed' }, at: new Date().toISOString() });
@@ -1308,14 +1260,12 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       }
     }
 
-
     return res.json({ received: true });
   } catch (error) {
     logger.error('Wallet webhook error:', error);
     return res.status(500).json({ success: false });
   }
 });
-
 
 router.get('/balance', auth, async (req, res) => {
   try {
@@ -1327,7 +1277,6 @@ router.get('/balance', auth, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Erro ao obter saldo' });
   }
 });
-
 
 router.get('/transactions', auth, async (req, res) => {
   try {
@@ -1344,7 +1293,6 @@ router.get('/transactions', auth, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Erro ao listar transações' });
   }
 });
-
 
 router.post('/withdraw', auth, async (req, res) => {
   try {
@@ -1369,7 +1317,6 @@ router.post('/withdraw', auth, async (req, res) => {
     } else if (!pixKey || !pixKeyType) {
       return res.status(400).json({ success: false, message: 'Chave Pix e tipo são obrigatórios' });
     }
-
 
     let normalizedPixKeyType;
     let digits;
@@ -1412,12 +1359,8 @@ router.post('/withdraw', auth, async (req, res) => {
       }
     }
 
-
-
-
     try { await reconcilePendingWithdrawsForUser(req.app, user._id, { limit: 25, timeoutMs: 4000 }); } catch (_) {}
     try { await expireStalePendingWithdrawsForUser(req.app, user._id); } catch (_) {}
-
 
     try {
       const today = startOfToday();
@@ -1436,7 +1379,6 @@ router.post('/withdraw', auth, async (req, res) => {
         });
       }
     } catch (_) {}
-
 
     if (idempotencyKey) {
       try {
@@ -1482,7 +1424,6 @@ router.post('/withdraw', auth, async (req, res) => {
       idempotencyKey,
       logs: [{ level: 'info', message: 'Withdraw requested', data: { amountGross: amountNum, feeAmount, amountNet } }]
     });
-
 
     // Reservar o valor TOTAL (amountGross) do saldo do usuário
     let reserveRes;
@@ -1568,7 +1509,6 @@ router.post('/withdraw', auth, async (req, res) => {
       logger?.error?.('[WITHDRAW] Failed to credit mediator fee', { error: feeErr?.message, transactionId: String(tx._id) });
     }
 
-
     afterResponse(res, () => {
       sendWalletNotification(req.app, user._id, {
         title: 'Saque criado',
@@ -1577,7 +1517,6 @@ router.post('/withdraw', auth, async (req, res) => {
         data: { transactionId: tx._id, amount: tx.amountNet }
       });
     });
-
 
     // Criar transferência PIX com o valor LÍQUIDO (após taxa)
     let transfer;
@@ -1600,7 +1539,6 @@ router.post('/withdraw', auth, async (req, res) => {
       const code = errItem.code || asaasData.error;
       const description = errItem.description || err.message;
 
-
       if (err?.code === 'ECONNABORTED') {
         try {
           tx.status = 'failed';
@@ -1615,13 +1553,11 @@ router.post('/withdraw', auth, async (req, res) => {
         });
       }
 
-
       try {
         tx.status = 'failed';
         tx.logs.push({ level: 'error', message: 'Withdraw transfer create failed', data: { code, description } });
         await tx.save();
       } catch (_) {}
-
 
       try {
         const refunded = await applyLedgerCreditRefund(req.app, user._id, tx);
@@ -1638,7 +1574,6 @@ router.post('/withdraw', auth, async (req, res) => {
           });
         }
       } catch (_) {}
-
 
       let clientMessage = 'Erro ao solicitar saque.';
       let httpStatus = status;
@@ -1668,7 +1603,6 @@ router.post('/withdraw', auth, async (req, res) => {
     tx.logs.push({ level: 'info', message: 'Withdraw transfer created', data: { transferId: transfer.id } });
     await tx.save();
 
-
     let transferStatus = 'PENDING';
     try {
       const t = await AsaasService.getTransferWithTimeout(transfer.id, 3500);
@@ -1677,7 +1611,6 @@ router.post('/withdraw', auth, async (req, res) => {
         tx.status = 'withdraw_completed';
         tx.logs.push({ level: 'info', message: 'Withdraw transfer confirmed', data: { transferId: transfer.id, status: transferStatus } });
         await tx.save();
-
 
         afterResponse(res, () => {
           sendBalanceUpdateEvent(req.app, user._id, {
@@ -1697,7 +1630,6 @@ router.post('/withdraw', auth, async (req, res) => {
             data: { transactionId: tx._id, amount: tx.amountNet }
           });
         });
-
 
         try {
           const u = await User.findById(user._id);
@@ -1737,8 +1669,6 @@ router.post('/withdraw', auth, async (req, res) => {
   }
 });
 
-
-
 router.post('/withdraw/sync', auth, async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1764,7 +1694,6 @@ router.post('/withdraw/sync', auth, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Erro ao sincronizar saques', error: error.message });
   }
 });
-
 
 // GET /wallet/escrow - Retorna saldo bloqueado em escrow
 router.get('/escrow', auth, async (req, res) => {

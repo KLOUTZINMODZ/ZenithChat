@@ -5,7 +5,6 @@ const sharp = require('sharp');
 const { auth } = require('../middleware/auth');
 const UploadedImage = require('../models/UploadedImage');
 
-
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/avif']);
 const MAX_FILE_SIZE = 25 * 1024 * 1024; 
 
@@ -39,7 +38,6 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
     const image = sharp(req.file.buffer, { failOnError: false });
     const metadata = await image.metadata();
 
-
     const fullBuffer = await image.clone()
       .rotate()
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
@@ -51,7 +49,6 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80, progressive: true, mozjpeg: true })
       .toBuffer();
-
 
     const thumbBuffer = await image.clone()
       .rotate()
@@ -134,7 +131,6 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
   }
 });
 
-
 function decodeBase64Image(input, explicitMime) {
   if (!input || typeof input !== 'string') return { error: 'No base64 data provided' };
   try {
@@ -153,7 +149,6 @@ function decodeBase64Image(input, explicitMime) {
     return { error: 'Invalid base64 content' };
   }
 }
-
 
 router.post('/image-base64', auth, async (req, res) => {
   try {
@@ -186,7 +181,6 @@ router.post('/image-base64', auth, async (req, res) => {
     const image = sharp(decoded.buffer, { failOnError: false});
     const metadata = await image.metadata();
 
-
     const fullBuffer = await image.clone()
       .rotate()
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
@@ -198,7 +192,6 @@ router.post('/image-base64', auth, async (req, res) => {
       .resize({ width: 1920, height: 1920, fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80, progressive: true, mozjpeg: true })
       .toBuffer();
-
 
     const thumbBuffer = await image.clone()
       .rotate()

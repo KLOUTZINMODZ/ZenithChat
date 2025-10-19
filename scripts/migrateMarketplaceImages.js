@@ -28,22 +28,22 @@ async function findAllImages(dir, fileList = []) {
 
 async function migrateMarketplaceImages() {
   try {
-    console.log('🔌 Conectando ao MongoDB...');
+    
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Conectado ao MongoDB\n');
+    
     
     const uploadsRoot = path.join(__dirname, '..', 'uploads', 'marketplace');
     
     if (!fs.existsSync(uploadsRoot)) {
-      console.log('⚠️  Diretório marketplace não existe:', uploadsRoot);
-      console.log('Nenhuma imagem de marketplace para migrar.');
+      
+      
       return;
     }
     
-    console.log('📂 Procurando imagens em:', uploadsRoot);
+    
     const allImages = await findAllImages(uploadsRoot);
     
-    console.log(`\n📊 Total de arquivos encontrados: ${allImages.length}\n`);
+    
     
     let processed = 0;
     let alreadyExists = 0;
@@ -58,7 +58,7 @@ async function migrateMarketplaceImages() {
         const match = fileName.match(/^(\d+_[a-z0-9]+)(?:_thumb)?\.(?:avif|jpg|jpeg|png)$/i);
         
         if (!match) {
-          console.log(`⚠️  Formato de arquivo não reconhecido: ${fileName}`);
+          
           continue;
         }
         
@@ -90,7 +90,7 @@ async function migrateMarketplaceImages() {
         
         // Verificar se todos os arquivos existem
         if (!fs.existsSync(fullAvifPath)) {
-          console.log(`⚠️  Arquivo principal não encontrado: ${fullAvifPath}`);
+          
           continue;
         }
         
@@ -129,48 +129,48 @@ async function migrateMarketplaceImages() {
         });
         
         imported++;
-        console.log(`Importado: ${imageId} (${(fullImage.length / 1024).toFixed(2)}KB)`);
+        .toFixed(2)}KB)`);
         
       } catch (error) {
         errors++;
-        console.error(`❌ Erro ao processar ${path.basename(imagePath)}:`, error.message);
+        }:`, error.message);
       }
       
       processed++;
       
       // Progress indicator
       if (processed % 10 === 0) {
-        console.log(`\n📊 Progresso: ${processed}/${allImages.length} arquivos processados\n`);
+        
       }
     }
     
-    console.log('\n' + '='.repeat(60));
-    console.log('📊 RESUMO DA MIGRAÇÃO');
-    console.log('='.repeat(60));
-    console.log(`Total de arquivos encontrados: ${allImages.length}`);
-    console.log(`Arquivos processados: ${processed}`);
-    console.log(`Já existiam no banco: ${alreadyExists}`);
-    console.log(`Novos importados: ${imported}`);
-    console.log(`Erros: ${errors}`);
-    console.log('='.repeat(60));
-    console.log('\nMigração concluída!\n');
+    );
+    
+    );
+    
+    
+    
+    
+    
+    );
+    
     
   } catch (error) {
-    console.error('❌ Erro na migração:', error);
+    
     process.exit(1);
   } finally {
     await mongoose.connection.close();
-    console.log('🔌 Conexão com MongoDB fechada');
+    
   }
 }
 
 // Executar migração
 migrateMarketplaceImages()
   .then(() => {
-    console.log('Script finalizado com sucesso');
+    
     process.exit(0);
   })
   .catch((error) => {
-    console.error('❌ Script falhou:', error);
+    
     process.exit(1);
   });

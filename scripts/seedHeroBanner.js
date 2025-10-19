@@ -5,9 +5,9 @@ const HeroBanner = require('../src/models/HeroBanner');
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✅ MongoDB connected');
+    
   } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
+    
     process.exit(1);
   }
 };
@@ -16,7 +16,7 @@ const seedBanner = async () => {
   try {
     // Limpar banners existentes (opcional)
     // await HeroBanner.deleteMany({});
-    // console.log('🗑️  Banners existentes removidos');
+    // 
 
     // Criar banner de exemplo
     const exampleBanner = new HeroBanner({
@@ -41,14 +41,14 @@ const seedBanner = async () => {
     });
 
     await exampleBanner.save();
-    console.log('✅ Banner de exemplo criado com sucesso!');
-    console.log(exampleBanner);
+    
+    
 
   } catch (error) {
-    console.error('❌ Erro ao criar banner:', error);
+    
   } finally {
     await mongoose.connection.close();
-    console.log('🔌 Conexão com MongoDB fechada');
+    
   }
 };
 

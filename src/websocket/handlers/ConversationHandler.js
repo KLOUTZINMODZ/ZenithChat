@@ -252,12 +252,10 @@ class ConversationHandler {
         this.userLastCheck.set(userId, parseInt(lastCheck));
       }
 
-
       this.activePolling.set(userId, {
         socketId: socket.id,
         startTime: Date.now()
       });
-
 
       await this.sendConversationsUpdate(userId);
 
@@ -344,7 +342,6 @@ class ConversationHandler {
       .sort({ updatedAt: -1 })
       .lean();
 
-
       const conversationsWithUnread = await Promise.all(
         conversations.map(async (conv) => {
           // Use stored unreadCount map on Conversation instead of heavy COUNTs
@@ -397,7 +394,6 @@ class ConversationHandler {
         })
       );
 
-
       const hasUpdates = conversationsWithUnread.some(c => c.hasUpdate);
 
       return {
@@ -424,7 +420,6 @@ class ConversationHandler {
       const lastCheck = this.userLastCheck.get(userId);
       const conversationsData = await this.getConversationsData(userId, lastCheck);
 
-
       if (conversationsData.hasUpdates) {
         this.sendToUser(userId, {
           type: 'conversations:update',
@@ -433,7 +428,6 @@ class ConversationHandler {
             timestamp: conversationsData.timestamp
           }
         });
-
 
         this.userLastCheck.set(userId, conversationsData.timestamp);
 
@@ -548,7 +542,6 @@ class ConversationHandler {
 
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) return;
-
 
       for (const participant of conversation.participants) {
         const userId = participant.user?.toString() || participant.toString();

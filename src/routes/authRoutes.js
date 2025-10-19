@@ -5,7 +5,6 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 const emailVerificationController = require('../controllers/emailVerificationController');
 
-
 router.post('/validate', async (req, res) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -37,7 +36,6 @@ router.post('/validate', async (req, res) => {
   }
 });
 
-
 router.get('/ws-token', async (req, res) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -49,9 +47,7 @@ router.get('/ws-token', async (req, res) => {
       });
     }
 
-
     jwt.verify(token, process.env.JWT_SECRET);
-
 
     const base = process.env.CHAT_PUBLIC_BASE_URL
       ? process.env.CHAT_PUBLIC_BASE_URL.replace(/\/$/, '')

@@ -73,29 +73,29 @@ function makeRequest(path, method = 'GET', data = null) {
 
 // Função para imprimir header
 function printHeader(text) {
-  console.log('\n' + colors.cyan + colors.bright + '═'.repeat(60) + colors.reset);
-  console.log(colors.cyan + colors.bright + text + colors.reset);
-  console.log(colors.cyan + colors.bright + '═'.repeat(60) + colors.reset + '\n');
+  + colors.reset);
+  
+  + colors.reset + '\n');
 }
 
 // Função para imprimir sucesso
 function printSuccess(text) {
-  console.log(colors.green + '✓ ' + text + colors.reset);
+  
 }
 
 // Função para imprimir erro
 function printError(text) {
-  console.log(colors.red + '✗ ' + text + colors.reset);
+  
 }
 
 // Função para imprimir info
 function printInfo(text) {
-  console.log(colors.blue + '→ ' + text + colors.reset);
+  
 }
 
 // Função para imprimir warning
 function printWarning(text) {
-  console.log(colors.yellow + '⚠ ' + text + colors.reset);
+  
 }
 
 // Teste 1: Conexão com API
@@ -135,24 +135,24 @@ async function testEmailStats() {
       const analysis = response.data.analysis;
       
       printSuccess('Estatísticas obtidas com sucesso!');
-      console.log('');
-      console.log(colors.bright + '📊 ESTATÍSTICAS:' + colors.reset);
-      console.log(`   Total de usuários: ${colors.cyan}${stats.totalUsers}${colors.reset}`);
-      console.log(`   Elegíveis: ${colors.green}${stats.eligibleUsers}${colors.reset}`);
-      console.log(`   Não elegíveis: ${colors.red}${stats.totalUsers - stats.eligibleUsers}${colors.reset}`);
       
-      console.log('');
-      console.log(colors.bright + '📋 BREAKDOWN:' + colors.reset);
-      console.log(`   true explícito: ${analysis.breakdown.trueExplicit}`);
-      console.log(`   ❌ false explícito: ${analysis.breakdown.falseExplicit}`);
-      console.log(`   ⚪ undefined: ${analysis.breakdown.undefinedValue}`);
-      console.log(`   ⚫ null: ${analysis.breakdown.nullValue}`);
-      console.log(`   🚫 sem preferences: ${analysis.breakdown.noPreferencesObject}`);
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       
       return { success: true, stats, analysis };
     } else {
       printError('Falha ao obter estatísticas');
-      console.log('Response:', response.data);
+      
       return { success: false };
     }
   } catch (error) {
@@ -173,20 +173,20 @@ async function testUserDebug() {
       const users = response.data.users;
       
       printSuccess('Debug obtido com sucesso!');
-      console.log('');
-      console.log(colors.bright + '👥 RESUMO:' + colors.reset);
-      console.log(`   Total: ${summary.total}`);
-      console.log(`   Elegíveis: ${colors.green}${summary.eligible}${colors.reset}`);
-      console.log(`   Não elegíveis: ${colors.red}${summary.notEligible}${colors.reset}`);
       
-      console.log('');
-      console.log(colors.bright + '📝 PRIMEIROS 5 USUÁRIOS:' + colors.reset);
+      
+      
+      
+      
+      
+      
+      
       users.slice(0, 5).forEach((user, index) => {
         const statusIcon = user.isEligible ? '✅' : '❌';
         const statusColor = user.isEligible ? colors.green : colors.red;
-        console.log(`   ${index + 1}. ${statusIcon} ${user.name} (${user.email})`);
-        console.log(`      ${statusColor}emailNotifications: ${user.emailNotifications}${colors.reset}`);
-        console.log(`      Tipo: ${user.emailNotificationsType}`);
+        `);
+        
+        
       });
       
       return { success: true, summary, users };
@@ -212,8 +212,8 @@ async function testLogicValidation(statsResult, debugResult) {
   const stats = statsResult.stats;
   const debug = debugResult.summary;
   
-  console.log(colors.bright + '🔍 VERIFICANDO CONSISTÊNCIA:' + colors.reset);
-  console.log('');
+  
+  
   
   // Verificação 1: Total de usuários
   if (stats.totalUsers === debug.total) {
@@ -260,7 +260,7 @@ function printFinalSummary(results) {
   
   const allPassed = results.every(r => r.passed);
   
-  console.log(colors.bright + 'RESULTADOS:' + colors.reset);
+  
   results.forEach(result => {
     if (result.passed) {
       printSuccess(result.name);
@@ -269,22 +269,22 @@ function printFinalSummary(results) {
     }
   });
   
-  console.log('');
+  
   if (allPassed) {
-    console.log(colors.green + colors.bright + '🎉 TODOS OS TESTES PASSARAM!' + colors.reset);
+    
   } else {
-    console.log(colors.red + colors.bright + '⚠️  ALGUNS TESTES FALHARAM' + colors.reset);
+    
   }
-  console.log('');
+  
 }
 
 // Função principal
 async function runAllTests() {
-  console.log(colors.cyan + colors.bright);
-  console.log('╔═══════════════════════════════════════════════════════════╗');
-  console.log('║     TESTE DO SISTEMA DE EMAIL - ZENITH GAMING           ║');
-  console.log('╚═══════════════════════════════════════════════════════════╝');
-  console.log(colors.reset);
+  
+  
+  
+  
+  
   
   const results = [];
   
@@ -316,6 +316,6 @@ async function runAllTests() {
 
 // Executar testes
 runAllTests().catch(error => {
-  console.error(colors.red + 'Erro fatal:', error.message + colors.reset);
+  
   process.exit(1);
 });

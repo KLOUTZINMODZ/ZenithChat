@@ -32,7 +32,7 @@ exports.getUserAchievements = async (req, res) => {
       data: achievements
     });
   } catch (error) {
-    console.error('Error getting user achievements:', error);
+    
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar conquistas',
@@ -105,7 +105,7 @@ exports.updateStats = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error updating stats:', error);
+    
     return res.status(500).json({
       success: false,
       message: 'Erro ao atualizar estatísticas',
@@ -157,7 +157,7 @@ exports.forceCheck = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error force checking achievements:', error);
+    
     return res.status(500).json({
       success: false,
       message: 'Erro ao verificar conquistas',
@@ -211,7 +211,7 @@ exports.markAsNotified = async (req, res) => {
       message: 'Conquista marcada como notificada'
     });
   } catch (error) {
-    console.error('Error marking achievement as notified:', error);
+    
     return res.status(500).json({
       success: false,
       message: 'Erro ao marcar conquista',
@@ -253,7 +253,7 @@ exports.getUnnotified = async (req, res) => {
       data: unnotified
     });
   } catch (error) {
-    console.error('Error getting unnotified achievements:', error);
+    
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar conquistas não notificadas',
@@ -316,13 +316,7 @@ exports.getUserAchievementsById = async (req, res) => {
       const averageRating = reviews.length > 0 ? reviews[0].averageRating : 0;
       const ratingCount = reviews.length > 0 ? reviews[0].count : 0;
 
-      console.log('[getUserAchievementsById] Stats calculadas:', {
-        userId,
-        totalSales,
-        totalPurchases,
-        averageRating,
-        ratingCount
-      });
+      
 
       // Processar conquistas com os dados reais
       const stats = {
@@ -339,7 +333,7 @@ exports.getUserAchievementsById = async (req, res) => {
       await achievementService.processAchievements(user, stats);
 
     } catch (calcError) {
-      console.error('Error calculating user stats:', calcError);
+      
       // Continuar com dados salvos se o cálculo falhar
     }
 
@@ -351,7 +345,7 @@ exports.getUserAchievementsById = async (req, res) => {
       data: achievements
     });
   } catch (error) {
-    console.error('Error getting user achievements by id:', error);
+    
     return res.status(500).json({
       success: false,
       message: 'Erro ao buscar conquistas do usuário',

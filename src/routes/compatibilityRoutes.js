@@ -9,7 +9,6 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 const { decryptMessage } = require('../utils/encryption');
 
-
 router.get('/v1/messages/conversations', auth, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;

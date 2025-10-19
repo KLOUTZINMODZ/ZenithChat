@@ -6,12 +6,10 @@ const highlightRetryService = require('../services/highlightRetryService');
 const MarketItem = require('../models/MarketItem');
 const router = express.Router();
 
-
 const applyHighlightToMainAPI = async (externalReference, paymentData = null) => {
   let userId = null;
   
   try {
-
 
     const parts = externalReference.split('_');
     if (parts.length < 4 || parts[0] !== 'marketplace' || parts[1] !== 'highlight') {
@@ -87,7 +85,6 @@ const applyHighlightToMainAPI = async (externalReference, paymentData = null) =>
   }
 };
 
-
 const processMercadoPagoNotification = async (notification) => {
   try {
     logger.info('💳 Processando notificação do Mercado Pago:', notification);
@@ -149,7 +146,6 @@ const processMercadoPagoNotification = async (notification) => {
 
         try {
 
-
           const refParts = paymentDetails.external_reference.split('_');
           const userId = refParts.length >= 4 ? refParts[2] : null;
           
@@ -206,7 +202,6 @@ const processMercadoPagoNotification = async (notification) => {
     };
   }
 };
-
 
 router.post('/mercadopago-webhook', async (req, res) => {
   logger.info('🔔 Webhook Mercado Pago recebido na ZenithChatApi');
@@ -279,7 +274,6 @@ router.post('/mercadopago-webhook', async (req, res) => {
   }
 });
 
-
 router.post('/test-webhook', async (req, res) => {
   logger.info('🧪 Teste de webhook recebido');
   
@@ -320,7 +314,6 @@ router.post('/test-webhook', async (req, res) => {
     });
   }
 });
-
 
 router.get('/health', (req, res) => {
   res.json({

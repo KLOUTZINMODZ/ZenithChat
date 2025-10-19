@@ -347,7 +347,7 @@ router.get('/list', auth, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[PURCHASES LIST ERROR]', error);
+    
     return res.status(500).json({ success: false, message: 'Erro ao listar compras/vendas', error: error.message });
   }
 });
@@ -610,7 +610,7 @@ router.post('/initiate', auth, async (req, res) => {
 
       await conv.save();
     } catch (convErr) {
-      console.error('[PURCHASES] Failed to update conversation as marketplace:', convErr);
+      
     }
 
     await sendBalanceUpdate(req.app, buyerId);

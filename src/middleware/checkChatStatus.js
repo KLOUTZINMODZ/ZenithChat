@@ -21,7 +21,6 @@ const checkChatStatus = async (req, res, next) => {
       });
     }
 
-
     if (conversation.isFinalized) {
       return res.status(403).json({ 
         success: false, 
@@ -32,7 +31,6 @@ const checkChatStatus = async (req, res, next) => {
       });
     }
 
-
     if (!conversation.canReceiveMessages()) {
       return res.status(403).json({ 
         success: false, 
@@ -41,11 +39,10 @@ const checkChatStatus = async (req, res, next) => {
       });
     }
 
-
     req.conversation = conversation;
     next();
   } catch (error) {
-    console.error('Erro ao verificar status do chat:', error);
+    
     res.status(500).json({ 
       success: false, 
       message: 'Erro interno do servidor' 

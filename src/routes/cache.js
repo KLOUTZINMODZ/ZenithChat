@@ -47,7 +47,6 @@ router.get('/sync/:userId', auth, async (req, res) => {
       version: Date.now().toString()
     };
 
-
     if (syncData.conversations) {
       syncData.messageCache = {};
       syncData.conversations.forEach(conv => {
@@ -134,7 +133,6 @@ router.post('/warm/:userId', auth, async (req, res) => {
       });
     }
 
-
     const Conversation = require('../models/Conversation');
     const conversations = await Conversation.find({
       participants: userId
@@ -144,9 +142,7 @@ router.post('/warm/:userId', auth, async (req, res) => {
       .sort('-lastMessageAt')
       .limit(50);
 
-
     cache.cacheConversations(userId, conversations);
-
 
     const Message = require('../models/Message');
     let cachedMessagesCount = 0;
@@ -232,7 +228,6 @@ router.get('/health', async (req, res) => {
       },
       timestamp: new Date().toISOString()
     };
-
 
     if (stats.cacheSize > stats.maxSize * 0.9) {
       health.status = 'warning';

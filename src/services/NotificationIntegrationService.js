@@ -36,7 +36,6 @@ class NotificationIntegrationService {
         retryOnFailure = true
       } = options;
 
-
       const offlineStatus = cache.get(`offline_status:${userId}`);
       const isOfflineForChat = !!offlineStatus;
 
@@ -49,11 +48,9 @@ class NotificationIntegrationService {
         cachedForOfflineUser: isOfflineForChat
       };
 
-
       if (isOfflineForChat || persistent) {
         this.cacheNotification(userId, enrichedNotification);
       }
-
 
       const delivered = await this.attemptDelivery(userId, enrichedNotification);
 
@@ -190,7 +187,6 @@ class NotificationIntegrationService {
         return sent;
       }
 
-
       const offlineKey = `notifications:offline:${userId}`;
       const offlineNotifications = cache.get(offlineKey) || [];
       offlineNotifications.unshift(message);
@@ -214,14 +210,11 @@ class NotificationIntegrationService {
       const cacheKey = `notifications:${userId}`;
       let userNotifications = cache.get(cacheKey) || [];
 
-
       userNotifications.unshift(notification);
-
 
       if (userNotifications.length > 100) {
         userNotifications = userNotifications.slice(0, 100);
       }
-
 
       cache.set(cacheKey, userNotifications, this.cacheTTL.notifications);
       
@@ -334,13 +327,11 @@ class NotificationIntegrationService {
 
       logger.info(`Sending ${pendingNotifications.length} pending notifications to user ${userId}`);
 
-
       for (let i = 0; i < pendingNotifications.length; i++) {
         setTimeout(() => {
           this.attemptDelivery(userId, pendingNotifications[i]);
         }, i * 500);
       }
-
 
       const unreadCount = cache.get(`notifications:${userId}:unread`) || 0;
       setTimeout(() => {

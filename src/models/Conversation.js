@@ -158,7 +158,6 @@ const conversationSchema = new mongoose.Schema({
   timestamps: true
 });
 
-
 conversationSchema.index({ participants: 1 });
 conversationSchema.index({ lastMessageAt: -1 });
 conversationSchema.index({ 'participants': 1, 'lastMessageAt': -1 });
@@ -176,11 +175,9 @@ conversationSchema.index(
   }
 );
 
-
 conversationSchema.virtual('participantCount').get(function() {
   return this.participants.length;
 });
-
 
 conversationSchema.methods.isParticipant = function(userId) {
   return this.participants.some(p => {
@@ -190,7 +187,6 @@ conversationSchema.methods.isParticipant = function(userId) {
   });
 };
 
-
 conversationSchema.methods.addParticipant = function(userId) {
   if (!this.isParticipant(userId)) {
     this.participants.push(userId);
@@ -198,18 +194,15 @@ conversationSchema.methods.addParticipant = function(userId) {
   return this.save();
 };
 
-
 conversationSchema.methods.removeParticipant = function(userId) {
   this.participants = this.participants.filter(p => p.toString() !== userId.toString());
   return this.save();
 };
 
-
 conversationSchema.methods.resetUnreadCount = function(userId) {
   this.unreadCount.set(userId.toString(), 0);
   return this.save();
 };
-
 
 conversationSchema.methods.incrementUnreadCount = function(senderId) {
   this.participants.forEach(participant => {
@@ -221,7 +214,6 @@ conversationSchema.methods.incrementUnreadCount = function(senderId) {
   return this.save();
 };
 
-
 conversationSchema.methods.finalize = function(userId) {
   this.isFinalized = true;
   this.finalizedAt = new Date();
@@ -230,16 +222,13 @@ conversationSchema.methods.finalize = function(userId) {
   return this.save();
 };
 
-
 conversationSchema.methods.canReceiveMessages = function() {
   return this.isActive && !this.isFinalized && this.status !== 'expired';
 };
 
-
 conversationSchema.methods.isExpired = function() {
   return this.isTemporary && this.expiresAt && new Date() > this.expiresAt;
 };
-
 
 conversationSchema.methods.acceptTemporaryChat = function() {
   if (this.isTemporary && this.status === 'pending') {
@@ -251,7 +240,6 @@ conversationSchema.methods.acceptTemporaryChat = function() {
   throw new Error('Chat não é temporário ou já foi processado');
 };
 
-
 conversationSchema.methods.expireTemporaryChat = function() {
   if (this.isTemporary) {
     this.status = 'expired';
@@ -260,7 +248,6 @@ conversationSchema.methods.expireTemporaryChat = function() {
   }
   throw new Error('Chat não é temporário');
 };
-
 
 conversationSchema.statics.findOrCreate = async function(participantIds, metadata = {}) {
 
@@ -281,7 +268,6 @@ conversationSchema.statics.findOrCreate = async function(participantIds, metadat
 
   return conversation;
 };
-
 
 conversationSchema.statics.findOrCreateByContext = async function(participantIds, metadata = {}) {
   const sortedIds = participantIds.sort();

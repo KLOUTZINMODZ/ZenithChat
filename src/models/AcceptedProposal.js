@@ -134,11 +134,9 @@ const acceptedProposalSchema = new mongoose.Schema({
   timestamps: true
 });
 
-
 acceptedProposalSchema.index({ 'client.userid': 1 });
 acceptedProposalSchema.index({ 'booster.userid': 1 });
 acceptedProposalSchema.index({ status: 1, acceptedAt: -1 });
-
 
 acceptedProposalSchema.methods.addRenegotiation = function(requestedBy, newPrice, newEstimatedTime, reason) {
   this.renegotiationHistory.push({
@@ -152,13 +150,11 @@ acceptedProposalSchema.methods.addRenegotiation = function(requestedBy, newPrice
   return this.save();
 };
 
-
 acceptedProposalSchema.methods.complete = function() {
   this.status = 'completed';
   this.completedAt = new Date();
   return this.save();
 };
-
 
 acceptedProposalSchema.methods.cancel = function() {
   this.status = 'cancelled';

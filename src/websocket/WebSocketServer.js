@@ -39,13 +39,10 @@ class WebSocketServer {
       const token = url.searchParams.get('token') || 
                     info.req.headers.authorization?.replace('Bearer ', '');
 
-
-
       if (!token) {
         cb(false, 401, 'Unauthorized: No token provided');
         return;
       }
-
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const possibleId = decoded.id || decoded._id || decoded.userid || decoded.userId || decoded.user?.id || decoded.user?._id;
@@ -95,13 +92,11 @@ class WebSocketServer {
         try { this.presenceHandler.onActivity(userId); } catch (_) {}
       });
 
-
       this.conversationHandler.registerEvents(ws);
       this.presenceHandler.registerEvents(ws);
       
 
       this.proposalHandler.registerEvents(ws);
-
 
       ws.on('message', async (data) => {
         try {
@@ -113,7 +108,6 @@ class WebSocketServer {
           this.sendError(ws, 'Invalid message format');
         }
       });
-
 
       ws.on('close', (code, reason) => {
         this.connectionManager.removeConnection(userId, ws);
@@ -128,7 +122,6 @@ class WebSocketServer {
           logger.error('Error handling user disconnection:', error);
         }
       });
-
 
       ws.on('error', (error) => {
         logger.error(`WebSocket error for user ${userId}:`, {
@@ -147,14 +140,12 @@ class WebSocketServer {
         }
       });
 
-
       this.sendMessage(ws, {
         type: 'connection',
         status: 'connected',
         userId: userId,
         timestamp: new Date().toISOString()
       });
-
 
       this.messageHandler.sendPendingMessages(userId, ws);
       
@@ -170,7 +161,6 @@ class WebSocketServer {
 
   async handleMessage(ws, message) {
     const { type, ...payload } = message;
-
 
     switch (type) {
       case 'message:send':
@@ -203,7 +193,6 @@ class WebSocketServer {
         await this.messageHandler.handleGetMessageHistory(ws.userId, payload, ws);
         break;
 
-
       case 'conversations:start_polling':
         await this.conversationHandler.handleStartPolling(ws, payload);
         break;
@@ -227,7 +216,6 @@ class WebSocketServer {
         this.presenceHandler.handleQuery(ws, payload);
         break;
 
-
       case 'proposal:accepted':
         await this.proposalHandler.handleProposalAccepted(ws, payload);
         break;
@@ -244,11 +232,9 @@ class WebSocketServer {
         await this.messageHandler.handleReadAck(payload.messageId, ws.userId);
         break;
 
-
       case 'message:send_with_delivery':
         await this.handleSendMessageWithDelivery(ws.userId, payload);
         break;
-
 
       case 'notification:subscribe':
         await this.notificationHandler.handleSubscribe(ws.userId, payload);
@@ -296,7 +282,6 @@ class WebSocketServer {
       const { conversationId, content, type, messageType, attachments = [] } = payload;
       const finalType = type || messageType || 'text';
 
-
       const Conversation = require('../models/Conversation');
       const conversation = await Conversation.findById(conversationId)
         .populate('participants', '_id');
@@ -308,7 +293,6 @@ class WebSocketServer {
       const recipients = conversation.participants
         .map(p => p._id.toString())
         .filter(id => id !== userId);
-
 
       const Message = require('../models/Message');
       const { encryptMessage } = require('../utils/encryption');
@@ -324,7 +308,6 @@ class WebSocketServer {
 
       await message.save();
       await message.populate('sender', 'name email avatar');
-
 
       const messageId = await this.messageHandler.sendMessageWithDelivery(
         userId,

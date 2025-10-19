@@ -56,7 +56,6 @@ const messageSchema = new mongoose.Schema({
   timestamps: true
 });
 
-
 messageSchema.index({ conversation: 1, createdAt: -1 });
 messageSchema.index({ sender: 1, createdAt: -1 });
 messageSchema.index({ 'readBy.user': 1 });
@@ -65,13 +64,11 @@ messageSchema.index({ conversation: 1, 'readBy.user': 1, sender: 1, createdAt: -
 
 messageSchema.index({ createdAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 15 });
 
-
 messageSchema.virtual('isReadBy').get(function() {
   return (userId) => {
     return this.readBy.some(read => read.user.toString() === userId.toString());
   };
 });
-
 
 messageSchema.methods.markAsRead = function(userId) {
   if (!this.isReadBy(userId)) {
@@ -82,7 +79,6 @@ messageSchema.methods.markAsRead = function(userId) {
   }
   return this.save();
 };
-
 
 messageSchema.methods.softDelete = function() {
   this.deletedAt = new Date();

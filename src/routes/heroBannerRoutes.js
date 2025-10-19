@@ -60,7 +60,7 @@ router.get('/active', async (req, res) => {
       data: banners
     });
   } catch (error) {
-    console.error('Error fetching active banners:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar banners'
@@ -81,7 +81,7 @@ router.get('/all', requireAdminKey, async (req, res) => {
       data: banners
     });
   } catch (error) {
-    console.error('Error fetching all banners:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar banners'
@@ -106,7 +106,7 @@ router.get('/:id', requireAdminKey, async (req, res) => {
       data: banner
     });
   } catch (error) {
-    console.error('Error fetching banner:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar banner'
@@ -176,7 +176,7 @@ router.post('/', requireAdminKey, async (req, res) => {
       data: newBanner
     });
   } catch (error) {
-    console.error('Error creating banner:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erro ao criar banner',
@@ -228,7 +228,7 @@ const updateBannerHandler = async (req, res) => {
       data: updatedBanner
     });
   } catch (error) {
-    console.error('Error updating banner:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erro ao atualizar banner',
@@ -261,7 +261,7 @@ router.patch('/reorder', requireAdminKey, async (req, res) => {
       message: 'Ordem atualizada com sucesso'
     });
   } catch (error) {
-    console.error('Error reordering banners:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erro ao reordenar banners'
@@ -292,7 +292,7 @@ router.delete('/:id', requireAdminKey, async (req, res) => {
       message: 'Banner deletado com sucesso'
     });
   } catch (error) {
-    console.error('Error deleting banner:', error);
+    
     res.status(500).json({
       success: false,
       message: 'Erro ao deletar banner'

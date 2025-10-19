@@ -43,7 +43,6 @@ const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
-
 app.use(helmet());
 app.use(compression());
 
@@ -129,7 +128,6 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-
 app.get('/', (req, res) => {
   res.json({
     name: 'Zenith Chat API',
@@ -164,7 +162,6 @@ app.get('/', (req, res) => {
   });
 });
 
-
 app.get('/health', (req, res) => {
   const cacheStats = cache.getStats();
   res.json({ 
@@ -176,7 +173,6 @@ app.get('/health', (req, res) => {
     cache: cacheStats
   });
 });
-
 
 const cacheRoutes = require('./src/routes/cache');
 const internalRoutes = require('./src/routes/internalRoutes');
@@ -243,7 +239,6 @@ app.get('/api/routes', (req, res) => {
 
 app.use('/api', compatibilityRoutes);
 
-
 app.get('/api/ws-info', (req, res) => {
   const wsUrl = process.env.CHAT_PUBLIC_BASE_URL
     ? `${process.env.CHAT_PUBLIC_BASE_URL
@@ -258,7 +253,6 @@ app.get('/api/ws-info', (req, res) => {
     features: ['real-time-messaging', 'typing-indicators', 'read-receipts', 'file-sharing']
   });
 });
-
 
 // 404 handler apenas para rotas /api/* que não foram encontradas
 app.use('/api/*', (req, res) => {
@@ -278,12 +272,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-
 const wsServer = new WebSocketServer(server);
 
-
 app.locals.notificationService = wsServer.notificationService;
-
 
 app.set('webSocketServer', wsServer);
 
@@ -295,7 +286,6 @@ logger.info('ProposalHandler registered in app');
 const banService = require('./src/services/BanService');
 banService.setWebSocketServer(wsServer);
 app.set('banService', banService);
-
 
 function gracefulShutdown(signal = 'SIGTERM') {
   const start = Date.now();
@@ -330,7 +320,6 @@ function gracefulShutdown(signal = 'SIGTERM') {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-
 const PORT = process.env.PORT || 5000;
 connectDB()
   .then(() => {
@@ -339,7 +328,6 @@ connectDB()
       logger.info(`🔌 WebSocket server ready for connections`);
       logger.info(`📝 Environment: ${process.env.NODE_ENV}`);
       logger.info(`🔗 Allowed origins: ${process.env.ALLOWED_ORIGINS}`);
-
 
       try {
         temporaryChatCleanupService.start();

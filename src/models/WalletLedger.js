@@ -1,11 +1,8 @@
 const mongoose = require('mongoose');
 
-
-
 const walletLedgerSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   txId: { type: mongoose.Schema.Types.ObjectId, ref: 'WalletTransaction', index: true },
-
 
   direction: { type: String, enum: ['debit', 'credit'], required: true },
   reason: { type: String, enum: [
@@ -30,9 +27,7 @@ const walletLedgerSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   currency: { type: String, default: 'BRL' },
 
-
   operationId: { type: String, required: true, unique: true, index: true },
-
 
   balanceBefore: { type: Number },
   balanceAfter: { type: Number },

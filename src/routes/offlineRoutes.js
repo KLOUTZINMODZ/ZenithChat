@@ -4,7 +4,6 @@ const { auth } = require('../middleware/auth');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 
-
 router.post('/activate', auth, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -41,7 +40,6 @@ router.post('/activate', auth, async (req, res) => {
     });
   }
 });
-
 
 router.post('/deactivate', auth, async (req, res) => {
   try {
@@ -90,7 +88,6 @@ router.post('/deactivate', auth, async (req, res) => {
   }
 });
 
-
 router.get('/status', auth, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -119,7 +116,6 @@ router.get('/status', auth, async (req, res) => {
     });
   }
 });
-
 
 router.delete('/clear-cache', auth, async (req, res) => {
   try {

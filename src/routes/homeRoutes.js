@@ -128,7 +128,7 @@ router.get('/data', optionalAuth, async (req, res) => {
     
     return res.json(response);
   } catch (error) {
-    console.error('[HOME DATA ERROR]', error);
+    
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao carregar dados da homepage',

@@ -3,7 +3,6 @@ const Message = require('../models/Message');
 const AcceptedProposal = require('../models/AcceptedProposal');
 const WebSocketServer = require('../websocket/WebSocketServer');
 
-
 function extractValidObjectId(id) {
   if (!id) return null;
   
@@ -16,14 +15,14 @@ function extractValidObjectId(id) {
   }
   
 
-  console.warn('⚠️ ID inválido detectado:', id, '-> Extraído:', cleanId);
+  
   return null;
 }
 
 class TemporaryChatController {
 
   async createTemporaryChat(req, res) {
-    console.log('🔥 createTemporaryChat endpoint chamado:', req.body);
+    
     try {
       const {
         clientId,
@@ -41,8 +40,6 @@ class TemporaryChatController {
           message: 'Dados obrigatórios não fornecidos'
         });
       }
-
-
 
       let conversation = null;
       if (boostingId) {
@@ -90,7 +87,6 @@ class TemporaryChatController {
 
         await proposalMessage.save();
 
-
         try {
           const webSocketServer = req.app.get('webSocketServer');
           if (webSocketServer) {
@@ -108,7 +104,6 @@ class TemporaryChatController {
             });
           }
         } catch (_) {}
-
 
         try {
           const notificationService = req.app.locals?.notificationService;
@@ -128,11 +123,9 @@ class TemporaryChatController {
           }
         } catch (_) {}
 
-
         conversation.lastMessage = proposalMessage._id;
         conversation.lastMessageAt = new Date();
         await conversation.save();
-
 
         try {
           const wsServer = require('../websocket/WebSocketServer');
@@ -166,7 +159,7 @@ class TemporaryChatController {
             });
           }
         } catch (wsError) {
-          console.error('❌ Erro ao emitir evento WebSocket:', wsError);
+          
         }
 
         return res.json({
@@ -176,10 +169,8 @@ class TemporaryChatController {
         });
       }
 
-
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 3);
-
 
       const User = require('../models/User');
       const clientUser = await User.findById(clientId);
@@ -226,7 +217,6 @@ class TemporaryChatController {
 
       await conversation.save();
 
-
       const _priceValue2 = typeof proposalData.price === 'string'
         ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
         : Number(proposalData.price || 0);
@@ -251,7 +241,6 @@ class TemporaryChatController {
 
       await initialMessage.save();
 
-
       try {
         const webSocketServer = req.app.get('webSocketServer');
         if (webSocketServer) {
@@ -269,7 +258,6 @@ class TemporaryChatController {
           });
         }
       } catch (_) {}
-
 
       try {
         const notificationService = req.app.locals?.notificationService;
@@ -289,11 +277,9 @@ class TemporaryChatController {
         }
       } catch (_) {}
 
-
       conversation.lastMessage = initialMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
-
 
       try {
         const wsServer = require('../websocket/WebSocketServer');
@@ -327,7 +313,7 @@ class TemporaryChatController {
           });
         }
       } catch (wsError) {
-        console.error('❌ Erro ao emitir evento WebSocket:', wsError);
+        
       }
 
       res.json({
@@ -338,15 +324,13 @@ class TemporaryChatController {
       });
 
     } catch (error) {
-      console.error('Erro ao criar chat temporário:', error);
+      
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor'
       });
     }
   }
-
-
 
   async acceptTemporaryProposal(req, res) {
     try {
@@ -357,11 +341,7 @@ class TemporaryChatController {
 
       const proposalId = rawProposalId ? extractValidObjectId(rawProposalId) : null;
       
-      console.log('🔍 [DEBUG] Proposal ID processing:', {
-        raw: rawProposalId,
-        cleaned: proposalId,
-        conversationProposal: null
-      });
+      
 
       if (!userId) {
         return res.status(401).json({
@@ -369,7 +349,6 @@ class TemporaryChatController {
           message: 'Usuário não autenticado'
         });
       }
-
 
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) {
@@ -379,7 +358,6 @@ class TemporaryChatController {
         });
       }
 
-
       if (!conversation.isParticipant(userId)) {
         return res.status(403).json({
           success: false,
@@ -387,14 +365,12 @@ class TemporaryChatController {
         });
       }
 
-
       if (!conversation.isTemporary || conversation.status !== 'pending') {
         return res.status(400).json({
           success: false,
           message: 'Esta conversa não é um chat temporário pendente'
         });
       }
-
 
       if (conversation.isExpired()) {
         await conversation.expireTemporaryChat();
@@ -404,25 +380,17 @@ class TemporaryChatController {
         });
       }
 
-
       await conversation.acceptTemporaryChat();
-
 
       const proposalData = conversation.metadata.get('proposalData');
       const clientData = conversation.metadata.get('clientData');
       const boosterData = conversation.metadata.get('boosterData');
 
-
       const finalProposalId = proposalId || extractValidObjectId(conversation.proposal);
       
-      console.log('🔍 [DEBUG] Final proposal ID for AcceptedProposal:', {
-        proposalId,
-        conversationProposal: conversation.proposal,
-        cleanedConversationProposal: extractValidObjectId(conversation.proposal),
+      ,
         finalProposalId
       });
-
-
 
       const numericAcceptedPrice = typeof proposalData.price === 'string'
         ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
@@ -463,10 +431,8 @@ class TemporaryChatController {
 
       await acceptedProposal.save();
 
-
       conversation.acceptedProposal = acceptedProposal._id;
       await conversation.save();
-
 
       const _priceValue3 = typeof proposalData.price === 'string'
         ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
@@ -493,7 +459,6 @@ class TemporaryChatController {
 
       await acceptanceMessage.save();
 
-
       try {
         const webSocketServer = req.app.get('webSocketServer');
         if (webSocketServer) {
@@ -512,7 +477,6 @@ class TemporaryChatController {
         }
       } catch (_) {}
 
-
       try {
         const notificationService = req.app.locals?.notificationService;
         if (notificationService) {
@@ -530,28 +494,20 @@ class TemporaryChatController {
         }
       } catch (_) {}
 
-
       conversation.lastMessage = acceptanceMessage._id;
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-
       try {
         const webSocketServer = req.app.get('webSocketServer');
         if (webSocketServer) {
-          console.log('🔌 WebSocket server found, emitting events...');
+          
           
           const participants = conversation.participants;
           const clientId = clientData.userid;
           const boosterId = boosterData.userid;
           
-          console.log('📊 Event emission details:', {
-            conversationId: conversation._id,
-            clientId: clientId,
-            clientIdType: typeof clientId,
-            boosterId: boosterId,
-            boosterIdType: typeof boosterId,
-            participants: participants.map(p => p.toString()),
+          ),
             participantTypes: participants.map(p => typeof p.toString())
           });
           
@@ -560,16 +516,10 @@ class TemporaryChatController {
           const clientConnections = connectionManager.getUserConnections(clientId?.toString());
           const boosterConnections = connectionManager.getUserConnections(boosterId?.toString());
           
-          console.log('🔍 Connection status check:', {
-            clientConnected: clientConnections.length > 0,
-            clientConnectionCount: clientConnections.length,
-            boosterConnected: boosterConnections.length > 0,
-            boosterConnectionCount: boosterConnections.length,
-            allOnlineUsers: connectionManager.getOnlineUsers()
           });  
           
-          console.log('🔍 [Temporary Chat Accept] Client ID:', clientId);
-          console.log('🔍 [Temporary Chat Accept] Booster ID:', boosterId);
+          
+          
           
 
           const proposalAcceptedEventData = {
@@ -606,7 +556,7 @@ class TemporaryChatController {
             for (const userId of userIds) {
               const connections = connectionManager.getUserConnections(userId);
               if (connections.length > 0) {
-                console.log(`🎯 Sending ${eventType} to ${userType} via ID: ${userId} (${connections.length} connections)`);
+                `);
                 webSocketServer.sendToUser(userId, { type: eventType, data: eventData });
                 eventSent = true;
                 break;
@@ -614,7 +564,7 @@ class TemporaryChatController {
             }
             
             if (!eventSent) {
-              console.warn(`⚠️ Failed to send ${eventType} to ${userType}. No active connections found for any ID variant.`);
+              
             }
             
             return eventSent;
@@ -635,9 +585,9 @@ class TemporaryChatController {
             boosterData.userid?.toString()
           ].filter(id => id).map(id => id.toString());
           
-          console.log('🔍 All possible client IDs:', clientIds);
-          console.log('🔍 All possible booster IDs:', boosterIds);
-          console.log('📊 Currently online users:', connectionManager.getOnlineUsers());
+          
+          
+          );
           
 
           const clientEventSent = sendToUserRobust(clientIds, 'proposal:accepted', proposalAcceptedEventData, 'CLIENT');
@@ -648,28 +598,27 @@ class TemporaryChatController {
           
 
           if (!clientEventSent || !boosterEventSent) {
-            console.log('🔄 Using participant fallback for missed events...');
+            
             participants.forEach(participantId => {
               try {
                 const participantIdStr = participantId.toString();
                 webSocketServer.sendToUser(participantIdStr, { type: 'proposal:accepted', data: proposalAcceptedEventData });
                 webSocketServer.sendToUser(participantIdStr, { type: 'conversation:updated', data: conversationUpdateEventData });
-                console.log(`Fallback events sent to participant: ${participantIdStr}`);
+                
               } catch (error) {
-                console.error(`❌ Error in participant fallback for ${participantId}:`, error);
+                
               }
             });
           }
           
-          console.log('Enhanced WebSocket event emission completed');
+          
         } else {
-          console.warn('⚠️ [Temporary Chat Accept] WebSocket server not available for real-time updates');
+          
         }
       } catch (wsError) {
-        console.error('❌ [Temporary Chat Accept] Error emitting WebSocket events:', wsError);
+        
 
       }
-
 
       try {
         conversation.isTemporary = false;
@@ -678,7 +627,7 @@ class TemporaryChatController {
         conversation.boostingStatus = 'active';
         await conversation.save();
       } catch (cleanupError) {
-        console.error('❌ [Temporary Chat Accept] Finalization error:', cleanupError);
+        
       }
 
       res.json({
@@ -688,14 +637,13 @@ class TemporaryChatController {
       });
 
     } catch (error) {
-      console.error('Erro ao aceitar proposta temporária:', error);
+      
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor'
       });
     }
   }
-
 
   async rejectTemporaryProposal(req, res) {
     try {
@@ -739,12 +687,10 @@ class TemporaryChatController {
       conversation.isActive = false;
       await conversation.save();
 
-
       const proposalData = conversation.metadata.get('proposalData');
       const clientData = conversation.metadata.get('clientData');
       const boosterData = conversation.metadata.get('boosterData');
       const finalProposalId = proposalId || extractValidObjectId(conversation.proposal);
-
 
       const rejectionMessage = new Message({
         conversation: conversation._id,
@@ -760,7 +706,6 @@ class TemporaryChatController {
       });
 
       await rejectionMessage.save();
-
 
       try {
         const webSocketServer = req.app.get('webSocketServer');
@@ -779,7 +724,6 @@ class TemporaryChatController {
           });
         }
       } catch (_) {}
-
 
       try {
         const notificationService = req.app.locals?.notificationService;
@@ -802,15 +746,13 @@ class TemporaryChatController {
       conversation.lastMessageAt = new Date();
       await conversation.save();
 
-
       try {
         conversation.isActive = false;
         conversation.status = 'expired';
         await conversation.save();
       } catch (stateError) {
-        console.error('❌ Erro ao atualizar estado da conversa para expirada/inativa:', stateError);
+        
       }
-
 
       try {
         const webSocketServer = req.app.get('webSocketServer');
@@ -833,7 +775,6 @@ class TemporaryChatController {
             });
           });
 
-
           const updatePayload = {
             type: 'conversation:updated',
             data: {
@@ -847,7 +788,7 @@ class TemporaryChatController {
           participants.forEach(participantId => webSocketServer.sendToUser(participantId, updatePayload));
         }
       } catch (wsError) {
-        console.error('❌ Erro ao emitir evento WebSocket de rejeição:', wsError);
+        
       }
 
       res.json({
@@ -856,14 +797,13 @@ class TemporaryChatController {
       });
 
     } catch (error) {
-      console.error('Erro ao rejeitar proposta temporária:', error);
+      
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor'
       });
     }
   }
-
 
   async getExpiredTemporaryChats(req, res) {
     try {
@@ -882,14 +822,13 @@ class TemporaryChatController {
       });
 
     } catch (error) {
-      console.error('Erro ao buscar chats expirados:', error);
+      
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor'
       });
     }
   }
-
 
   async cleanupExpiredChats(req, res) {
     try {
@@ -906,7 +845,7 @@ class TemporaryChatController {
           
           // CORREÇÃO: Garantir que sender seja fornecido
           if (!chat.participants || chat.participants.length === 0) {
-            console.warn(`⚠️ Chat ${chat._id} não tem participantes, pulando mensagem de expiração`);
+            
             cleanedCount++;
             continue;
           }
@@ -915,7 +854,7 @@ class TemporaryChatController {
           const systemSenderId = chat.participants[0]._id || chat.participants[0];
           
           if (!systemSenderId) {
-            console.warn(`⚠️ Chat ${chat._id} não tem participante válido, pulando mensagem de expiração`);
+            
             cleanedCount++;
             continue;
           }
@@ -932,7 +871,6 @@ class TemporaryChatController {
           });
 
           await expirationMessage.save();
-
 
           try {
             const webSocketServer = req.app.get('webSocketServer');
@@ -951,7 +889,6 @@ class TemporaryChatController {
               });
             }
           } catch (_) {}
-
 
           try {
             const notificationService = req.app.locals?.notificationService;
@@ -999,12 +936,12 @@ class TemporaryChatController {
               });
             }
           } catch (wsError) {
-            console.error('❌ Erro ao emitir evento WebSocket de expiração:', wsError);
+            
           }
           
           cleanedCount++;
         } catch (error) {
-          console.error(`Erro ao expirar chat ${chat._id}:`, error);
+          
         }
       }
 
@@ -1015,7 +952,7 @@ class TemporaryChatController {
       });
 
     } catch (error) {
-      console.error('Erro ao limpar chats expirados:', error);
+      
       res.status(500).json({
         success: false,
         message: 'Erro interno do servidor'

@@ -91,25 +91,25 @@ const testUsers = [
 
 // Função para criar usuários
 async function createTestUsers() {
-  console.log(colors.cyan + '\n╔═══════════════════════════════════════════════════════════╗');
-  console.log('║          CRIAÇÃO DE USUÁRIOS DE TESTE                   ║');
-  console.log('╚═══════════════════════════════════════════════════════════╝\n' + colors.reset);
+  
+  
+  
 
   try {
     // Conectar ao MongoDB
-    console.log(colors.blue + '→ Conectando ao MongoDB...' + colors.reset);
+    
     await mongoose.connect(MONGODB_URI);
-    console.log(colors.green + '✓ Conectado ao MongoDB!\n' + colors.reset);
+    
 
     // Remover usuários de teste antigos
-    console.log(colors.yellow + '⚠ Removendo usuários de teste antigos...' + colors.reset);
+    
     const deletedCount = await User.deleteMany({
       email: { $regex: '@zenith-test.com$' }
     });
-    console.log(colors.green + `✓ Removidos ${deletedCount.deletedCount} usuários antigos\n` + colors.reset);
+    
 
     // Criar novos usuários
-    console.log(colors.blue + '→ Criando novos usuários de teste...\n' + colors.reset);
+    
 
     for (const userData of testUsers) {
       const user = new User(userData);
@@ -118,15 +118,15 @@ async function createTestUsers() {
       // Buscar o usuário recém-criado para verificar o valor salvo
       const savedUser = await User.findById(user._id).lean();
       
-      console.log(colors.cyan + `✓ Criado: ${userData.name}` + colors.reset);
-      console.log(`  Email: ${userData.email}`);
-      console.log(`  emailNotifications salvo como: ${colors.yellow}${savedUser.preferences?.emailNotifications}${colors.reset}`);
-      console.log(`  Tipo: ${typeof savedUser.preferences?.emailNotifications}`);
-      console.log('');
+      
+      
+      
+      
+      
     }
 
     // Verificar criação
-    console.log(colors.green + '\n✓ Todos os usuários de teste criados com sucesso!' + colors.reset);
+    
     
     // Estatísticas
     const totalUsers = await User.countDocuments({});
@@ -134,12 +134,12 @@ async function createTestUsers() {
       email: { $regex: '@zenith-test.com$' }
     });
     
-    console.log(colors.cyan + '\n📊 ESTATÍSTICAS:' + colors.reset);
-    console.log(`  Total de usuários no banco: ${totalUsers}`);
-    console.log(`  Usuários de teste: ${testUsersCount}`);
+    
+    
+    
 
     // Análise detalhada dos usuários de teste
-    console.log(colors.cyan + '\n🔍 ANÁLISE DETALHADA DOS USUÁRIOS DE TESTE:\n' + colors.reset);
+    
     
     const allTestUsers = await User.find({
       email: { $regex: '@zenith-test.com$' }
@@ -153,33 +153,33 @@ async function createTestUsers() {
       const statusIcon = isEligible ? '✅' : '❌';
       const statusColor = isEligible ? colors.green : colors.red;
       
-      console.log(`${index + 1}. ${statusIcon} ${user.name}`);
-      console.log(`   Email: ${user.email}`);
-      console.log(`   Tem preferences: ${hasPrefs ? 'Sim' : 'Não'}`);
-      console.log(`   emailNotifications: ${statusColor}${emailNotif}${colors.reset} (${typeof emailNotif})`);
-      console.log(`   É elegível: ${isEligible ? colors.green + 'SIM' : colors.red + 'NÃO'}${colors.reset}`);
-      console.log('');
+      
+      
+      
+      `);
+      
+      
     });
 
     // Instruções finais
-    console.log(colors.cyan + '═'.repeat(60) + colors.reset);
-    console.log(colors.yellow + '\n⚡ PRÓXIMOS PASSOS:' + colors.reset);
-    console.log('  1. Execute: node test-email-system.js');
-    console.log('  2. Verifique se os 5 usuários de teste aparecem corretamente');
-    console.log('  3. Confirme que apenas o "Test User TRUE" é elegível');
-    console.log('  4. Teste o envio de emails no painel admin\n');
+    + colors.reset);
+    
+    
+    
+    
+    
 
   } catch (error) {
-    console.error(colors.red + '✗ Erro:', error.message + colors.reset);
+    
     process.exit(1);
   } finally {
     await mongoose.disconnect();
-    console.log(colors.blue + '→ Desconectado do MongoDB' + colors.reset);
+    
   }
 }
 
 // Executar
 createTestUsers().catch(error => {
-  console.error(colors.red + 'Erro fatal:', error.message + colors.reset);
+  
   process.exit(1);
 });

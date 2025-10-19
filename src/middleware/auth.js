@@ -16,7 +16,6 @@ const auth = async (req, res, next) => {
     let user = await User.findById(decoded.id || decoded._id);
     
 
-
     if (!user && decoded.id) {
       user = await User.findOneAndUpdate(
         { _id: decoded.id },

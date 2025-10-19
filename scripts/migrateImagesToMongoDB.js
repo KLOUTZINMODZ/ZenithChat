@@ -11,16 +11,16 @@ const UploadedImage = require('../src/models/UploadedImage');
 
 async function migrateImages() {
   try {
-    console.log('🔄 Iniciando migração de imagens para MongoDB...\n');
+    
 
     // Conectar ao MongoDB
     await mongoose.connect(process.env.MONGODB_URI);
-    console.log('✅ Conectado ao MongoDB\n');
+    
 
     const uploadsDir = path.join(__dirname, '..', 'uploads');
     
     if (!fs.existsSync(uploadsDir)) {
-      console.log('❌ Diretório uploads/ não encontrado');
+      
       return;
     }
 
@@ -50,7 +50,7 @@ async function migrateImages() {
             const existing = await UploadedImage.findOne({ imageId });
             
             if (existing) {
-              console.log(`⏭️  Já existe: ${imageId}`);
+              
               skipped++;
               continue;
             }
@@ -64,7 +64,7 @@ async function migrateImages() {
               
               if (!fs.existsSync(fullAvifPath) || !fs.existsSync(thumbAvifPath) ||
                   !fs.existsSync(fullJpegPath) || !fs.existsSync(thumbJpegPath)) {
-                console.log(`⚠️  Arquivos incompletos: ${imageId}`);
+                
                 errors++;
                 continue;
               }
@@ -106,11 +106,11 @@ async function migrateImages() {
                 uploadedAt: stat.mtime // Usar data de modificação do arquivo
               });
               
-              console.log(`✅ Migrado: ${imageId} (${Math.round(fullImage.length / 1024)}KB)`);
+              }KB)`);
               migrated++;
               
             } catch (error) {
-              console.error(`❌ Erro ao migrar ${imageId}:`, error.message);
+              
               errors++;
             }
           }
@@ -120,20 +120,20 @@ async function migrateImages() {
     
     await processDirectory(uploadsDir);
     
-    console.log('\n📊 Resumo da migração:');
-    console.log(`✅ Migradas: ${migrated}`);
-    console.log(`⏭️  Puladas (já existem): ${skipped}`);
-    console.log(`❌ Erros: ${errors}`);
+    
+    
+    : ${skipped}`);
+    
     
     // Verificar total no banco
     const total = await UploadedImage.countDocuments();
-    console.log(`📦 Total de imagens no MongoDB: ${total}\n`);
+    
     
   } catch (error) {
-    console.error('❌ Erro na migração:', error);
+    
   } finally {
     await mongoose.connection.close();
-    console.log('🔌 Conexão com MongoDB fechada');
+    
     process.exit(0);
   }
 }

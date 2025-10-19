@@ -56,7 +56,6 @@ class CacheOptimizer {
         logger.debug(`Warming up cache for user ${userId}`);
         
 
-
         this.cache.set(cacheKey, { warmedUp: true }, 3600);
       }
       
@@ -98,7 +97,6 @@ class CacheOptimizer {
     if (data !== null) {
       return data;
     }
-
 
     try {
       data = await fetchFunction();
@@ -173,7 +171,6 @@ class CacheOptimizer {
       recommendations: []
     };
 
-
     for (const [operation, times] of this.performanceMetrics.queryTimes.entries()) {
       const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
       report.queryPerformance[operation] = {
@@ -181,7 +178,6 @@ class CacheOptimizer {
         samples: times.length
       };
     }
-
 
     const hitRate = parseFloat(report.cacheStats.hitRate);
     if (hitRate < 50) {

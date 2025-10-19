@@ -153,7 +153,7 @@ async function processAchievements(user, stats) {
       totalUnlocked: user.achievements?.unlocked?.length || 0
     };
   } catch (error) {
-    console.error('Error processing achievements:', error);
+    
     return {
       success: false,
       error: error.message
@@ -210,7 +210,7 @@ async function forceCheckAchievements(user) {
 
     return await processAchievements(user, stats);
   } catch (error) {
-    console.error('Error force checking achievements:', error);
+    
     return {
       success: false,
       error: error.message

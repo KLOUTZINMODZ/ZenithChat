@@ -28,7 +28,6 @@ class AgreementController {
         });
       }
 
-
       if (idempotencyKey) {
         const existingAgreement = await Agreement.findOne({
           'actionHistory.idempotencyKey': idempotencyKey
@@ -46,7 +45,6 @@ class AgreementController {
           });
         }
       }
-
 
       const agreement = new Agreement({
         conversationId,
@@ -98,14 +96,12 @@ class AgreementController {
         status: 'active'
       });
 
-
       agreement.addAction('created', clientData.userid, {
         proposalId,
         createdVia: 'migration'
       }, idempotencyKey);
 
       await agreement.save();
-
 
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
@@ -130,11 +126,10 @@ class AgreementController {
         }
       });
     } catch (error) {
-      console.error('Erro ao criar acordo:', error);
+      
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
-
 
   async getAgreement(req, res) {
     try {
@@ -159,7 +154,6 @@ class AgreementController {
           message: 'Acordo não encontrado' 
         });
       }
-
 
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
@@ -210,11 +204,10 @@ class AgreementController {
         }
       });
     } catch (error) {
-      console.error('Erro ao buscar acordo:', error);
+      
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
-
 
   async completeAgreement(req, res) {
     try {
@@ -233,7 +226,6 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
-
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -241,7 +233,6 @@ class AgreementController {
       if (!isParticipant) {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
-
 
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
@@ -251,7 +242,6 @@ class AgreementController {
           requestedVersion: version
         });
       }
-
 
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
@@ -272,7 +262,6 @@ class AgreementController {
         }
       }
 
-
       await agreement.complete(userId, {
         completionNotes,
         completedVia: 'api'
@@ -283,8 +272,8 @@ class AgreementController {
         const User = require('../models/User');
         const boosterId = agreement.parties.booster.userid;
         
-        console.log(`🔍 [Agreement Complete] Tentando incrementar boosts para booster: ${boosterId}`);
-        console.log(`🔍 [Agreement Complete] Tipo do boosterId: ${typeof boosterId}`);
+        
+        
         
         const updateResult = await User.findByIdAndUpdate(
           boosterId,
@@ -298,18 +287,18 @@ class AgreementController {
         );
         
         if (updateResult) {
-          console.log(`[Agreement Complete] Booster stats updated successfully!`);
-          console.log(`   - User: ${updateResult.name}`);
-          console.log(`   - New totalBoosts: ${updateResult.totalBoosts}`);
-          console.log(`   - New completedBoosts: ${updateResult.completedBoosts}`);
+          
+          
+          
+          
         } else {
-          console.error(`❌ [Agreement Complete] User not found with ID: ${boosterId}`);
+          
         }
         
       } catch (statsError) {
-        console.error('❌ [Agreement Complete] Error updating booster stats:');
-        console.error('   Message:', statsError.message);
-        console.error('   Stack:', statsError.stack);
+        
+        
+        
         // Não falha a operação se não conseguir atualizar stats
       }
 
@@ -326,7 +315,6 @@ class AgreementController {
       });
       await systemMessage.save();
 
-
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/confirm-delivery`, {
           conversationId: agreement.conversationId.toString(),
@@ -334,7 +322,7 @@ class AgreementController {
           completedBy: userId
         });
       } catch (apiError) {
-        console.warn('Falha ao notificar API principal:', apiError.message);
+        
       }
 
       res.json({
@@ -348,14 +336,13 @@ class AgreementController {
         }
       });
     } catch (error) {
-      console.error('Erro ao completar acordo:', error);
+      
       if (error.message.includes('Cannot complete agreement')) {
         return res.status(400).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
-
 
   async cancelAgreement(req, res) {
     try {
@@ -374,7 +361,6 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
-
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -382,7 +368,6 @@ class AgreementController {
       if (!isParticipant) {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
-
 
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
@@ -392,7 +377,6 @@ class AgreementController {
           requestedVersion: version
         });
       }
-
 
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
@@ -413,9 +397,7 @@ class AgreementController {
         }
       }
 
-
       await agreement.cancel(userId, cancelReason, idempotencyKey);
-
 
       const systemMessage = new Message({
         conversation: agreement.conversationId,
@@ -430,7 +412,6 @@ class AgreementController {
       });
       await systemMessage.save();
 
-
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/cancel`, {
           conversationId: agreement.conversationId.toString(),
@@ -439,7 +420,7 @@ class AgreementController {
           reason: cancelReason
         });
       } catch (apiError) {
-        console.warn('Falha ao notificar API principal:', apiError.message);
+        
       }
 
       res.json({
@@ -453,14 +434,13 @@ class AgreementController {
         }
       });
     } catch (error) {
-      console.error('Erro ao cancelar acordo:', error);
+      
       if (error.message.includes('Cannot cancel agreement')) {
         return res.status(400).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
-
 
   async renegotiateAgreement(req, res) {
     try {
@@ -479,7 +459,6 @@ class AgreementController {
         return res.status(404).json({ success: false, message: 'Acordo não encontrado' });
       }
 
-
       const isParticipant = 
         agreement.parties.client.userid.toString() === userId.toString() ||
         agreement.parties.booster.userid.toString() === userId.toString();
@@ -487,7 +466,6 @@ class AgreementController {
       if (!isParticipant) {
         return res.status(403).json({ success: false, message: 'Acesso negado ao acordo' });
       }
-
 
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
@@ -497,7 +475,6 @@ class AgreementController {
           requestedVersion: version
         });
       }
-
 
       if (idempotencyKey) {
         const existingAction = agreement.actionHistory.find(
@@ -518,9 +495,7 @@ class AgreementController {
         }
       }
 
-
       await agreement.renegotiate(userId, newPrice, newEstimatedTime, reason, idempotencyKey);
-
 
       const systemMessage = new Message({
         conversation: agreement.conversationId,
@@ -546,14 +521,13 @@ class AgreementController {
         }
       });
     } catch (error) {
-      console.error('Erro ao renegociar acordo:', error);
+      
       if (error.message.includes('Cannot renegotiate agreement')) {
         return res.status(400).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
-
 
   async getConversationAgreements(req, res) {
     try {
@@ -564,7 +538,6 @@ class AgreementController {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
-
 
       const conversation = await Conversation.findById(conversationId);
       if (!conversation || !conversation.isParticipant(userId)) {
@@ -588,11 +561,10 @@ class AgreementController {
         }))
       });
     } catch (error) {
-      console.error('Erro ao listar acordos:', error);
+      
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
-
 
   async getUserAgreements(req, res) {
     try {
@@ -621,7 +593,7 @@ class AgreementController {
         }))
       });
     } catch (error) {
-      console.error('Erro ao listar acordos do usuário:', error);
+      
       res.status(500).json({ success: false, message: 'Erro interno do servidor' });
     }
   }
