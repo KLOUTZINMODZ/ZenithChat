@@ -578,7 +578,7 @@ class ConversationHandler {
 
     await Promise.all(
       activeUsers.map(userId => this.sendConversationsUpdate(userId))
-
+    );
   }
 }
 
