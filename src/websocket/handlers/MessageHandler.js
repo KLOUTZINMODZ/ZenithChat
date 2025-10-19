@@ -831,7 +831,7 @@ class MessageHandler {
               'metadata.deliveryAttempts': bufferData?.attempts ?? null
             }
           }
-
+        );
       } catch (metaErr) {
         logger.warn(`storePendingMessage: could not persist pending metadata for ${messageId}: ${metaErr.message}`);
       }
