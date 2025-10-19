@@ -1,9 +1,10 @@
 const axios = require('axios');
 
 const logger = {
-  info: (msg) => ,
-  warn: (msg) => ,
-  error: (msg) => };
+  info: () => {},
+  warn: () => {},
+  error: () => {}
+};
 const paymentCacheService = require('./paymentCacheService');
 const MarketItem = require('../models/MarketItem');
 

@@ -1,8 +1,8 @@
-
 const logger = {
-  info: (msg) => ,
-  warn: (msg) => ,
-  error: (msg) => };
+  info: () => {},
+  warn: () => {},
+  error: () => {}
+};
 
 /**
  * Sistema de Cache para Pagamentos e Marketplace
