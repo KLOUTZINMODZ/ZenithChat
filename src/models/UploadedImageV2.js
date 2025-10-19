@@ -1,7 +1,11 @@
 const mongoose = require('mongoose');
 
-const uploadedImageSchema = new mongoose.Schema({
-  // Identificador único da imagem
+/**
+ * VERSÃO 2: Armazena imagens como base64 string em vez de Buffer
+ * Solução para problema de serialização de buffers no MongoDB Atlas
+ */
+
+const uploadedImageV2Schema = new mongoose.Schema({
   imageId: {
     type: String,
     required: true,
@@ -9,7 +13,6 @@ const uploadedImageSchema = new mongoose.Schema({
     index: true
   },
   
-  // Conversação associada (opcional para imagens de marketplace)
   conversationId: {
     type: String,
     required: false,
@@ -17,7 +20,6 @@ const uploadedImageSchema = new mongoose.Schema({
     sparse: true
   },
   
-  // Tipo de imagem: 'conversation' ou 'marketplace'
   imageType: {
     type: String,
     enum: ['conversation', 'marketplace'],
@@ -25,7 +27,7 @@ const uploadedImageSchema = new mongoose.Schema({
     index: true
   },
   
-  // Imagens armazenadas como base64 (solução para problema de serialização de Buffer no MongoDB Atlas)
+  // Armazenando como base64 string em vez de Buffer
   fullImage: {
     type: String,
     required: true
@@ -46,7 +48,6 @@ const uploadedImageSchema = new mongoose.Schema({
     required: true
   },
   
-  // Metadados
   metadata: {
     originalName: String,
     originalSize: Number,
@@ -56,7 +57,6 @@ const uploadedImageSchema = new mongoose.Schema({
     conversationId: String
   },
   
-  // URLs públicas (para compatibilidade)
   urls: {
     full: String,
     thumb: String,
@@ -64,7 +64,6 @@ const uploadedImageSchema = new mongoose.Schema({
     thumbJpeg: String
   },
   
-  // Controle
   uploadedAt: {
     type: Date,
     default: Date.now,
@@ -76,7 +75,6 @@ const uploadedImageSchema = new mongoose.Schema({
     ref: 'User'
   },
   
-  // Flag para nunca deletar
   permanent: {
     type: Boolean,
     default: true
@@ -85,22 +83,22 @@ const uploadedImageSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Índice composto para busca rápida
-uploadedImageSchema.index({ conversationId: 1, uploadedAt: -1 });
+// Índice composto
+uploadedImageV2Schema.index({ conversationId: 1, uploadedAt: -1 });
 
-// Métodos estáticos para conversão Buffer ↔ Base64
-uploadedImageSchema.statics.bufferToBase64 = function(buffer) {
+// Métodos helper para conversão
+uploadedImageV2Schema.statics.bufferToBase64 = function(buffer) {
   if (!buffer || !Buffer.isBuffer(buffer)) return null;
   return buffer.toString('base64');
 };
 
-uploadedImageSchema.statics.base64ToBuffer = function(base64String) {
+uploadedImageV2Schema.statics.base64ToBuffer = function(base64String) {
   if (!base64String || typeof base64String !== 'string') return null;
   return Buffer.from(base64String, 'base64');
 };
 
-// Método para criar imagem a partir de buffers (converte automaticamente)
-uploadedImageSchema.statics.createFromBuffers = async function(data) {
+// Método para criar imagem a partir de buffers
+uploadedImageV2Schema.statics.createFromBuffers = async function(data) {
   const imageData = {
     ...data,
     fullImage: this.bufferToBase64(data.fullImage),
@@ -112,23 +110,12 @@ uploadedImageSchema.statics.createFromBuffers = async function(data) {
   return this.create(imageData);
 };
 
-// Método de instância para obter buffer específico
-uploadedImageSchema.methods.getBuffer = function(type) {
+// Método para obter buffer específico
+uploadedImageV2Schema.methods.getBuffer = function(type) {
   const base64 = this[type];
-  return UploadedImage.base64ToBuffer(base64);
+  return UploadedImageV2.base64ToBuffer(base64);
 };
 
-// Método estático para buscar imagem por URL
-uploadedImageSchema.statics.findByUrl = function(url) {
-  // Extrai o imageId da URL
-  // Exemplo: /uploads/conversationId/2024/1/12345_abc.avif
-  const match = url.match(/\/uploads\/.+?\/(\d+_[a-z0-9]+)(?:_thumb)?\.(?:avif|jpg)$/i);
-  if (!match) return null;
-  
-  const imageId = match[1];
-  return this.findOne({ imageId });
-};
+const UploadedImageV2 = mongoose.model('UploadedImageV2', uploadedImageV2Schema);
 
-const UploadedImage = mongoose.model('UploadedImage', uploadedImageSchema);
-
-module.exports = UploadedImage;
+module.exports = UploadedImageV2;

@@ -34,29 +34,36 @@ const imageServeMiddleware = async (req, res, next) => {
     const uploadedImage = await UploadedImage.findOne({ imageId }).lean();
     
     if (uploadedImage) {
-      // Determinar qual buffer servir
-      let buffer;
+      // Determinar qual base64 string usar e converter para Buffer
+      let base64String;
       let contentType;
       
       if (isThumb) {
         if (isJpeg) {
-          buffer = uploadedImage.thumbImageJpeg;
+          base64String = uploadedImage.thumbImageJpeg;
           contentType = 'image/jpeg';
         } else {
-          buffer = uploadedImage.thumbImage;
+          base64String = uploadedImage.thumbImage;
           contentType = 'image/avif';
         }
       } else {
         if (isJpeg) {
-          buffer = uploadedImage.fullImageJpeg;
+          base64String = uploadedImage.fullImageJpeg;
           contentType = 'image/jpeg';
         } else {
-          buffer = uploadedImage.fullImage;
+          base64String = uploadedImage.fullImage;
           contentType = 'image/avif';
         }
       }
 
-      // Verificar se o buffer existe e é válido
+      // Verificar se a string base64 existe e converter para buffer
+      if (!base64String || typeof base64String !== 'string' || base64String.length === 0) {
+        return next(); // Tentar buscar no disco
+      }
+
+      // Converter base64 para Buffer
+      const buffer = UploadedImage.base64ToBuffer(base64String);
+      
       if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
         return next(); // Tentar buscar no disco
       }

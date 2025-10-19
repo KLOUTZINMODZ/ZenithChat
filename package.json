@@ -13,6 +13,12 @@
     "images:migrate": "node ./scripts/migrateImagesToMongoDB.js",
     "images:check": "node ./scripts/checkImagesHealth.js",
     "images:clean": "node ./scripts/cleanCorruptedImages.js",
+    "images:clean-all": "node ./scripts/cleanAllCorruptedImages.js",
+    "images:diagnostic": "node ./scripts/diagnosticImageSystem.js",
+    "images:test-upload": "node ./scripts/testUploadFlow.js",
+    "images:test-buffer": "node ./scripts/testBufferStorage.js",
+    "images:test-base64": "node ./scripts/testBase64Storage.js",
+    "images:list": "node ./scripts/listAllImages.js",
     "reviews:fix-indexes": "node ./scripts/fixReviewIndexes.js"
   },
   "keywords": [

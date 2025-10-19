@@ -26,17 +26,17 @@ async function checkImagesHealth() {
     for (const img of images) {
       const problems = [];
       
-      // Verificar buffers
-      if (!img.fullImage || !Buffer.isBuffer(img.fullImage) || img.fullImage.length === 0) {
+      // Verificar strings base64
+      if (!img.fullImage || typeof img.fullImage !== 'string' || img.fullImage.length === 0) {
         problems.push('fullImage inválido ou vazio');
       }
-      if (!img.thumbImage || !Buffer.isBuffer(img.thumbImage) || img.thumbImage.length === 0) {
+      if (!img.thumbImage || typeof img.thumbImage !== 'string' || img.thumbImage.length === 0) {
         problems.push('thumbImage inválido ou vazio');
       }
-      if (!img.fullImageJpeg || !Buffer.isBuffer(img.fullImageJpeg) || img.fullImageJpeg.length === 0) {
+      if (!img.fullImageJpeg || typeof img.fullImageJpeg !== 'string' || img.fullImageJpeg.length === 0) {
         problems.push('fullImageJpeg inválido ou vazio');
       }
-      if (!img.thumbImageJpeg || !Buffer.isBuffer(img.thumbImageJpeg) || img.thumbImageJpeg.length === 0) {
+      if (!img.thumbImageJpeg || typeof img.thumbImageJpeg !== 'string' || img.thumbImageJpeg.length === 0) {
         problems.push('thumbImageJpeg inválido ou vazio');
       }
       

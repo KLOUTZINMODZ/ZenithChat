@@ -83,7 +83,7 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
       return res.status(500).json({ success: false, message: 'Invalid JPEG thumbnail buffer' });
     }
 
-    const savedImage = await UploadedImage.create({
+    const savedImage = await UploadedImage.createFromBuffers({
       imageId: baseName,
       conversationId: conversationId.toString(),
       imageType: 'conversation',
@@ -230,7 +230,7 @@ router.post('/image-base64', auth, async (req, res) => {
       return res.status(500).json({ success: false, message: 'Invalid JPEG thumbnail buffer' });
     }
 
-    const savedImage = await UploadedImage.create({
+    const savedImage = await UploadedImage.createFromBuffers({
       imageId: baseName,
       conversationId: conversationId.toString(),
       imageType: 'conversation',
@@ -395,7 +395,7 @@ router.post('/marketplace-image', auth, upload.single('file'), async (req, res) 
       return res.status(500).json({ success: false, message: 'Invalid JPEG thumbnail buffer' });
     }
 
-    const savedImage = await UploadedImage.create({
+    const savedImage = await UploadedImage.createFromBuffers({
       imageId: baseName,
       conversationId: null,
       imageType: 'marketplace',
