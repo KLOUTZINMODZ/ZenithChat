@@ -12,7 +12,8 @@
     "create:test-users": "node create-test-users.js",
     "images:migrate": "node ./scripts/migrateImagesToMongoDB.js",
     "images:check": "node ./scripts/checkImagesHealth.js",
-    "images:clean": "node ./scripts/cleanCorruptedImages.js"
+    "images:clean": "node ./scripts/cleanCorruptedImages.js",
+    "reviews:fix-indexes": "node ./scripts/fixReviewIndexes.js"
   },
   "keywords": [
     "websocket",
