@@ -21,7 +21,6 @@ const internalAuth = (req, res, next) => {
     logger.error('[Internal Auth] INTERNAL_API_KEY not configured in .env');
     return res.status(500).json({ 
       success: false, 
-      message: 'Internal API key not configured' 
     });
   }
   
@@ -29,7 +28,6 @@ const internalAuth = (req, res, next) => {
     logger.warn('[Internal Auth] No token provided');
     return res.status(401).json({ 
       success: false, 
-      message: 'Unauthorized: No token provided' 
     });
   }
   
@@ -37,7 +35,6 @@ const internalAuth = (req, res, next) => {
     logger.warn('[Internal Auth] Invalid token provided');
     return res.status(403).json({ 
       success: false, 
-      message: 'Forbidden: Invalid credentials' 
     });
   }
   
@@ -65,14 +62,12 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
     if (!type) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Broadcast type is required' 
       });
     }
     
     if (!boostingId) {
       return res.status(400).json({ 
         success: false, 
-        message: 'boostingId is required' 
       });
     }
     
@@ -83,7 +78,6 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
       logger.error('[Internal Broadcast] ProposalHandler not available');
       return res.status(500).json({ 
         success: false, 
-        message: 'ProposalHandler not available' 
       });
     }
     
@@ -95,7 +89,6 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposal) {
           return res.status(400).json({ 
             success: false, 
-            message: 'Proposal data is required for type "new"' 
           });
         }
         proposalHandler.broadcastNewProposal(boostingId, proposal);
@@ -106,7 +99,6 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposal) {
           return res.status(400).json({ 
             success: false, 
-            message: 'Proposal data is required for type "updated"' 
           });
         }
         proposalHandler.broadcastProposalUpdated(boostingId, proposal);
@@ -117,7 +109,6 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposalId) {
           return res.status(400).json({ 
             success: false, 
-            message: 'proposalId is required for type "rejected"' 
           });
         }
         proposalHandler.broadcastProposalRejected(boostingId, proposalId);
@@ -128,7 +119,6 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         if (!proposalId) {
           return res.status(400).json({ 
             success: false, 
-            message: 'proposalId is required for type "cancelled"' 
           });
         }
         proposalHandler.broadcastProposalCancelled(boostingId, proposalId);
@@ -166,7 +156,6 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error during broadcast',
-      error: error.message 
     });
   }
 });
@@ -182,7 +171,6 @@ router.get('/proposal/stats', internalAuth, (req, res) => {
     if (!proposalHandler) {
       return res.status(500).json({ 
         success: false, 
-        message: 'ProposalHandler not available' 
       });
     }
     
@@ -197,7 +185,6 @@ router.get('/proposal/stats', internalAuth, (req, res) => {
     logger.error('[Internal Stats] Error:', error);
     res.status(500).json({ 
       success: false, 
-      message: error.message 
     });
   }
 });

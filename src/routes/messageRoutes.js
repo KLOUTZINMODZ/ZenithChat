@@ -366,7 +366,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         if (!isGroupChat && conv.participants.length >= 2) {
           otherParticipant = conv.participants.find(
             p => p && p._id && p._id.toString() !== userId.toString()
-          );
+
         }
 
         const userUnreadCount = (() => {
@@ -416,7 +416,6 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       } catch (convError) {
         logger.error('Error formatting conversation:', { 
           conversationId: conv._id, 
-          error: convError.message 
         });
         
 
@@ -460,7 +459,6 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching conversations',
-      error: error.message
     });
   }
 });
@@ -478,14 +476,12 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
     if (!conversation) {
       return res.status(404).json({ 
         success: false, 
-        message: 'Conversa não encontrada' 
       });
     }
 
     if (!conversation.isParticipant(userId)) {
       return res.status(403).json({ 
         success: false, 
-        message: 'Acesso negado' 
       });
     }
 
@@ -498,7 +494,6 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao buscar conversa',
-      error: error.message 
     });
   }
 });
@@ -527,7 +522,6 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
       logger.warn('[MSG:REST] Access denied', { conversationId, userId });
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
       });
     }
 
@@ -571,7 +565,6 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
     res.status(500).json({
       success: false,
       message: 'Error fetching messages',
-      error: error.message
     });
   }
 });
@@ -594,7 +587,6 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
     if (!conversation || !conversation.isParticipant(userId)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
       });
     }
 
@@ -656,7 +648,6 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       return res.status(423).json({
         success: false,
         message: 'Chat reportado - não é possível enviar mensagens',
-        error: 'CHAT_REPORTED'
       });
     }
 
@@ -666,7 +657,6 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       return res.status(423).json({
         success: false,
         message: 'Chat finalizado - envie uma nova proposta para reativar',
-        error: 'CHAT_FINALIZED'
       });
     }
 
@@ -699,7 +689,6 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
         return res.status(423).json({
           success: false,
           message: 'Atendimento finalizado - aguardando nova proposta do booster',
-          error: 'BOOSTING_COMPLETED'
         });
       }
     }
@@ -749,7 +738,6 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
     res.status(500).json({
       success: false,
       message: 'Error sending message',
-      error: error.message
     });
   }
 });
@@ -792,7 +780,6 @@ router.post('/conversations', auth, invalidationMiddleware(['conversations:']), 
     res.status(500).json({
       success: false,
       message: 'Error creating conversation',
-      error: error.message
     });
   }
 });
@@ -830,14 +817,12 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
 
     res.json({
       success: true,
-      message: 'Messages marked as read'
     });
   } catch (error) {
     logger.error('Error marking messages as read:', error);
     res.status(500).json({
       success: false,
       message: 'Error marking messages as read',
-      error: error.message
     });
   }
 });
@@ -851,14 +836,12 @@ router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:',
     if (!message) {
       return res.status(404).json({
         success: false,
-        message: 'Message not found'
       });
     }
 
     if (message.sender.toString() !== userId.toString()) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
       });
     }
 
@@ -866,14 +849,12 @@ router.delete('/messages/:messageId', auth, invalidationMiddleware(['messages:',
 
     res.json({
       success: true,
-      message: 'Message deleted'
     });
   } catch (error) {
     logger.error('Error deleting message:', error);
     res.status(500).json({
       success: false,
       message: 'Error deleting message',
-      error: error.message
     });
   }
 });
@@ -894,7 +875,6 @@ router.get('/cache/stats', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error getting cache statistics',
-      error: error.message
     });
   }
 });
@@ -905,14 +885,12 @@ router.delete('/cache/clear', auth, async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Cache cleared successfully'
     });
   } catch (error) {
     logger.error('Error clearing cache:', error);
     res.status(500).json({
       success: false,
       message: 'Error clearing cache',
-      error: error.message
     });
   }
 });

@@ -268,7 +268,6 @@ class ConversationHandler {
       logger.error('Error starting conversation polling:', error);
       socket.emit('conversations:error', {
         message: 'Erro ao iniciar polling de conversas',
-        error: error.message
       });
     }
   }
@@ -312,7 +311,6 @@ class ConversationHandler {
       logger.error('Error getting conversations:', error);
       socket.emit('conversations:error', {
         message: 'Erro ao buscar conversas',
-        error: error.message
       });
     }
   }
@@ -580,7 +578,7 @@ class ConversationHandler {
 
     await Promise.all(
       activeUsers.map(userId => this.sendConversationsUpdate(userId))
-    );
+
   }
 }
 

@@ -26,7 +26,7 @@ const auth = async (req, res, next) => {
           lastSeen: new Date()
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
+
     }
 
     if (!user) {
@@ -43,7 +43,6 @@ const auth = async (req, res, next) => {
     res.status(401).json({
       success: false,
       message: 'Please authenticate',
-      error: error.message
     });
   }
 };

@@ -46,14 +46,12 @@ router.post('/', auth, async (req, res) => {
       title: title ? String(title).slice(0, 100) : null,
       comment: comment ? String(comment).slice(0, 1500) : null,
       isVerifiedPurchase: true,
-      status: 'approved'
     });
 
     // Atualizar rating do vendedor
     try {
       const allSellerReviews = await Review.find({ 
         targetId: purchase.sellerId,
-        status: 'approved'
       });
       
       if (allSellerReviews.length > 0) {
@@ -271,7 +269,6 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
       rating: Math.max(1, Math.min(5, Number(rating))),
       comment: String(comment).trim().slice(0, 1500),
       isVerifiedPurchase: true,
-      status: 'approved'
     });
 
     // Atualizar rating do booster
@@ -280,7 +277,6 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
       
       const allBoosterReviews = await Review.find({ 
         targetId: boosterId,
-        status: 'approved'
       });
       
       

@@ -192,7 +192,6 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching conversations',
-      error: error.message
     });
   }
 });
@@ -215,7 +214,6 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
     if (!conversation) {
       return res.status(404).json({
         success: false,
-        message: 'Conversation not found'
       });
     }
 
@@ -267,7 +265,6 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
     res.status(500).json({
       success: false,
       message: 'Error fetching messages',
-      error: error.message
     });
   }
 });

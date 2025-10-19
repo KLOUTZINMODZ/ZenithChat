@@ -15,7 +15,6 @@ class ConversationController {
       if (!conversation) {
         return res.status(404).json({
           success: false,
-          message: 'Conversa não encontrada'
         });
       }
 
@@ -46,7 +45,6 @@ class ConversationController {
       
       res.status(500).json({
         success: false,
-        message: 'Erro interno do servidor'
       });
     }
   }

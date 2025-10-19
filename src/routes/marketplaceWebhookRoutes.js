@@ -241,7 +241,6 @@ router.post('/mercadopago-webhook', async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: 'Webhook recebido mas estrutura inválida'
       });
     }
     
@@ -250,7 +249,6 @@ router.post('/mercadopago-webhook', async (req, res) => {
       logger.info(`⚠️ Tipo de notificação '${notification.type}' ignorado`);
       return res.status(200).json({
         success: true,
-        message: 'Tipo de notificação ignorado'
       });
     }
     
@@ -283,7 +281,6 @@ router.post('/test-webhook', async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'userId é obrigatório para o teste'
       });
     }
     
@@ -310,7 +307,6 @@ router.post('/test-webhook', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro no teste de webhook',
-      error: error.message
     });
   }
 });

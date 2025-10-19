@@ -87,7 +87,7 @@ async function updateConversationMarketplaceStatus(session, purchase, status) {
       purchase.conversationId,
       { $set: { 'marketplace.statusCompra': status, updatedAt: new Date() } },
       session ? { session } : {}
-    );
+
   } catch (e) {
     try { logger?.warn?.('[PURCHASES] Failed to update conversation marketplace status', { purchaseId: String(purchase?._id), status, error: e?.message }); } catch (_) {}
   }
@@ -743,7 +743,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
             }
           },
           { upsert: true, session }
-        );
+
       } catch (_) {}
 
       // Credit mediator with platform fee (5%) within the same transaction
@@ -1359,7 +1359,7 @@ router.post('/auto-release/run', auth, async (req, res) => {
                 }
               },
               { upsert: true }
-            );
+
           } catch (_) {}
           p.status = 'completed';
           p.logs.push({ level: 'info', message: 'Auto-release after 7 days from shipped' });

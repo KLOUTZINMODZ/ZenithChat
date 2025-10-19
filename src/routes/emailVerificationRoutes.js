@@ -161,7 +161,6 @@ router.post('/send-verification', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao enviar email de verificação',
-      error: error.message
     });
   }
 });

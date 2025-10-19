@@ -36,7 +36,6 @@ router.post('/activate', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao ativar modo offline',
-      error: error.message
     });
   }
 });
@@ -83,7 +82,6 @@ router.post('/deactivate', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao desativar modo offline',
-      error: error.message
     });
   }
 });
@@ -112,7 +110,6 @@ router.get('/status', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao verificar status offline',
-      error: error.message
     });
   }
 });
@@ -140,7 +137,6 @@ router.delete('/clear-cache', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao limpar cache',
-      error: error.message
     });
   }
 });

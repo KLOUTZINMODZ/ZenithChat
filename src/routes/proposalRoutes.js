@@ -38,7 +38,6 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor',
-      error: error.message
     });
   }
 });
@@ -334,7 +333,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                   currency: 'BRL',
                   paymentStatus: 'pending'
                 },
-                status: 'active'
               });
               
               agreement.addAction('created', clientId, { proposalId: actualProposalId });
@@ -402,7 +400,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                   amount: proposalPrice,
                   balanceBefore: clientBalanceBefore,
                   balanceAfter: clientBalanceAfter,
-                  status: 'escrowed'
                 });
               } catch (escrowError) {
                 :', escrowError.message);
@@ -574,8 +571,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               boostingId,
               actualProposalId,
               conversationId
-            );
-            
+
           }
         } catch (broadcastError) {
           
@@ -633,7 +629,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro interno do servidor ao aceitar proposta',
-      error: error.message
     });
   }
 });

@@ -321,12 +321,10 @@ router.get('/serve/:imageId/:variant', async (req, res) => {
     
     return res.status(404).json({ 
       success: false, 
-      message: 'Image not found' 
     });
   } catch (error) {
     return res.status(500).json({ 
       success: false, 
-      message: 'Error serving image' 
     });
   }
 });

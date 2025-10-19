@@ -17,7 +17,6 @@ const checkChatStatus = async (req, res, next) => {
     if (!conversation) {
       return res.status(404).json({ 
         success: false, 
-        message: 'Conversa não encontrada' 
       });
     }
 
@@ -45,7 +44,6 @@ const checkChatStatus = async (req, res, next) => {
     
     res.status(500).json({ 
       success: false, 
-      message: 'Erro interno do servidor' 
     });
   }
 };

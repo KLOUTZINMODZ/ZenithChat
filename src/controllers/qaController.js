@@ -95,7 +95,6 @@ module.exports = {
         buyerId: userId,
         sellerId,
         question: text,
-        status: 'pending',
         buyerSnapshot: sanitizeUserSnapshot(buyer),
         sellerSnapshot: sanitizeUserSnapshot(seller),
         createdAt: new Date(),
@@ -109,7 +108,6 @@ module.exports = {
             id: `qa_new_${qa._id}`,
             type: 'qa:new_question',
             title: 'Nova pergunta recebida',
-            message: `Você recebeu uma nova pergunta de: ${buyer?.name || 'Comprador'}`,
             meta: {
               itemId: String(itemId),
               questionId: String(qa._id),
@@ -169,7 +167,6 @@ module.exports = {
             id: `qa_answered_${qa._id}`,
             type: 'qa:answered',
             title: 'Pergunta respondida',
-            message: `Sua pergunta foi respondida por: ${seller?.name || 'Vendedor'}`,
             meta: {
               itemId: String(qa.itemId),
               questionId: String(qa._id),
@@ -226,13 +223,11 @@ module.exports = {
       let report;
       try {
       report = await Report.create({
-        conversationId: null,
         proposalId: null,
         purchaseId: null,
         qaQuestionId: qa._id,
         qaItemId: qa.itemId,
         qaMeta: {
-          status: qa.status,
           question: qa.question,
           answeredAt: qa.answeredAt || null,
           buyerSnapshot: qa.buyerSnapshot || null,
@@ -243,7 +238,6 @@ module.exports = {
         reason: String(reason).trim().slice(0, 200),
         description: String(description).trim().slice(0, 2000),
         reporter: {
-          userid: reporter?._id || userId,
           name: reporter?.name || 'Usuário',
           email: reporter?.email || null,
           avatar: reporter?.avatar || reporter?.profilePicture || null,
@@ -251,14 +245,12 @@ module.exports = {
           registeredAt: reporter?.joinDate || reporter?.createdAt
         },
         reported: {
-          userid: reported?._id || qa.buyerId,
           name: reported?.name || 'Usuário',
           email: reported?.email || null,
           avatar: reported?.avatar || reported?.profilePicture || null,
           isVerified: !!reported?.isVerified,
           registeredAt: reported?.joinDate || reported?.createdAt
         },
-        status: 'pending',
         priority: 'medium'
       });
       } catch (e) {
@@ -277,7 +269,6 @@ module.exports = {
           await ns.sendNotification(String(userId), {
             type: 'support:ticket_opened',
             title: 'Denúncia registrada',
-            message: 'Sua denúncia foi registrada e será analisada pela equipe.',
             meta: { reportId: String(report._id), qaQuestionId: String(qa._id), itemId: String(qa.itemId) }
           }, { persistent: true });
         }

@@ -83,8 +83,6 @@ class BoostingChatController {
       
       return res.status(500).json({ 
         success: false, 
-        message: 'Erro ao buscar conversa',
-        error: error.message 
       });
     }
   }
@@ -121,8 +119,6 @@ class BoostingChatController {
       if (!acceptedProposal && !agreement) {
         return res.status(404).json({ 
           success: false, 
-          message: 'Nenhuma proposta aceita encontrada para esta conversa' 
-        });
       }
 
       const response = {
@@ -137,12 +133,10 @@ class BoostingChatController {
           currentRank: agreement.proposalSnapshot.currentRank,
           desiredRank: agreement.proposalSnapshot.desiredRank,
           description: agreement.proposalSnapshot.description,
-          price: agreement.proposalSnapshot.price,
           originalPrice: agreement.proposalSnapshot.originalPrice,
           estimatedTime: agreement.proposalSnapshot.estimatedTime,
           client: agreement.parties.client,
           booster: agreement.parties.booster,
-          status: agreement.status,
           acceptedAt: agreement.createdAt,
           completedAt: agreement.completedAt,
           cancelledAt: agreement.cancelledAt
@@ -152,7 +146,6 @@ class BoostingChatController {
       if (agreement) {
         response.agreement = {
           agreementId: agreement.agreementId,
-          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
           renegotiationData: agreement.renegotiationData
@@ -219,7 +212,6 @@ class BoostingChatController {
 
       res.json({
         success: true,
-        message: 'Renegociação solicitada com sucesso',
         systemMessage
       });
     } catch (error) {
@@ -356,13 +348,6 @@ class BoostingChatController {
         }
       } catch (apiError) {
         // Log detalhado do erro, mas não bloqueia o cancelamento
-
-          status: apiError.response?.status,
-          statusText: apiError.response?.statusText,
-          message: apiError.message,
-          url: apiError.config?.url,
-          method: apiError.config?.method
-        });
       }
 
       try {
@@ -410,7 +395,6 @@ class BoostingChatController {
             type: 'conversation:updated',
             data: {
               conversationId,
-              status: 'cancelled',
               boostingStatus: 'cancelled',
               isActive: false,
               updatedAt: new Date().toISOString()
@@ -436,7 +420,6 @@ class BoostingChatController {
 
       res.json({
         success: true,
-        message: 'Atendimento cancelado com sucesso',
         systemMessage
       });
     } catch (error) {
@@ -506,7 +489,6 @@ class BoostingChatController {
       const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price);
       const formattedBoosterReceives = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(boosterReceives);
 
-        boosterId: boosterUserId?.toString(),
         price,
         feeAmount,
         boosterReceives
@@ -517,7 +499,6 @@ class BoostingChatController {
         
         return res.json({
           success: true,
-          message: 'Entrega já foi confirmada anteriormente',
           blocked: true,
           idempotent: true
         });
@@ -528,7 +509,6 @@ class BoostingChatController {
         
         return res.json({
           success: true,
-          message: 'Entrega já foi confirmada anteriormente',
           blocked: true,
           idempotent: true
         });
@@ -539,7 +519,6 @@ class BoostingChatController {
         
         return res.json({
           success: true,
-          message: 'Entrega já foi confirmada anteriormente',
           blocked: true,
           idempotent: true
         });
@@ -582,15 +561,10 @@ class BoostingChatController {
               source: 'boosting',
               agreementId: agreement?._id?.toString() || null,
               conversationId: conversationId,
-              boosterId: boosterUserId?.toString(),
-              price: Number(price),
-              feeAmount: Number(feeAmount),
-              boosterReceives: Number(boosterReceives),
               feePercent: 0.05,
               type: 'boosting_service',
               serviceName: 'Serviço de Boosting',
               providerName: 'Booster',
-              status: 'released', // Escrow liberado
               originalEscrowId: existingEscrow._id.toString()
             }
           }], { session });
@@ -625,10 +599,6 @@ class BoostingChatController {
               source: 'boosting',
               agreementId: agreement?._id?.toString() || null,
               conversationId: conversationId,
-              boosterId: boosterUserId?.toString(),
-              price: Number(price),
-              feeAmount: Number(feeAmount),
-              boosterReceives: Number(boosterReceives),
               feePercent: 0.05,
               type: 'boosting_service',
               serviceName: 'Serviço de Boosting',
@@ -665,9 +635,6 @@ class BoostingChatController {
             agreementId: agreement?._id?.toString() || null,
             conversationId: conversationId,
             clientId: clientUserId?.toString(),
-            price: Number(price),
-            feeAmount: Number(feeAmount),
-            boosterReceives: Number(boosterReceives),
             // Adicionar campos extras para compatibilidade com marketplace
             feePercent: 0.05,
             type: 'boosting_service'
@@ -697,11 +664,7 @@ class BoostingChatController {
               asaasTransferId: null
             },
             metadata: {
-              price: Number(price),
-              feeAmount: Number(feeAmount),
-              boosterReceives: Number(boosterReceives),
               clientId: clientUserId?.toString(),
-              boosterId: boosterUserId?.toString(),
               // Adicionar campos extras para compatibilidade
               feePercent: 0.05,
               serviceType: 'boosting'
@@ -742,11 +705,7 @@ class BoostingChatController {
                 source: 'boosting',
                 agreementId: agreement?._id?.toString() || null,
                 conversationId: conversationId,
-                boosterId: boosterUserId?.toString(),
                 clientId: clientUserId?.toString(),
-                price: Number(price),
-                feeAmount: Number(feeAmount),
-                boosterReceives: Number(boosterReceives),
                 // Adicionar campos extras para compatibilidade com marketplace
                 feePercent: 0.05,
                 type: 'boosting_service'
@@ -776,10 +735,6 @@ class BoostingChatController {
                   asaasTransferId: null
                 },
                 metadata: {
-                  price: Number(price),
-                  feeAmount: Number(feeAmount),
-                  boosterReceives: Number(boosterReceives),
-                  boosterId: boosterUserId?.toString(),
                   clientId: clientUserId?.toString(),
                   // Adicionar campos extras para compatibilidade
                   feePercent: 0.05,
@@ -831,10 +786,7 @@ class BoostingChatController {
           systemType: 'order_finalized',
           confirmedBy: userId,
           closedAt: new Date(),
-          price: price,
           priceFormatted: formattedPrice,
-          boosterReceives: boosterReceives,
-          feeAmount: feeAmount,
           // Marcar como já processado para idempotência
           processed: true,
           processedAt: new Date()
@@ -874,10 +826,7 @@ class BoostingChatController {
               confirmedBy: userId,
               confirmedAt: new Date(),
               blocked: true,
-              price: price,
               priceFormatted: formattedPrice,
-              boosterReceives: boosterReceives,
-              feeAmount: feeAmount
             },
             timestamp: new Date().toISOString()
           });
@@ -911,13 +860,11 @@ class BoostingChatController {
           notificationService.sendNotification(String(boosterUserId), {
             type: 'boosting:completed',
             title: 'Pagamento liberado',
-            message: 'O cliente confirmou a entrega. Valor liberado na sua carteira.',
             data: { conversationId, agreementId: agreement?._id || agreement?.agreementId }
           });
           notificationService.sendNotification(String(clientUserId), {
             type: 'boosting:completed',
             title: 'Pedido concluído',
-            message: 'Obrigado por confirmar. Pedido concluído com sucesso.',
             data: { conversationId, agreementId: agreement?._id || agreement?.agreementId }
           });
         }
@@ -927,12 +874,8 @@ class BoostingChatController {
 
       return res.json({
         success: true,
-        message: 'Entrega confirmada e pagamento liberado com sucesso',
         blocked: true,
         data: {
-          price: price,
-          boosterReceives: boosterReceives,
-          feeAmount: feeAmount,
           priceFormatted: formattedPrice,
           boosterReceivesFormatted: formattedBoosterReceives
         }
@@ -941,8 +884,6 @@ class BoostingChatController {
       
       return res.status(500).json({ 
         success: false, 
-        message: 'Erro interno do servidor ao processar confirmação',
-        error: error.message 
       });
     }
   }
@@ -1098,7 +1039,6 @@ class BoostingChatController {
           messagesCount: await Message.countDocuments({ conversation: conversationId }),
           conversationDuration: Math.floor((new Date() - conversation.createdAt) / (1000 * 60))
         },
-        status: 'pending',
         priority: calculateReportPriority(type, reportedData?.previousReportsCount || 0)
       });
 
@@ -1238,7 +1178,6 @@ class BoostingChatController {
 
       res.json({
         success: true,
-        message: 'Denúncia registrada com sucesso',
         reportId: reportData._id,
         systemMessage
       });
@@ -1263,8 +1202,6 @@ class BoostingChatController {
       if (!conversationId || !proposalId || !proposalData) {
         return res.status(400).json({ 
           success: false, 
-          message: 'Dados obrigatórios não fornecidos' 
-        });
       }
 
       const existingProposal = await AcceptedProposal.findOne({ conversationId });
@@ -1277,7 +1214,6 @@ class BoostingChatController {
       if (existingAgreement) {
         return res.json({
           success: true,
-          message: 'Proposta já salva (idempotência)',
           proposalId: existingProposal?._id,
           agreementId: existingAgreement.agreementId
         });
@@ -1291,7 +1227,6 @@ class BoostingChatController {
         currentRank: proposalData.currentRank,
         desiredRank: proposalData.desiredRank,
         description: proposalData.description,
-        price: proposalData.price,
         originalPrice: proposalData.originalPrice || proposalData.price,
         estimatedTime: proposalData.estimatedTime,
         client: {
@@ -1335,7 +1270,6 @@ class BoostingChatController {
         proposalId,
         acceptedProposalId: acceptedProposal?._id,
         boostingRequestId: boostingRequestId || null,
-        price: proposalData.price,
         
         proposalSnapshot: {
           game: proposalData.game,
@@ -1343,7 +1277,6 @@ class BoostingChatController {
           currentRank: proposalData.currentRank,
           desiredRank: proposalData.desiredRank,
           description: proposalData.description,
-          price: proposalData.price,
           originalPrice: proposalData.originalPrice || proposalData.price,
           estimatedTime: proposalData.estimatedTime
         },
@@ -1383,8 +1316,6 @@ class BoostingChatController {
           paymentStatus: 'pending'
         },
         
-        status: 'active'
-      });
 
       agreement.addAction('created', clientData.userid, {
         proposalId,
@@ -1416,7 +1347,6 @@ class BoostingChatController {
 
       res.json({
         success: true,
-        message: existingProposal 
           ? 'Nova proposta aceita criada com sucesso (múltiplas propostas permitidas)'
           : 'Proposta aceita salva com sucesso',
 
@@ -1518,7 +1448,6 @@ class BoostingChatController {
 
       res.json({
         success: true,
-        message: 'Conversa desbloqueada com sucesso',
         systemMessage
       });
 

@@ -24,8 +24,6 @@ class AgreementController {
       if (!conversationId || !proposalId || !proposalData || !clientData || !boosterData) {
         return res.status(400).json({ 
           success: false, 
-          message: 'Dados obrigatórios não fornecidos' 
-        });
       }
 
       if (idempotencyKey) {
@@ -36,10 +34,8 @@ class AgreementController {
         if (existingAgreement) {
           return res.json({
             success: true,
-            message: 'Acordo já existe (idempotência)',
             agreement: {
               agreementId: existingAgreement.agreementId,
-              status: existingAgreement.status,
               version: existingAgreement.version
             }
           });
@@ -56,13 +52,11 @@ class AgreementController {
           currentRank: proposalData.currentRank,
           desiredRank: proposalData.desiredRank,
           description: proposalData.description,
-          price: proposalData.price,
           originalPrice: proposalData.originalPrice || proposalData.price,
           estimatedTime: proposalData.estimatedTime
         },
         parties: {
           client: {
-            userid: clientData.userid,
             name: clientData.name,
             email: clientData.email,
             avatar: clientData.avatar,
@@ -74,7 +68,6 @@ class AgreementController {
             ])
           },
           booster: {
-            userid: boosterData.userid,
             name: boosterData.name,
             email: boosterData.email,
             avatar: boosterData.avatar,
@@ -93,8 +86,6 @@ class AgreementController {
           currency: 'BRL',
           paymentStatus: 'pending'
         },
-        status: 'active'
-      });
 
       agreement.addAction('created', clientData.userid, {
         proposalId,
@@ -117,10 +108,8 @@ class AgreementController {
 
       res.json({
         success: true,
-        message: 'Acordo criado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
-          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt
         }
@@ -151,8 +140,6 @@ class AgreementController {
       if (!agreement) {
         return res.status(404).json({ 
           success: false, 
-          message: 'Acordo não encontrado' 
-        });
       }
 
       const isParticipant = 
@@ -188,12 +175,9 @@ class AgreementController {
         data: {
           _id: agreement._id,
           agreementId: agreement.agreementId,
-          conversationId: agreement.conversationId,
-          price: agreement.price,
           boostingRequestId: agreement.boostingRequestId,
           proposalSnapshot: agreement.proposalSnapshot,
           parties: updatedParties,
-          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
           activatedAt: agreement.activatedAt,
@@ -237,7 +221,6 @@ class AgreementController {
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
-          message: 'Conflito de versão. Dados foram modificados por outro processo.',
           currentVersion: agreement.version,
           requestedVersion: version
         });
@@ -251,10 +234,8 @@ class AgreementController {
         if (existingAction) {
           return res.json({
             success: true,
-            message: 'Acordo já foi completado (idempotência)',
             agreement: {
               agreementId: agreement.agreementId,
-              status: agreement.status,
               version: agreement.version,
               completedAt: agreement.completedAt
             }
@@ -317,7 +298,6 @@ class AgreementController {
 
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/confirm-delivery`, {
-          conversationId: agreement.conversationId.toString(),
           agreementId: agreement.agreementId,
           completedBy: userId
         });
@@ -327,10 +307,8 @@ class AgreementController {
 
       res.json({
         success: true,
-        message: 'Acordo completado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
-          status: agreement.status,
           version: agreement.version,
           completedAt: agreement.completedAt
         }
@@ -372,7 +350,6 @@ class AgreementController {
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
-          message: 'Conflito de versão. Dados foram modificados por outro processo.',
           currentVersion: agreement.version,
           requestedVersion: version
         });
@@ -386,10 +363,8 @@ class AgreementController {
         if (existingAction) {
           return res.json({
             success: true,
-            message: 'Acordo já foi cancelado (idempotência)',
             agreement: {
               agreementId: agreement.agreementId,
-              status: agreement.status,
               version: agreement.version,
               cancelledAt: agreement.cancelledAt
             }
@@ -414,7 +389,6 @@ class AgreementController {
 
       try {
         await axios.post(`${process.env.MAIN_API_URL}/api/boosting/cancel`, {
-          conversationId: agreement.conversationId.toString(),
           agreementId: agreement.agreementId,
           cancelledBy: userId,
           reason: cancelReason
@@ -425,10 +399,8 @@ class AgreementController {
 
       res.json({
         success: true,
-        message: 'Acordo cancelado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
-          status: agreement.status,
           version: agreement.version,
           cancelledAt: agreement.cancelledAt
         }
@@ -470,7 +442,6 @@ class AgreementController {
       if (version && agreement.version !== parseInt(version)) {
         return res.status(409).json({
           success: false,
-          message: 'Conflito de versão. Dados foram modificados por outro processo.',
           currentVersion: agreement.version,
           requestedVersion: version
         });
@@ -484,10 +455,8 @@ class AgreementController {
         if (existingAction) {
           return res.json({
             success: true,
-            message: 'Renegociação já processada (idempotência)',
             agreement: {
               agreementId: agreement.agreementId,
-              status: agreement.status,
               version: agreement.version,
               renegotiationData: agreement.renegotiationData
             }
@@ -512,10 +481,8 @@ class AgreementController {
 
       res.json({
         success: true,
-        message: 'Acordo renegociado com sucesso',
         agreement: {
           agreementId: agreement.agreementId,
-          status: agreement.status,
           version: agreement.version,
           renegotiationData: agreement.renegotiationData
         }
@@ -552,7 +519,6 @@ class AgreementController {
           agreementId: agreement.agreementId,
           proposalSnapshot: agreement.proposalSnapshot,
           parties: agreement.parties,
-          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
           completedAt: agreement.completedAt,
@@ -581,10 +547,8 @@ class AgreementController {
         success: true,
         agreements: agreements.map(agreement => ({
           agreementId: agreement.agreementId,
-          conversationId: agreement.conversationId,
           proposalSnapshot: agreement.proposalSnapshot,
           parties: agreement.parties,
-          status: agreement.status,
           version: agreement.version,
           createdAt: agreement.createdAt,
           completedAt: agreement.completedAt,

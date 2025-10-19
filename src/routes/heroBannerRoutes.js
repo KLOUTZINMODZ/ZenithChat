@@ -63,7 +63,6 @@ router.get('/active', async (req, res) => {
     
     res.status(500).json({
       success: false,
-      message: 'Erro ao buscar banners'
     });
   }
 });
@@ -84,7 +83,6 @@ router.get('/all', requireAdminKey, async (req, res) => {
     
     res.status(500).json({
       success: false,
-      message: 'Erro ao buscar banners'
     });
   }
 });
@@ -97,7 +95,6 @@ router.get('/:id', requireAdminKey, async (req, res) => {
     if (!banner) {
       return res.status(404).json({
         success: false,
-        message: 'Banner não encontrado'
       });
     }
 
@@ -109,7 +106,6 @@ router.get('/:id', requireAdminKey, async (req, res) => {
     
     res.status(500).json({
       success: false,
-      message: 'Erro ao buscar banner'
     });
   }
 });
@@ -140,7 +136,6 @@ router.post('/', requireAdminKey, async (req, res) => {
     if (!primaryButton || !primaryButton.text || !primaryButton.link) {
       return res.status(400).json({
         success: false,
-        message: 'Botão principal é obrigatório'
       });
     }
 
@@ -150,7 +145,6 @@ router.post('/', requireAdminKey, async (req, res) => {
       if (activeBannersCount >= 6) {
         return res.status(400).json({
           success: false,
-          message: 'Limite de 6 banners ativos atingido. Desative um banner antes de criar outro.'
         });
       }
     }
@@ -180,7 +174,6 @@ router.post('/', requireAdminKey, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao criar banner',
-      error: error.message
     });
   }
 });
@@ -196,7 +189,6 @@ const updateBannerHandler = async (req, res) => {
     if (!banner) {
       return res.status(404).json({
         success: false,
-        message: 'Banner não encontrado'
       });
     }
 
@@ -210,7 +202,6 @@ const updateBannerHandler = async (req, res) => {
       if (activeBannersCount >= 6) {
         return res.status(400).json({
           success: false,
-          message: 'Limite de 6 banners ativos atingido'
         });
       }
     }
@@ -232,7 +223,6 @@ const updateBannerHandler = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao atualizar banner',
-      error: error.message
     });
   }
 };
@@ -245,7 +235,6 @@ router.patch('/reorder', requireAdminKey, async (req, res) => {
     if (!Array.isArray(banners)) {
       return res.status(400).json({
         success: false,
-        message: 'Formato inválido'
       });
     }
 
@@ -258,13 +247,11 @@ router.patch('/reorder', requireAdminKey, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Ordem atualizada com sucesso'
     });
   } catch (error) {
     
     res.status(500).json({
       success: false,
-      message: 'Erro ao reordenar banners'
     });
   }
 });
@@ -283,19 +270,16 @@ router.delete('/:id', requireAdminKey, async (req, res) => {
     if (!banner) {
       return res.status(404).json({
         success: false,
-        message: 'Banner não encontrado'
       });
     }
 
     res.json({
       success: true,
-      message: 'Banner deletado com sucesso'
     });
   } catch (error) {
     
     res.status(500).json({
       success: false,
-      message: 'Erro ao deletar banner'
     });
   }
 });

@@ -12,7 +12,6 @@ router.post('/validate', async (req, res) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'No token provided'
       });
     }
 
@@ -31,7 +30,6 @@ router.post('/validate', async (req, res) => {
     res.status(401).json({
       success: false,
       message: 'Invalid token',
-      error: error.message
     });
   }
 });
@@ -43,7 +41,6 @@ router.get('/ws-token', async (req, res) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'No token provided'
       });
     }
 
@@ -67,7 +64,6 @@ router.get('/ws-token', async (req, res) => {
     res.status(401).json({
       success: false,
       message: 'Invalid token',
-      error: error.message
     });
   }
 });

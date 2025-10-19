@@ -68,7 +68,6 @@ class WebSocketServer {
     } catch (error) {
       logger.error('WebSocket authentication failed:', {
         error: error.message,
-        stack: error.stack
       });
       cb(false, 401, 'Invalid token');
     }
@@ -127,7 +126,6 @@ class WebSocketServer {
         logger.error(`WebSocket error for user ${userId}:`, {
           error: error.message,
           code: error.code,
-          stack: error.stack
         });
         
 

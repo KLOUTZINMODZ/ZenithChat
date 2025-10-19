@@ -504,7 +504,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
         return res.status(400).json({
           success: false,
           message: 'Para depósitos em produção é obrigatório informar CPF (11 dígitos) ou CNPJ (14 dígitos).',
-          error: 'MISSING_CPF_CNPJ'
         });
       }
 
@@ -595,7 +594,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
             amountNet
           }
         },
-        message: 'Depósito iniciado.'
       });
     } catch (qrErr) {
       logger.warn('Asaas pixQrCode not ready or transient error; returning pending', { paymentId: payment.id, message: qrErr.message });
@@ -614,7 +612,6 @@ router.post('/deposits/initiate', auth, async (req, res) => {
             amountNet
           }
         },
-        message: 'Depósito iniciado. QR Code será disponibilizado em instantes.'
       });
     }
   } catch (error) {
@@ -1392,7 +1389,6 @@ router.post('/withdraw', auth, async (req, res) => {
               transferStatus: String(existing.status || 'UNKNOWN').toUpperCase(),
               newBalance: round2(user.walletBalance || 0)
             },
-            message: 'Operação idempotente: saque já existente retornado.'
           });
         }
       } catch (_) {}
@@ -1746,7 +1742,6 @@ router.get('/escrow', auth, async (req, res) => {
     logger.error('Erro ao buscar saldo em escrow:', error);
     return res.status(500).json({
       success: false,
-      message: 'Erro ao obter saldo bloqueado'
     });
   }
 });

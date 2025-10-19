@@ -187,7 +187,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
           { description: new RegExp(s, 'i') },
           { 'reporter.name': new RegExp(s, 'i') },
           { 'reported.name': new RegExp(s, 'i') }
-        );
+
       }
     }
     if (any) {
@@ -206,7 +206,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
               { purchaseId: mid },
               { 'reporter.userid': mid },
               { 'reported.userid': mid }
-            );
+
           }
         }
 
@@ -217,7 +217,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
           ors.push(
             { 'reporter.email': reEmail },
             { 'reported.email': reEmail }
-          );
+
         }
 
         // If the entire input is a single ID token
@@ -230,7 +230,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
             { purchaseId: maybeId },
             { 'reporter.userid': maybeId },
             { 'reported.userid': maybeId }
-          );
+
         }
 
         // If the entire input looks like an email
@@ -239,7 +239,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
           ors.push(
             { 'reporter.email': reEmail },
             { 'reported.email': reEmail }
-          );
+
         }
 
         // Fallback to text search as in 'q'
@@ -248,7 +248,7 @@ router.get('/support/tickets', requireAdminKey, async (req, res) => {
           { description: new RegExp(s, 'i') },
           { 'reporter.name': new RegExp(s, 'i') },
           { 'reported.name': new RegExp(s, 'i') }
-        );
+
       }
     }
     if (ors.length) {
@@ -401,7 +401,6 @@ router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-        message: 'ID de usuário inválido'
       });
     }
 
@@ -410,7 +409,6 @@ router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
     if (!banService) {
       return res.status(500).json({
         success: false,
-        message: 'BanService não disponível'
       });
     }
 
@@ -435,7 +433,6 @@ router.post('/users/:userId/ban', requireAdminKey, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao banir usuário',
-      error: error.message
     });
   }
 });
@@ -453,7 +450,6 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-        message: 'ID de usuário inválido'
       });
     }
 
@@ -462,7 +458,6 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
     if (!banService) {
       return res.status(500).json({
         success: false,
-        message: 'BanService não disponível'
       });
     }
 
@@ -480,7 +475,6 @@ router.post('/users/:userId/unban', requireAdminKey, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao desbanir usuário',
-      error: error.message
     });
   }
 });
@@ -497,7 +491,6 @@ router.get('/users/:userId/ban-status', requireAdminKey, async (req, res) => {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
-        message: 'ID de usuário inválido'
       });
     }
 
@@ -514,7 +507,6 @@ router.get('/users/:userId/ban-status', requireAdminKey, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao verificar banimento',
-      error: error.message
     });
   }
 });
@@ -540,7 +532,6 @@ router.get('/users/banned', requireAdminKey, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Erro ao listar usuários banidos',
-      error: error.message
     });
   }
 });
@@ -663,7 +654,6 @@ router.get('/email-stats', requireAdminKey, async (req, res) => {
       success: false,
       message: 'Erro ao buscar estatísticas',
       error: error.message,
-      stack: error.stack
     });
   }
 });
@@ -711,7 +701,6 @@ router.post('/revert-email-preferences', requireAdminKey, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro durante a reversão',
-      error: error.message
     });
   }
 });
@@ -770,7 +759,6 @@ router.get('/email-users-debug', requireAdminKey, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao buscar debug',
-      error: error.message
     });
   }
 });
@@ -926,7 +914,6 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
     logger.error('Error sending custom emails:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao enviar emails'
     });
   }
 });

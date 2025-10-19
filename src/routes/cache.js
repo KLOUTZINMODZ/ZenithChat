@@ -19,7 +19,6 @@ router.get('/stats', auth, async (req, res) => {
     logger.error('Error getting cache stats:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
     });
   }
 });
@@ -36,7 +35,6 @@ router.get('/sync/:userId', auth, async (req, res) => {
     if (req.user.id !== userId) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied'
       });
     }
 
@@ -67,7 +65,6 @@ router.get('/sync/:userId', auth, async (req, res) => {
     logger.error('Error syncing cache:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
     });
   }
 });
@@ -92,20 +89,17 @@ router.post('/invalidate', auth, async (req, res) => {
         } else {
           return res.status(403).json({
             success: false,
-            error: 'Can only invalidate own cache'
           });
         }
         break;
       default:
         return res.status(400).json({
           success: false,
-          error: 'Invalid cache type'
         });
     }
 
     res.json({
       success: true,
-      message: `${type} cache invalidated`
     });
 
     logger.debug(`Cache invalidated - type: ${type}, id: ${id}, by user: ${userId}`);
@@ -113,7 +107,6 @@ router.post('/invalidate', auth, async (req, res) => {
     logger.error('Error invalidating cache:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
     });
   }
 });
@@ -129,7 +122,6 @@ router.post('/warm/:userId', auth, async (req, res) => {
     if (req.user.id !== userId) {
       return res.status(403).json({
         success: false,
-        error: 'Access denied'
       });
     }
 
@@ -175,7 +167,6 @@ router.post('/warm/:userId', auth, async (req, res) => {
     logger.error('Error warming cache:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
     });
   }
 });
@@ -190,7 +181,6 @@ router.delete('/clear', auth, async (req, res) => {
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
-        error: 'Admin access required'
       });
     }
 
@@ -198,7 +188,6 @@ router.delete('/clear', auth, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Cache cleared completely'
     });
 
     logger.warn(`Cache cleared by admin user ${req.user.id}`);
@@ -206,7 +195,6 @@ router.delete('/clear', auth, async (req, res) => {
     logger.error('Error clearing cache:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
     });
   }
 });

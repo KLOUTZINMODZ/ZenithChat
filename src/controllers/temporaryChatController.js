@@ -37,8 +37,6 @@ class TemporaryChatController {
       if (!clientId || !boosterId || !proposalId || !proposalData) {
         return res.status(400).json({
           success: false,
-          message: 'Dados obrigatórios não fornecidos'
-        });
       }
 
       let conversation = null;
@@ -78,7 +76,6 @@ class TemporaryChatController {
             type: 'temporary_proposal',
             systemType: 'temporary_created',
             proposalId,
-            price: isNaN(_priceValue) ? 0 : _priceValue,
             priceFormatted: _priceFormatted,
             date: new Date().toISOString(),
             proposalData
@@ -96,8 +93,6 @@ class TemporaryChatController {
               webSocketServer.sendToUser(participantId, {
                 type: 'message:new',
                 data: {
-                  message: messageToSend,
-                  conversationId: conversation._id
                 },
                 timestamp: new Date().toISOString()
               });
@@ -114,9 +109,7 @@ class TemporaryChatController {
               await notificationService.sendNotification(userId, {
                 id: `proposal_${proposalId}`,
                 title: 'Nova proposta recebida',
-                message: `Valor: ${_priceFormatted} • Tempo: ${proposalData.estimatedTime}`,
                 type: 'new_proposal',
-                conversationId: conversation._id,
                 proposalId
               }, { persistent: true });
             }
@@ -134,7 +127,6 @@ class TemporaryChatController {
             wsServer.sendToUser(clientId, {
               type: 'proposal:received',
               data: {
-                conversationId: conversation._id,
                 proposalId,
                 proposalData,
                 clientData,
@@ -148,7 +140,6 @@ class TemporaryChatController {
             wsServer.sendToUser(boosterId, {
               type: 'proposal:received',
               data: {
-                conversationId: conversation._id,
                 proposalId,
                 proposalData,
                 clientData,
@@ -164,8 +155,6 @@ class TemporaryChatController {
 
         return res.json({
           success: true,
-          message: 'Proposta adicionada à conversa existente',
-          conversationId: conversation._id
         });
       }
 
@@ -181,11 +170,9 @@ class TemporaryChatController {
         type: 'direct',
         isTemporary: true,
         expiresAt: expiresAt,
-        status: 'pending',
         proposal: proposalId,
 
         client: {
-          userid: clientUser._id,
           name: clientUser.name,
           email: clientUser.email,
           avatar: clientUser.avatar,
@@ -195,7 +182,6 @@ class TemporaryChatController {
           registeredAt: clientUser.createdAt
         },
         booster: {
-          userid: boosterUser._id,
           name: boosterUser.name,
           email: boosterUser.email,
           avatar: boosterUser.avatar,
@@ -232,7 +218,6 @@ class TemporaryChatController {
           type: 'temporary_chat_created',
           systemType: 'temporary_created',
           proposalId,
-          price: isNaN(_priceValue2) ? 0 : _priceValue2,
           priceFormatted: _priceFormatted2,
           date: new Date().toISOString(),
           expiresAt
@@ -250,8 +235,6 @@ class TemporaryChatController {
             webSocketServer.sendToUser(participantId, {
               type: 'message:new',
               data: {
-                message: messageToSend,
-                conversationId: conversation._id
               },
               timestamp: new Date().toISOString()
             });
@@ -268,9 +251,7 @@ class TemporaryChatController {
             await notificationService.sendNotification(userId, {
               id: `temporary_chat_${conversation._id}`,
               title: 'Chat temporário criado',
-              message: `Proposta: ${_priceFormatted2} • Tempo: ${proposalData.estimatedTime}`,
               type: 'temporary_chat_created',
-              conversationId: conversation._id,
               proposalId
             }, { persistent: true });
           }
@@ -288,7 +269,6 @@ class TemporaryChatController {
           wsServer.sendToUser(clientId, {
             type: 'proposal:received',
             data: {
-              conversationId: conversation._id,
               proposalId,
               proposalData,
               clientData,
@@ -302,7 +282,6 @@ class TemporaryChatController {
           wsServer.sendToUser(boosterId, {
             type: 'proposal:received',
             data: {
-              conversationId: conversation._id,
               proposalId,
               proposalData,
               clientData,
@@ -318,8 +297,6 @@ class TemporaryChatController {
 
       res.json({
         success: true,
-        message: 'Chat temporário criado com sucesso',
-        conversationId: conversation._id,
         expiresAt: expiresAt
       });
 
@@ -327,8 +304,6 @@ class TemporaryChatController {
       
       res.status(500).json({
         success: false,
-        message: 'Erro interno do servidor'
-      });
     }
   }
 
@@ -346,38 +321,28 @@ class TemporaryChatController {
       if (!userId) {
         return res.status(401).json({
           success: false,
-          message: 'Usuário não autenticado'
-        });
       }
 
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) {
         return res.status(404).json({
           success: false,
-          message: 'Conversa não encontrada'
-        });
       }
 
       if (!conversation.isParticipant(userId)) {
         return res.status(403).json({
           success: false,
-          message: 'Acesso negado à conversa'
-        });
       }
 
       if (!conversation.isTemporary || conversation.status !== 'pending') {
         return res.status(400).json({
           success: false,
-          message: 'Esta conversa não é um chat temporário pendente'
-        });
       }
 
       if (conversation.isExpired()) {
         await conversation.expireTemporaryChat();
         return res.status(400).json({
           success: false,
-          message: 'Este chat temporário já expirou'
-        });
       }
 
       await conversation.acceptTemporaryChat();
@@ -395,18 +360,15 @@ class TemporaryChatController {
         : Number(proposalData.price || 0);
 
       const acceptedProposal = new AcceptedProposal({
-        conversationId: conversation._id,
         proposalId: finalProposalId,
         game: proposalData.game,
         category: proposalData.category,
         currentRank: proposalData.currentRank,
         desiredRank: proposalData.desiredRank,
         description: proposalData.description,
-        price: isNaN(numericAcceptedPrice) ? 0 : numericAcceptedPrice,
         originalPrice: isNaN(numericAcceptedPrice) ? 0 : numericAcceptedPrice,
         estimatedTime: proposalData.estimatedTime,
         client: {
-          userid: clientData.userid,
           name: clientData.name,
           avatar: clientData.avatar,
           isVerified: false,
@@ -414,7 +376,6 @@ class TemporaryChatController {
           rating: 0
         },
         booster: {
-          userid: boosterData.userid,
           name: boosterData.name,
           avatar: boosterData.avatar,
           isVerified: false,
@@ -423,7 +384,6 @@ class TemporaryChatController {
           completedBoosts: 0,
           specializations: []
         },
-        status: 'active',
         acceptedAt: new Date()
       });
 
@@ -449,7 +409,6 @@ class TemporaryChatController {
           proposalId: finalProposalId,
           acceptedBy: userId,
           acceptedAt: new Date(),
-          price: isNaN(_priceValue3) ? 0 : _priceValue3,
           priceFormatted: _priceFormatted3,
           date: new Date().toISOString()
         }
@@ -466,8 +425,6 @@ class TemporaryChatController {
             webSocketServer.sendToUser(participantId, {
               type: 'message:new',
               data: {
-                message: messageToSend,
-                conversationId: conversation._id
               },
               timestamp: new Date().toISOString()
             });
@@ -483,9 +440,7 @@ class TemporaryChatController {
             await notificationService.sendNotification(userId, {
               id: `proposal_accepted_${finalProposalId}`,
               title: 'Proposta aceita',
-              message: `Valor acordado: ${_priceFormatted3} • Tempo: ${proposalData.estimatedTime}`,
               type: 'proposal_accepted',
-              conversationId: conversation._id,
               proposalId: finalProposalId
             }, { persistent: true });
           }
@@ -521,22 +476,18 @@ class TemporaryChatController {
           
 
           const proposalAcceptedEventData = {
-            conversationId: conversation._id,
             proposalId: finalProposalId,
             proposalData,
             clientData,
             boosterData,
             acceptedBy: userId,
             acceptedAt: new Date().toISOString(),
-            status: 'accepted',
             isTemporary: false,
             boostingStatus: 'active',
             timestamp: new Date().toISOString()
           };
           
           const conversationUpdateEventData = {
-            conversationId: conversation._id,
-            status: 'accepted',
             isTemporary: false,
             boostingStatus: 'active',
             updatedAt: new Date().toISOString(),
@@ -630,7 +581,6 @@ class TemporaryChatController {
 
       res.json({
         success: true,
-        message: 'Proposta aceita com sucesso',
         acceptedProposal: acceptedProposal
       });
 
@@ -638,8 +588,6 @@ class TemporaryChatController {
       
       res.status(500).json({
         success: false,
-        message: 'Erro interno do servidor'
-      });
     }
   }
 
@@ -654,30 +602,22 @@ class TemporaryChatController {
       if (!userId) {
         return res.status(401).json({
           success: false,
-          message: 'Usuário não autenticado'
-        });
       }
 
       const conversation = await Conversation.findById(conversationId);
       if (!conversation) {
         return res.status(404).json({
           success: false,
-          message: 'Conversa não encontrada'
-        });
       }
 
       if (!conversation.isParticipant(userId)) {
         return res.status(403).json({
           success: false,
-          message: 'Acesso negado à conversa'
-        });
       }
 
       if (!conversation.isTemporary || conversation.status !== 'pending') {
         return res.status(400).json({
           success: false,
-          message: 'Esta conversa não é um chat temporário pendente'
-        });
       }
       
 
@@ -714,8 +654,6 @@ class TemporaryChatController {
             webSocketServer.sendToUser(participantId, {
               type: 'message:new',
               data: {
-                message: messageToSend,
-                conversationId: conversation._id
               },
               timestamp: new Date().toISOString()
             });
@@ -731,9 +669,7 @@ class TemporaryChatController {
             await notificationService.sendNotification(userId, {
               id: `proposal_rejected_${finalProposalId}`,
               title: 'Proposta rejeitada',
-              message: 'A proposta foi rejeitada.',
               type: 'proposal_rejected',
-              conversationId: conversation._id,
               proposalId: finalProposalId
             }, { persistent: true });
           }
@@ -761,7 +697,6 @@ class TemporaryChatController {
             webSocketServer.sendToUser(participantId, {
               type: 'proposal:rejected',
               data: {
-                conversationId: conversation._id,
                 proposalId: finalProposalId,
                 proposalData,
                 clientData,
@@ -776,8 +711,6 @@ class TemporaryChatController {
           const updatePayload = {
             type: 'conversation:updated',
             data: {
-              conversationId: conversation._id,
-              status: 'expired',
               isTemporary: !!conversation.isTemporary,
               isActive: false,
               updatedAt: new Date().toISOString()
@@ -791,15 +724,11 @@ class TemporaryChatController {
 
       res.json({
         success: true,
-        message: 'Proposta rejeitada com sucesso'
-      });
 
     } catch (error) {
       
       res.status(500).json({
         success: false,
-        message: 'Erro interno do servidor'
-      });
     }
   }
 
@@ -807,7 +736,6 @@ class TemporaryChatController {
     try {
       const expiredChats = await Conversation.find({
         isTemporary: true,
-        status: 'pending',
         expiresAt: { $lt: new Date() }
       });
 
@@ -823,8 +751,6 @@ class TemporaryChatController {
       
       res.status(500).json({
         success: false,
-        message: 'Erro interno do servidor'
-      });
     }
   }
 
@@ -832,7 +758,6 @@ class TemporaryChatController {
     try {
       const expiredChats = await Conversation.find({
         isTemporary: true,
-        status: 'pending',
         expiresAt: { $lt: new Date() }
       });
 
@@ -879,8 +804,6 @@ class TemporaryChatController {
                 webSocketServer.sendToUser(participantId, {
                   type: 'message:new',
                   data: {
-                    message: messageToSend,
-                    conversationId: chat._id
                   },
                   timestamp: new Date().toISOString()
                 });
@@ -896,9 +819,7 @@ class TemporaryChatController {
                 await notificationService.sendNotification(userId, {
                   id: `temporary_chat_expired_${chat._id}`,
                   title: 'Chat temporário expirou',
-                  message: 'A proposta não foi aceita em até 3 dias.',
                   type: 'proposal_expired',
-                  conversationId: chat._id
                 }, { persistent: true });
               }
             }
@@ -922,7 +843,6 @@ class TemporaryChatController {
                 wsServer.sendToUser(participantId, {
                   type: 'proposal:expired',
                   data: {
-                    conversationId: chat._id,
                     proposalId: chat.proposal,
                     proposalData,
                     clientData,
@@ -945,7 +865,6 @@ class TemporaryChatController {
 
       res.json({
         success: true,
-        message: `${cleanedCount} chats temporários expirados foram limpos`,
         cleanedCount
       });
 
@@ -953,8 +872,6 @@ class TemporaryChatController {
       
       res.status(500).json({
         success: false,
-        message: 'Erro interno do servidor'
-      });
     }
   }
 }

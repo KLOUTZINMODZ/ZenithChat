@@ -99,7 +99,6 @@ class HighlightRetryService {
     } catch (error) {
       logger.error('❌ Error during highlight retry:', {
         paymentId,
-        error: error.message
       });
       
       paymentCacheService.updateHighlightRetry(paymentId, false);
@@ -201,7 +200,6 @@ class HighlightRetryService {
         } catch (itemError) {
           logger.warn('⚠️ Failed to highlight individual item:', {
             itemId: item._id || item.id,
-            error: itemError.message
           });
         }
       }
@@ -219,7 +217,6 @@ class HighlightRetryService {
     } catch (error) {
       logger.error('❌ Local fallback highlight failed:', {
         userId: highlightData.userId,
-        error: error.message
       });
       return false;
     }

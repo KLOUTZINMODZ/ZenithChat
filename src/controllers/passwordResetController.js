@@ -48,7 +48,6 @@ exports.requestPasswordReset = async (req, res) => {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({
         success: false,
-        message: 'Email inválido'
       });
     }
 
@@ -64,7 +63,6 @@ exports.requestPasswordReset = async (req, res) => {
     if (!checkRateLimit(ipAddress)) {
       return res.status(429).json({
         success: false,
-        message: 'Muitas tentativas. Tente novamente em 1 hora.'
       });
     }
 
@@ -124,7 +122,6 @@ exports.requestPasswordReset = async (req, res) => {
       
       res.status(500).json({
         success: false,
-        message: 'Erro ao enviar email. Tente novamente mais tarde.'
       });
     }
 
@@ -132,7 +129,6 @@ exports.requestPasswordReset = async (req, res) => {
     logger.error('Error in requestPasswordReset:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao processar solicitação'
     });
   }
 };
@@ -147,7 +143,6 @@ exports.verifyResetCode = async (req, res) => {
     if (!email || !code) {
       return res.status(400).json({
         success: false,
-        message: 'Email e código são obrigatórios'
       });
     }
 
@@ -161,7 +156,6 @@ exports.verifyResetCode = async (req, res) => {
     if (!resetRequest) {
       return res.status(400).json({
         success: false,
-        message: 'Código inválido ou expirado'
       });
     }
 
@@ -169,7 +163,6 @@ exports.verifyResetCode = async (req, res) => {
     if (resetRequest.isExpired()) {
       return res.status(400).json({
         success: false,
-        message: 'Código expirado. Solicite um novo código.'
       });
     }
 
@@ -182,7 +175,6 @@ exports.verifyResetCode = async (req, res) => {
       
       return res.status(400).json({
         success: false,
-        message: 'Muitas tentativas. Solicite um novo código.'
       });
     }
 
@@ -202,7 +194,6 @@ exports.verifyResetCode = async (req, res) => {
     logger.error('Error in verifyResetCode:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao verificar código'
     });
   }
 };
@@ -217,7 +208,6 @@ exports.resetPassword = async (req, res) => {
     if (!resetToken || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Token e nova senha são obrigatórios'
       });
     }
 
@@ -225,7 +215,6 @@ exports.resetPassword = async (req, res) => {
     if (newPassword.length < 6) {
       return res.status(400).json({
         success: false,
-        message: 'A senha deve ter no mínimo 6 caracteres'
       });
     }
 
@@ -235,14 +224,12 @@ exports.resetPassword = async (req, res) => {
     if (!resetRequest || resetRequest.used) {
       return res.status(400).json({
         success: false,
-        message: 'Token inválido ou já utilizado'
       });
     }
 
     if (resetRequest.isExpired()) {
       return res.status(400).json({
         success: false,
-        message: 'Token expirado'
       });
     }
 
@@ -252,7 +239,6 @@ exports.resetPassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Usuário não encontrado'
       });
     }
 
@@ -303,14 +289,12 @@ exports.resetPassword = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Senha redefinida com sucesso! Você já pode fazer login.'
     });
 
   } catch (error) {
     logger.error('Error in resetPassword:', error);
     res.status(500).json({
       success: false,
-      message: 'Erro ao redefinir senha'
     });
   }
 };

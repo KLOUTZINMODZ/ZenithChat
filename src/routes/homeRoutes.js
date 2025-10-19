@@ -132,7 +132,6 @@ router.get('/data', optionalAuth, async (req, res) => {
     return res.status(500).json({ 
       success: false, 
       message: 'Erro ao carregar dados da homepage',
-      error: error.message 
     });
   }
 });
@@ -146,7 +145,6 @@ router.get('/featured', optionalAuth, async (req, res) => {
     if (!userId || isBanned) {
       return res.status(403).json({ 
         success: false, 
-        message: 'Acesso negado. Faça login para ver items em destaque.' 
       });
     }
     
@@ -167,7 +165,6 @@ router.get('/featured', optionalAuth, async (req, res) => {
   } catch (error) {
     return res.status(500).json({ 
       success: false, 
-      message: 'Erro ao carregar items em destaque' 
     });
   }
 });

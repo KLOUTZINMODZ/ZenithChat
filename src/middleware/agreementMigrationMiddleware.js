@@ -218,7 +218,6 @@ class AgreementMigrationMiddleware {
         if (!agreement) {
           return res.status(404).json({ 
             success: false, 
-            message: 'Acordo não encontrado' 
           });
         }
         
