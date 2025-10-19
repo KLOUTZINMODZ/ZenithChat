@@ -82,10 +82,8 @@ const imageServeMiddleware = async (req, res, next) => {
       return res.send(buffer);
     }
 
-    return res.status(404).json({ 
-      success: false, 
-      message: 'Image not found'
-    });
+    // Imagem não encontrada no banco, passar para o próximo middleware (express.static)
+    return next();
     
   } catch (error) {
     next();

@@ -114,6 +114,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   }
 }));
 
+// 404 final para /uploads - imagem não encontrada nem no banco nem no disco
+app.use('/uploads/*', (req, res) => {
+  res.status(404).json({ 
+    success: false, 
+    message: 'Image not found'
+  });
+});
+
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
@@ -248,20 +256,21 @@ app.get('/api/ws-info', (req, res) => {
 });
 
 
+// 404 handler apenas para rotas /api/* que não foram encontradas
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found'
+  });
+});
+
+// Error handler global
 app.use((err, req, res, next) => {
   logger.error('Express error:', err);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || 'Internal server error',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
-
-
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Route not found'
   });
 });
 
