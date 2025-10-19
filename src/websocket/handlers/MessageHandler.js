@@ -5,6 +5,7 @@ const logger = require('../../utils/logger');
 const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
 const crypto = require('crypto');
+const { validateMessage } = require('../../utils/messageValidation');
 
 const messageBuffer = new Map();
 const deliveryTimeouts = new Map();
@@ -71,6 +72,13 @@ class MessageHandler {
         logger.warn(`User ${userId} attempted to send message with ${content.length} characters (limit: 10,000). Banning user for exploit.`);
         await this.banUserForExploit(userId);
         throw new Error('Message exceeds character limit. User has been banned for exploit attempt.');
+      }
+
+      // Validar conteúdo restrito (URLs e números de telefone)
+      const validation = validateMessage(content);
+      if (!validation.isValid) {
+        logger.warn(`User ${userId} attempted to send restricted content: ${validation.detectedContent || 'unknown'}`);
+        throw new Error(validation.reason || 'Conteúdo não permitido detectado');
       }
 
 
