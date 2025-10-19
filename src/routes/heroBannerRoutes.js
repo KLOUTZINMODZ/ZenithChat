@@ -185,8 +185,8 @@ router.post('/', requireAdminKey, async (req, res) => {
   }
 });
 
-// PUT - Atualizar banner (admin)
-router.put('/:id', requireAdminKey, async (req, res) => {
+// Handler compartilhado para PUT e PATCH
+const updateBannerHandler = async (req, res) => {
   try {
     const bannerId = req.params.id;
     const updates = req.body;
@@ -235,34 +235,9 @@ router.put('/:id', requireAdminKey, async (req, res) => {
       error: error.message
     });
   }
-});
+};
 
-// DELETE - Deletar banner (admin)
-router.delete('/:id', requireAdminKey, async (req, res) => {
-  try {
-    const banner = await HeroBanner.findByIdAndDelete(req.params.id);
-    
-    if (!banner) {
-      return res.status(404).json({
-        success: false,
-        message: 'Banner não encontrado'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Banner deletado com sucesso'
-    });
-  } catch (error) {
-    console.error('Error deleting banner:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao deletar banner'
-    });
-  }
-});
-
-// PATCH - Alterar ordem dos banners (admin)
+// PATCH - Alterar ordem dos banners (admin) - DEVE VIR ANTES DE /:id
 router.patch('/reorder', requireAdminKey, async (req, res) => {
   try {
     const { banners } = req.body; // Array de { id, order }
@@ -290,6 +265,37 @@ router.patch('/reorder', requireAdminKey, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro ao reordenar banners'
+    });
+  }
+});
+
+// PUT - Atualizar banner (admin)
+router.put('/:id', requireAdminKey, updateBannerHandler);
+
+// PATCH - Atualizar banner (admin) - Compatibilidade
+router.patch('/:id', requireAdminKey, updateBannerHandler);
+
+// DELETE - Deletar banner (admin)
+router.delete('/:id', requireAdminKey, async (req, res) => {
+  try {
+    const banner = await HeroBanner.findByIdAndDelete(req.params.id);
+    
+    if (!banner) {
+      return res.status(404).json({
+        success: false,
+        message: 'Banner não encontrado'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Banner deletado com sucesso'
+    });
+  } catch (error) {
+    console.error('Error deleting banner:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao deletar banner'
     });
   }
 });
