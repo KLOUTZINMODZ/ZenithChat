@@ -138,7 +138,7 @@ async function getOrCreateConversation(buyerId, sellerId, metadata) {
   }
   let conv = await Conversation.findOne({
     participants: { $all: unique, $size: unique.length },
-    'metadata.purchaseId': metadata.purchaseId
+    'metadata.purchaseId': metadata.purchaseId);
   });
   if (!conv) {
     let meta = metadata instanceof Map ? metadata : new Map(Object.entries(metadata || {}));

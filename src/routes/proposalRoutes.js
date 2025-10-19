@@ -230,7 +230,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             { 'metadata.proposalId': actualProposalId },
             { proposal: proposalId },
             { proposal: actualProposalId }
-          ]
+          ]);
         });
       }
 

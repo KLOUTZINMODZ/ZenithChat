@@ -663,7 +663,7 @@ router.post('/revert-email-preferences', requireAdminKey, async (req, res) => {
   try {
     // Buscar todos os usuários com emailNotifications = true
     const users = await User.find({
-      'preferences.emailNotifications': true
+      'preferences.emailNotifications': true);
     }).select('name email preferences');
 
     logger.info(`Found ${users.length} users with emailNotifications=true`);

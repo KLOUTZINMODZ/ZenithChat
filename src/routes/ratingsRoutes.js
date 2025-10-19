@@ -51,7 +51,7 @@ router.post('/', auth, async (req, res) => {
     // Atualizar rating do vendedor
     try {
       const allSellerReviews = await Review.find({ 
-        targetId: purchase.sellerId,
+        targetId: purchase.sellerId,);
       });
       
       if (allSellerReviews.length > 0) {
@@ -252,7 +252,7 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     // Verificar se já foi avaliado
     const existing = await Review.findOne({ 
       agreementId: agreement._id,
-      targetType: 'Boosting'
+      targetType: 'Boosting');
     });
     
     if (existing) {
@@ -276,7 +276,7 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
       
       
       const allBoosterReviews = await Review.find({ 
-        targetId: boosterId,
+        targetId: boosterId,);
       });
       
       

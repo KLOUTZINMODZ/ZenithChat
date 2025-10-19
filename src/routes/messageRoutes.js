@@ -366,7 +366,7 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
         if (!isGroupChat && conv.participants.length >= 2) {
           otherParticipant = conv.participants.find(
             p => p && p._id && p._id.toString() !== userId.toString()
-
+          );
         }
 
         const userUnreadCount = (() => {
