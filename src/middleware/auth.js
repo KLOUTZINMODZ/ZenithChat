@@ -79,4 +79,32 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { auth, optionalAuth };
+// Admin auth - verifica se o usuário é admin
+const adminAuth = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+
+    next();
+  } catch (error) {
+    logger.error('Admin authorization error:', error);
+    res.status(403).json({
+      success: false,
+      message: 'Access denied',
+      error: error.message
+    });
+  }
+};
+
+module.exports = { auth, optionalAuth, adminAuth };
