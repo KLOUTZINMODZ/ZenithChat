@@ -4,6 +4,28 @@ const logger = require('../utils/logger');
 
 const auth = async (req, res, next) => {
   try {
+    // Check for panel proxy secret first (for admin panel requests)
+    const panelSecret = req.header('X-Panel-Proxy-Secret');
+    const envSecret = process.env.PANEL_PROXY_SECRET;
+    
+    // Debug logs
+    if (req.path.includes('/reviews')) {
+      logger.info('Auth check for reviews route', {
+        hasProxyHeader: !!panelSecret,
+        hasEnvSecret: !!envSecret,
+        headersKeys: Object.keys(req.headers),
+        path: req.path
+      });
+    }
+    
+    if (panelSecret && envSecret && panelSecret === envSecret) {
+      // Valid panel proxy request - create a pseudo admin user
+      req.user = { _id: 'panel-admin', role: 'admin', name: 'Panel Admin' };
+      req.userId = 'panel-admin';
+      logger.info('Panel proxy authentication successful');
+      return next();
+    }
+
     const token = req.header('Authorization')?.replace('Bearer ', '');
 
     if (!token) {
