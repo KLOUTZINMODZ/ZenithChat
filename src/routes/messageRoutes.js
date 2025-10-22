@@ -676,18 +676,37 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
       });
     }
 
-    // VALIDAÇÃO 3: Chat inativo
-    if (!conversation.isActive) {
-      logger.warn('[MSG:REST] Conversation inactive/finalized - blocking send', { conversationId, userId });
+    // VALIDAÇÃO 3: Usar método canReceiveMessages() para validação unificada
+    if (!conversation.canReceiveMessages()) {
+      const blockReason = conversation.isFinalized ? 'Chat finalizado permanentemente' :
+                         conversation.status === 'expired' ? 'Chat temporário expirado' :
+                         !conversation.isActive ? 'Chat inativo' :
+                         'Chat não pode receber mensagens';
+      
+      logger.warn('[MSG:REST] Conversation cannot receive messages', { 
+        conversationId, 
+        userId,
+        isActive: conversation.isActive,
+        isFinalized: conversation.isFinalized,
+        status: conversation.status,
+        boostingStatus: conversation.boostingStatus
+      });
+      
       return res.status(423).json({
         success: false,
-        message: 'Chat finalizado - envie uma nova proposta para reativar',
-        error: 'CHAT_FINALIZED'
+        message: blockReason,
+        error: 'CHAT_CANNOT_RECEIVE_MESSAGES',
+        details: {
+          isActive: conversation.isActive,
+          isFinalized: conversation.isFinalized,
+          status: conversation.status
+        }
       });
     }
 
-
-    if (conversation.boostingStatus === 'completed') {
+    // VALIDAÇÃO 4: Validar todos os status terminais de boosting
+    const TERMINAL_STATUSES = ['completed', 'cancelled', 'disputed'];
+    if (TERMINAL_STATUSES.includes(conversation.boostingStatus)) {
 
       const Agreement = require('../models/Agreement');
       const AcceptedProposal = require('../models/AcceptedProposal');
@@ -713,11 +732,23 @@ router.post('/conversations/:conversationId/messages', auth, invalidationMiddlew
 
 
       if (!activeAgreement && !activeProposal) {
-        logger.warn('[MSG:REST] Boosting completed without active agreement/proposal - blocking', { conversationId, userId });
+        const statusMessages = {
+          'completed': 'Atendimento finalizado - aguardando nova proposta do booster',
+          'cancelled': 'Atendimento cancelado - não é possível enviar mensagens',
+          'disputed': 'Atendimento em disputa - aguardando resolução'
+        };
+        
+        logger.warn(`[MSG:REST] Boosting ${conversation.boostingStatus} without active work - blocking`, { 
+          conversationId, 
+          userId,
+          boostingStatus: conversation.boostingStatus
+        });
+        
         return res.status(423).json({
           success: false,
-          message: 'Atendimento finalizado - aguardando nova proposta do booster',
-          error: 'BOOSTING_COMPLETED'
+          message: statusMessages[conversation.boostingStatus] || 'Chat não está ativo',
+          error: `BOOSTING_${conversation.boostingStatus.toUpperCase()}`,
+          boostingStatus: conversation.boostingStatus
         });
       }
     }

@@ -244,8 +244,11 @@ conversationSchema.methods.isExpired = function() {
 conversationSchema.methods.acceptTemporaryChat = function() {
   if (this.isTemporary && this.status === 'pending') {
     this.isTemporary = false;
-    this.status = 'active';
+    this.status = 'accepted';
+    this.boostingStatus = 'active'; // ✅ CRÍTICO: Atualizar boostingStatus aqui!
     this.expiresAt = undefined;
+    this.isActive = true;
+    console.log(`✅ [acceptTemporaryChat] Chat ${this._id} aceito: boostingStatus='active', status='accepted'`);
     return this.save();
   }
   throw new Error('Chat não é temporário ou já foi processado');

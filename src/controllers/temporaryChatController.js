@@ -49,7 +49,10 @@ class TemporaryChatController {
         conversation = await Conversation.findOne({
           participants: { $all: [clientId, boosterId], $size: 2 },
           type: 'direct',
-          'metadata.boostingId': boostingId
+          'metadata.boostingId': boostingId,
+          // CRITICAL: Only reuse ACTIVE conversations, not completed/expired ones
+          status: { $in: ['pending', 'accepted', 'active'] },
+          boostingStatus: { $nin: ['completed', 'cancelled', 'disputed'] }
         });
       }
 
@@ -60,11 +63,15 @@ class TemporaryChatController {
           $or: [
             { 'metadata.proposalId': proposalId },
             { proposal: proposalId }
-          ]
+          ],
+          // CRITICAL: Only reuse ACTIVE conversations, not completed/expired ones
+          status: { $in: ['pending', 'accepted', 'active'] },
+          boostingStatus: { $nin: ['completed', 'cancelled', 'disputed'] }
         });
       }
 
       if (conversation) {
+        console.log(`✅ [createTemporaryChat] Reutilizando conversa ATIVA: ${conversation._id} (status: ${conversation.status}, boostingStatus: ${conversation.boostingStatus})`);
 
         const _priceValue = typeof proposalData.price === 'string'
           ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
@@ -177,6 +184,8 @@ class TemporaryChatController {
       }
 
 
+      console.log(`🆕 [createTemporaryChat] Criando NOVA conversa temporária (nenhuma conversa ativa encontrada)`);
+      
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 3);
 
@@ -671,12 +680,29 @@ class TemporaryChatController {
       }
 
 
+      // ✅ Estado já foi atualizado por acceptTemporaryChat() - apenas garantir que foi salvo
       try {
-        conversation.isTemporary = false;
-        conversation.status = 'accepted';
-        conversation.expiresAt = null;
-        conversation.boostingStatus = 'active';
-        await conversation.save();
+        // Verificar se os estados estão corretos
+        if (conversation.isTemporary || conversation.status !== 'accepted' || conversation.boostingStatus !== 'active') {
+          console.warn('⚠️ [Temporary Chat Accept] Estado inconsistente detectado após acceptTemporaryChat, corrigindo...', {
+            isTemporary: conversation.isTemporary,
+            status: conversation.status,
+            boostingStatus: conversation.boostingStatus
+          });
+          
+          conversation.isTemporary = false;
+          conversation.status = 'accepted';
+          conversation.expiresAt = null;
+          conversation.boostingStatus = 'active';
+          await conversation.save();
+        }
+        
+        console.log('✅ [Temporary Chat Accept] Estado final verificado:', {
+          conversationId: conversation._id,
+          isTemporary: conversation.isTemporary,
+          status: conversation.status,
+          boostingStatus: conversation.boostingStatus
+        });
       } catch (cleanupError) {
         console.error('❌ [Temporary Chat Accept] Finalization error:', cleanupError);
       }
