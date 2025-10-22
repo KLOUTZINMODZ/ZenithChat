@@ -361,6 +361,52 @@ class ProposalHandler {
   }
 
   /**
+   * Broadcast: Proposta aceita
+   */
+  broadcastProposalAccepted(boostingId, proposalId, conversationId) {
+    try {
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      if (!subscribers || subscribers.size === 0) {
+        logger.debug(`No subscribers for accepted proposal on boosting ${boostingId}`);
+        return;
+      }
+
+      const message = JSON.stringify({
+        type: 'proposal:accepted',
+        boostingId,
+        data: { 
+          proposalId,
+          conversationId,
+          status: 'accepted'
+        },
+        timestamp: new Date().toISOString()
+      });
+
+      logger.info(`Broadcasting proposal accepted to ${subscribers.size} subscribers`);
+
+      let broadcastCount = 0;
+      subscribers.forEach(userId => {
+        const connections = this.connectionManager.getUserConnections(userId);
+        connections.forEach(conn => {
+          if (conn.readyState === 1) {
+            try {
+              conn.send(message);
+              broadcastCount++;
+            } catch (error) {
+              logger.error(`Error broadcasting acceptance:`, error);
+            }
+          }
+        });
+      });
+
+      logger.info(`Successfully broadcasted proposal acceptance to ${broadcastCount} connections`);
+
+    } catch (error) {
+      logger.error('Error in broadcastProposalAccepted:', error);
+    }
+  }
+
+  /**
    * Broadcast: Proposta cancelada
    */
   broadcastProposalCancelled(boostingId, proposalId) {
