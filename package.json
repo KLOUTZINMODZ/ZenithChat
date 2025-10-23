@@ -6,6 +6,14 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "prod": "pm2 start ecosystem.config.js --env production",
+    "prod:stop": "pm2 stop zenith-chat-api",
+    "prod:restart": "pm2 restart zenith-chat-api",
+    "prod:reload": "pm2 reload zenith-chat-api",
+    "prod:delete": "pm2 delete zenith-chat-api",
+    "prod:logs": "pm2 logs zenith-chat-api",
+    "prod:monit": "pm2 monit",
+    "prod:status": "pm2 status",
     "backfill:marketitem-seller": "node ./scripts/backfill-marketitem-seller.js",
     "test": "node test-email-system.js",
     "test:email": "node test-email-system.js",
@@ -19,7 +27,8 @@
     "images:test-buffer": "node ./scripts/testBufferStorage.js",
     "images:test-base64": "node ./scripts/testBase64Storage.js",
     "images:list": "node ./scripts/listAllImages.js",
-    "reviews:fix-indexes": "node ./scripts/fixReviewIndexes.js"
+    "reviews:fix-indexes": "node ./scripts/fixReviewIndexes.js",
+    "optimize:indexes": "node ./scripts/add-performance-indexes.js"
   },
   "keywords": [
     "websocket",

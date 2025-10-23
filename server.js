@@ -6,6 +6,14 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const { 
+  apiLimiter, 
+  authLimiter, 
+  messageLimiter, 
+  uploadLimiter, 
+  adminLimiter, 
+  webhookLimiter 
+} = require('./src/middleware/rateLimiters');
 const WebSocketServer = require('./src/websocket/WebSocketServer');
 const connectDB = require('./src/config/database');
 const logger = require('./src/utils/logger');
@@ -123,12 +131,7 @@ app.use('/uploads/*', (req, res) => {
   });
 });
 
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 60000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-  message: 'Too many requests from this IP, please try again later.'
-});
-app.use('/api/', limiter);
+// Rate limiters específicos removidos daqui - aplicados por rota abaixo
 
 
 app.get('/', (req, res) => {
@@ -183,8 +186,8 @@ const cacheRoutes = require('./src/routes/cache');
 const internalRoutes = require('./src/routes/internalRoutes');
 const checkBanned = require('./src/middleware/checkBanned');
 
-// Rotas de autenticação (não verificar banimento aqui)
-app.use('/api/auth', authRoutes);
+// Rotas de autenticação com rate limiter específico
+app.use('/api/auth', authLimiter, authRoutes);
 
 // ✅ Rotas internas (comunicação entre APIs - não verificar banimento)
 app.use('/api/internal', internalRoutes);
@@ -193,11 +196,15 @@ app.use('/api/internal', internalRoutes);
 // Aplicado após autenticação mas antes das rotas
 app.use('/api', checkBanned);
 
-app.use('/api/messages', messageRoutes);
+// Rate limiter padrão para APIs gerais
+app.use('/api', apiLimiter);
 
-app.use('/api/uploads', uploadRoutes);
+// Rotas com rate limiters específicos
+app.use('/api/messages', messageLimiter, messageRoutes);
+
+app.use('/api/uploads', uploadLimiter, uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/marketplace-webhook', marketplaceWebhookRoutes);
+app.use('/api/marketplace-webhook', webhookLimiter, marketplaceWebhookRoutes);
 app.use('/api/boosting-chat', boostingChatRoutes);
 app.use('/api/boosting-chat', temporaryChatRoutes);
 
@@ -207,8 +214,8 @@ app.use('/api/offline', offlineRoutes);
 app.use('/api/agreements', agreementRoutes);
 app.use('/api/cache', cacheRoutes);
 app.use('/api/wallet', walletRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/admin', adminReviewRoutes);
+app.use('/api/admin', adminLimiter, adminRoutes);
+app.use('/api/admin', adminLimiter, adminReviewRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/email', emailVerificationRoutes);
 app.use('/api/qa', qaRoutes);

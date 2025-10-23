@@ -14,10 +14,13 @@ const connectDB = async () => {
 
     const options = {
       serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS) || 30000,
-      socketTimeoutMS: Number(process.env.MONGODB_SOCKET_TIMEOUT_MS) || 45000,
-      connectTimeoutMS: Number(process.env.MONGODB_CONNECT_TIMEOUT_MS) || 20000,
-      maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE) || 10,
-
+      socketTimeoutMS: Number(process.env.MONGODB_SOCKET_TIMEOUT_MS) || 60000,
+      connectTimeoutMS: Number(process.env.MONGODB_CONNECT_TIMEOUT_MS) || 30000,
+      maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE) || 100,
+      minPoolSize: Number(process.env.MONGODB_MIN_POOL_SIZE) || 10,
+      maxIdleTimeMS: Number(process.env.MONGODB_MAX_IDLE_TIME_MS) || 30000,
+      compressors: ['zlib'],
+      zlibCompressionLevel: 6,
       ...(process.env.MONGODB_DBNAME ? { dbName: process.env.MONGODB_DBNAME } : {})
     };
 
