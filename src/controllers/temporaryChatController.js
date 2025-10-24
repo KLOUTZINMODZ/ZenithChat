@@ -23,7 +23,7 @@ function extractValidObjectId(id) {
 class TemporaryChatController {
 
   async createTemporaryChat(req, res) {
-    logger.debug('[createTemporaryChat] Endpoint called', { body: req.body });
+    // Endpoint called - removed for performance
     try {
       const {
         clientId,
@@ -71,7 +71,7 @@ class TemporaryChatController {
       }
 
       if (conversation) {
-        logger.info('[createTemporaryChat] Reusing active conversation', { conversationId: conversation._id, status: conversation.status, boostingStatus: conversation.boostingStatus });
+        // Reusing active conversation
 
         const _priceValue = typeof proposalData.price === 'string'
           ? parseFloat(proposalData.price.replace(/\./g, '').replace(',', '.'))
@@ -184,7 +184,7 @@ class TemporaryChatController {
       }
 
 
-      logger.info('[createTemporaryChat] Creating new temporary conversation');
+      // Creating new temporary conversation
       
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 3);
@@ -366,7 +366,7 @@ class TemporaryChatController {
 
       const proposalId = rawProposalId ? extractValidObjectId(rawProposalId) : null;
       
-      logger.debug('[acceptTemporaryChat] Proposal ID processing', { raw: rawProposalId, cleaned: proposalId });
+      // Proposal ID processing
 
       if (!userId) {
         return res.status(401).json({
@@ -420,7 +420,7 @@ class TemporaryChatController {
 
       const finalProposalId = proposalId || extractValidObjectId(conversation.proposal);
       
-      logger.debug('[acceptTemporaryChat] Final proposal ID', { proposalId, finalProposalId });
+      // Final proposal ID
 
 
 
@@ -539,21 +539,21 @@ class TemporaryChatController {
       try {
         const webSocketServer = req.app.get('webSocketServer');
         if (webSocketServer) {
-          logger.debug('[acceptTemporaryChat] WebSocket server found, emitting events');
+          // WebSocket server found, emitting events
           
           const participants = conversation.participants;
           const clientId = clientData.userid;
           const boosterId = boosterData.userid;
           
-          logger.debug('[acceptTemporaryChat] Event emission details', { conversationId: conversation._id, clientId, boosterId, participants: participants.map(p => p.toString()), participantTypes: participants.map(p => typeof p.toString()) });
+          // Event emission details
 
           const connectionManager = webSocketServer.connectionManager;
           const clientConnections = connectionManager.getUserConnections(clientId?.toString());
           const boosterConnections = connectionManager.getUserConnections(boosterId?.toString());
           
-          logger.debug('[acceptTemporaryChat] Connection status', { clientConnected: clientConnections.length > 0, boosterConnected: boosterConnections.length > 0 });  
+          // Connection status  
           
-          logger.debug('[acceptTemporaryChat] Participant IDs', { clientId, boosterId });
+          // Participant IDs
           
 
           const proposalAcceptedEventData = {
@@ -590,7 +590,7 @@ class TemporaryChatController {
             for (const userId of userIds) {
               const connections = connectionManager.getUserConnections(userId);
               if (connections.length > 0) {
-                logger.debug(`[acceptTemporaryChat] Sending ${eventType} to ${userType}`, { userId, connections: connections.length });
+                // Sending event
                 webSocketServer.sendToUser(userId, { type: eventType, data: eventData });
                 eventSent = true;
                 break;
@@ -619,7 +619,7 @@ class TemporaryChatController {
             boosterData.userid?.toString()
           ].filter(id => id).map(id => id.toString());
           
-          logger.debug('[acceptTemporaryChat] Participant ID variants and online users', { clientIds, boosterIds });
+          // Participant ID variants
           
 
           const clientEventSent = sendToUserRobust(clientIds, 'proposal:accepted', proposalAcceptedEventData, 'CLIENT');
@@ -630,20 +630,20 @@ class TemporaryChatController {
           
 
           if (!clientEventSent || !boosterEventSent) {
-            logger.debug('[acceptTemporaryChat] Using participant fallback for missed events');
+            // Using participant fallback for missed events
             participants.forEach(participantId => {
               try {
                 const participantIdStr = participantId.toString();
                 webSocketServer.sendToUser(participantIdStr, { type: 'proposal:accepted', data: proposalAcceptedEventData });
                 webSocketServer.sendToUser(participantIdStr, { type: 'conversation:updated', data: conversationUpdateEventData });
-                logger.debug('[acceptTemporaryChat] Fallback event sent', { participantId: participantIdStr });
+                // Fallback event sent
               } catch (error) {
                 logger.error('[acceptTemporaryChat] Error in participant fallback', { participantId, error: error.message });
               }
             });
           }
           
-          logger.debug('[acceptTemporaryChat] WebSocket event emission completed');
+          // WebSocket event emission completed
         } else {
           logger.warn('[acceptTemporaryChat] WebSocket server not available');
         }
@@ -666,7 +666,7 @@ class TemporaryChatController {
           await conversation.save();
         }
         
-        logger.debug('[acceptTemporaryChat] Final state verified', { conversationId: conversation._id, status: conversation.status, boostingStatus: conversation.boostingStatus });
+        // Final state verified
       } catch (cleanupError) {
         console.error('❌ [Temporary Chat Accept] Finalization error:', cleanupError);
       }

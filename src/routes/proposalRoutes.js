@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth');
-
+const logger = require('../utils/logger');
 
 const axios = require('axios');
 const Conversation = require('../models/Conversation');
@@ -25,9 +25,8 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
     
-    console.log(`🔍 [Proposal Accept GET] Received request for proposal: ${proposalId}`);
+    logger.warn('[ProposalAccept] GET method not allowed', { proposalId });
     
-
     res.status(405).json({
       success: false,
       message: 'Method Not Allowed. Use POST method to accept proposals.',
@@ -37,7 +36,7 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ [Proposal Accept GET] Error:', error.message);
+    logger.error('[ProposalAccept] GET error', { error: error.message });
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor',
@@ -62,53 +61,40 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       clientId = clientId._id || clientId.id;
     }
 
-    console.log(`🔍 [Proposal Accept] Received request for proposal: ${proposalId}`);
-    console.log(`🔍 [Proposal Accept] ConversationId: ${conversationId}`);
-    console.log(`🔍 [Proposal Accept] BoosterId (normalized): ${boosterId}`);
-    console.log(`🔍 [Proposal Accept] ClientId (normalized): ${clientId}`);
-    console.log(`🔍 [Proposal Accept] Metadata:`, metadata);
-    console.log(`🔍 [Proposal Accept] Checking boostingId: ${boostingId} (type: ${typeof boostingId})`);
-    console.log(`🔍 [Proposal Accept] Metadata boostingId exists: ${!!metadata?.boostingId}`);
-    console.log(`🔍 [Proposal Accept] Metadata proposalId: ${metadata?.proposalId}`);
+    // Request received - removed info log for performance
     
 
     if (metadata?.proposalId) {
       actualProposalId = metadata.proposalId;
-      console.log(`[Proposal Accept] Using proposalId from metadata: ${actualProposalId}`);
+      // Using proposalId from metadata
     }
     
     if (!boostingId) {
-      console.log(`⚠️ [Proposal Accept] No boostingId in metadata, attempting database lookup for proposalId: ${proposalId}`);
+      // Attempting boostingId lookup
       
       try {
-
         const proposalLookupUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/proposals/${proposalId}/boosting-id`;
-        console.log(`🔍 [Proposal Accept] Looking up boostingId at: ${proposalLookupUrl}`);
         
         const lookupResponse = await axios.get(proposalLookupUrl, {
           headers: { Authorization: req.headers.authorization }
         });
         
-        console.log('[Proposal Accept] Lookup successful:', lookupResponse.data);
         lookupData = lookupResponse.data;
         boostingId = lookupResponse.data.boostingId;
         
-
         if (lookupResponse.data.actualProposalId) {
           actualProposalId = lookupResponse.data.actualProposalId;
-          console.log('[Proposal Accept] Using actualProposalId from lookup:', actualProposalId);
+          // Using actualProposalId from lookup
         }
       } catch (lookupError) {
-        console.log('❌ [Proposal Accept] Lookup failed:', lookupError.message);
-        console.log('❌ [Proposal Accept] Lookup error details:', lookupError.response?.data);
+        logger.warn('[ProposalAccept] Lookup failed', { error: lookupError.message });
         
         const mongoose = require('mongoose');
         if (mongoose.Types.ObjectId.isValid(proposalId)) {
-          console.log('🔍 [Proposal Accept] Checking if proposalId', proposalId, 'is actually a boostingId...');
-          console.log('[Proposal Accept] ProposalId', proposalId, 'is a valid ObjectId, using as boostingId');
+          // Using proposalId as boostingId
           boostingId = proposalId;
         } else {
-          console.log('❌ [Proposal Accept] ProposalId is not a valid ObjectId, cannot proceed');
+          logger.error('[ProposalAccept] Invalid proposalId', { proposalId });
           return res.status(400).json({
             success: false,
             message: 'Não foi possível encontrar o boostingId para esta proposta',
@@ -122,10 +108,8 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       }
     }
     
-    console.log(`🔍 [Proposal Accept] Final BoostingId: ${boostingId}`);
-    
     if (!boostingId || boostingId === 'undefined') {
-      console.error(`❌ [Proposal Accept] Invalid boostingId: ${boostingId}`);
+      logger.error('[ProposalAccept] Invalid boostingId', { boostingId });
       return res.status(500).json({
         success: false,
         message: 'BoostingId inválido ou não encontrado',
@@ -142,40 +126,28 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     // Se proposalId contém underscore, é o formato composto (boostingId_boosterId_timestamp)
     // Precisamos buscar o ID real da proposta na API principal
     if (proposalId.includes('_')) {
-      console.log(`🔍 [Proposal Accept] ProposalId is composite format, need to find real proposal ID`);
+      // Composite proposalId, fetching from API
       
       try {
-        // Busca todas as propostas deste boosting request
         const proposalsUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals`;
-        console.log(`🔗 [Proposal Accept] Fetching proposals from: ${proposalsUrl}`);
         
         const proposalsResponse = await axios.get(proposalsUrl, {
           headers: { Authorization: req.headers.authorization }
         });
         
         const proposals = proposalsResponse.data.data || proposalsResponse.data.proposals || [];
-        console.log(`[Proposal Accept] Found ${proposals.length} proposals for boosting ${boostingId}`);
         
-        // Encontra a proposta do booster correto (boosterId já normalizado no início)
         const boosterIdStr = String(boosterId);
-        console.log(`🔍 [Proposal Accept] Looking for proposal from booster: ${boosterIdStr}`);
-        
         const matchingProposal = proposals.find(p => {
           const proposalBoosterId = String(p.boosterId?._id || p.boosterId || p.booster?._id || p.booster);
-          console.log(`🔍 [Proposal Accept] Comparing ${proposalBoosterId} === ${boosterIdStr}`);
           return proposalBoosterId === boosterIdStr;
         });
         
         if (matchingProposal) {
           actualProposalId = String(matchingProposal._id || matchingProposal.id);
-          console.log(`[Proposal Accept] Found matching proposal ID: ${actualProposalId} for booster ${boosterIdStr}`);
+          // Found matching proposal
         } else {
-          console.error(`❌ [Proposal Accept] No matching proposal found for booster ${boosterIdStr}`);
-          console.log(`🔍 [Proposal Accept] Available proposals:`, proposals.map(p => ({
-            id: p._id || p.id,
-            boosterId: p.boosterId?._id || p.boosterId || p.booster?._id || p.booster,
-            status: p.status
-          })));
+          logger.error('[ProposalAccept] No matching proposal', { boosterId: boosterIdStr, proposalsCount: proposals.length });
           
           // Se não encontrou, retorna erro ao invés de continuar
           return res.status(404).json({
@@ -193,35 +165,29 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           });
         }
       } catch (error) {
-        console.log('❌ [Proposal Accept] Error fetching proposals:', error.message);
-        console.log('❌ [Proposal Accept] Error details:', error.response?.data);
+        logger.error('[ProposalAccept] Error fetching proposals', { error: error.message });
       }
     }
     
     // Se ainda não temos actualProposalId, verifica conversation metadata
     if (!actualProposalId || actualProposalId.includes('_')) {
-      console.log(`🔍 [Proposal Accept] Checking conversation metadata for proposal ID`);
-      
       try {
         const conversationResponse = await axios.get(`https://zenith.enrelyugi.com.br/api/conversations/${conversationId}`, {
           headers: { Authorization: req.headers.authorization }
         });
         
         const conversationData = conversationResponse.data;
-        console.log('🔍 [Proposal Accept] Conversation metadata:', JSON.stringify(conversationData?.metadata, null, 2));
         
-        // Não usa metadata.proposalId se for formato composto
         if (conversationData?.metadata?.actualProposalId) {
           actualProposalId = conversationData.metadata.actualProposalId;
-          console.log('[Proposal Accept] Found actualProposalId from conversation:', actualProposalId);
+          // Found actualProposalId from conversation
         }
       } catch (error) {
-        console.log('❌ [Proposal Accept] Error fetching conversation metadata:', error.message);
+        logger.warn('[ProposalAccept] Error fetching conversation metadata', { error: error.message });
       }
     }
     
-    // Aceita proposta localmente primeiro (sistema híbrido)
-    console.log('📝 [Proposal Accept] Accepting proposal locally in Chat API...');
+    // Accepting proposal locally
     
     let acceptedConv = null;
     let agreementCreated = null;
@@ -247,36 +213,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         throw new Error('Conversa não encontrada para aceitar proposta');
       }
 
-      console.log('[Proposal Accept] Conversation found:', acceptedConv._id);
+      // Conversation found
       
       // 2. CRÍTICO: Criar Agreement ANTES de aceitar a conversa
       try {
-          console.log('📝 [Proposal Accept] Creating Agreement for conversation...');
-          
           // Verifica se já existe Agreement
           const existingAgreement = await Agreement.findOne({ conversationId });
           
           if (!existingAgreement) {
-            console.log('🔍 [Proposal Accept] Agreement does not exist, creating new one...');
-            console.log('🔍 [Proposal Accept] Creating Agreement with:', {
-              conversationId,
-              actualProposalId,
-              clientId,
-              boosterId,
-              hasMetadata: !!metadata,
-              hasProposalData: !!metadata?.proposalData
-            });
             
             // Busca dados do cliente e booster
             const clientUser = await require('../models/User').findById(clientId);
             const boosterUser = await require('../models/User').findById(boosterId);
-            
-            console.log('🔍 [Proposal Accept] Users found:', {
-              clientUser: !!clientUser,
-              boosterUser: !!boosterUser,
-              clientName: clientUser?.name,
-              boosterName: boosterUser?.name
-            });
             
             if (!clientUser) {
               throw new Error(`Client user not found: ${clientId}`);
@@ -290,12 +238,6 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               const proposalData = metadata?.proposalData || {};
               const proposalPrice = proposalData.price || metadata?.price || metadata?.proposedPrice || 0;
               
-              console.log('🔍 [Proposal Accept] Proposal data extracted:', {
-                proposalPrice,
-                game: proposalData.game || metadata?.game,
-                category: proposalData.category || metadata?.category
-              });
-              
               if (!proposalPrice || proposalPrice <= 0) {
                 throw new Error(`Invalid proposal price: ${proposalPrice}`);
               }
@@ -306,13 +248,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               
               if (mongoose.Types.ObjectId.isValid(actualProposalId) && !actualProposalId.includes('_')) {
                 validProposalId = actualProposalId;
-                console.log('[Proposal Accept] Using actualProposalId as ObjectId:', validProposalId);
               } else if (mongoose.Types.ObjectId.isValid(boostingId)) {
                 validProposalId = boostingId;
-                console.log('[Proposal Accept] ProposalId is composite, using boostingId:', validProposalId);
               } else {
                 validProposalId = conversationId;
-                console.log('⚠️ [Proposal Accept] Using conversationId as fallback:', validProposalId);
               }
               
               const agreement = new Agreement({
@@ -369,12 +308,11 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               acceptedConv.metadata.set('latestAgreementId', agreement.agreementId);
               await acceptedConv.save();
               
-              console.log(`[Proposal Accept] Agreement created: ${agreement.agreementId}`);
-              console.log('[Proposal Accept] Agreement saved successfully with conversationId:', conversationId);
+              // Agreement created
               
               // NOVO: DEBITAR cliente imediatamente (ESCROW) ao aceitar proposta
               try {
-                console.log('💰 [Proposal Accept] Debitando cliente (escrow)...');
+                // Debiting client escrow
                 
                 const User = require('../models/User');
                 const WalletLedger = require('../models/WalletLedger');
@@ -421,15 +359,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 agreement.financial.paymentStatus = 'escrowed';
                 await agreement.save();
                 
-                console.log('[Proposal Accept] Cliente debitado (escrow):', {
-                  clientId: clientId.toString(),
-                  amount: proposalPrice,
-                  balanceBefore: clientBalanceBefore,
-                  balanceAfter: clientBalanceAfter,
-                  status: 'escrowed'
-                });
+                // Client debited (escrow)
               } catch (escrowError) {
-                console.error('❌ [Proposal Accept] Erro ao debitar cliente (escrow):', escrowError.message);
+                logger.error('[ProposalAccept] Escrow debit failed', { error: escrowError.message, clientId });
                 
                 // Reverter Agreement se débito falhou
                 await Agreement.deleteOne({ _id: agreement._id });
@@ -439,24 +371,19 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               
               agreementCreated = agreement;
             } else {
-              console.warn('⚠️ [Proposal Accept] Client or Booster user not found for Agreement creation');
+              logger.warn('[ProposalAccept] Client or Booster not found for Agreement');
             }
           } else {
-            console.log(`ℹ️ [Proposal Accept] Agreement already exists: ${existingAgreement.agreementId}`);
+            // Agreement already exists
             agreementCreated = existingAgreement;
           }
       } catch (agreementError) {
-        console.error('❌ [Proposal Accept] CRITICAL ERROR creating Agreement:', agreementError.message);
-        console.error('❌ [Proposal Accept] Stack trace:', agreementError.stack);
-        console.error('❌ [Proposal Accept] This will prevent delivery confirmation!');
-        
-        // Log dados detalhados para debug
-        console.error('❌ [Proposal Accept] Failed with data:', {
-          conversationId,
+        logger.error('[ProposalAccept] CRITICAL - Agreement creation failed', { 
+          error: agreementError.message, 
+          conversationId, 
           actualProposalId,
           clientId,
-          boosterId,
-          metadata: JSON.stringify(metadata, null, 2)
+          boosterId
         });
         
         // ⚠️ IMPORTANTE: Agreement é CRÍTICO para confirmação de entrega
@@ -470,11 +397,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       acceptedConv.expiresAt = null;
       acceptedConv.boostingStatus = 'active';
       await acceptedConv.save();
-      console.log('[Proposal Accept] Conversation accepted locally:', acceptedConv._id);
+      // Conversation accepted locally
       
     } catch (localError) {
-      console.error('❌ [Proposal Accept] FATAL ERROR accepting locally:', localError.message);
-      console.error('❌ [Proposal Accept] Stack:', localError.stack);
+      logger.error('[ProposalAccept] FATAL ERROR accepting locally', { error: localError.message, stack: localError.stack });
       
       // ⚠️ RETORNAR ERRO para o cliente - NÃO continuar se Agreement falhou
       return res.status(500).json({
@@ -495,8 +421,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     try {
       const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${finalProposalId}/accept`;
       
-      console.log(`🔗 [Proposal Accept] Attempting sync with main API: ${forwardUrl}`);
-      console.log(`🔗 [Proposal Accept] Final IDs: boostingId=${boostingId}, proposalId=${finalProposalId}`);
+      // Syncing with main API
       
       apiResponse = await axios.post(forwardUrl, {
         conversationId,
@@ -511,21 +436,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         timeout: 10000 // 10s timeout
       });
       
-      console.log(`[Proposal Accept] Main API sync successful:`, apiResponse.data);
+      // Main API sync successful
       apiSyncSuccess = true;
       
     } catch (apiError) {
-      console.warn('⚠️ [Proposal Accept] Main API sync failed (continuing anyway):', apiError.message);
-      if (apiError.response) {
-        console.warn('⚠️ [Proposal Accept] API Error:', apiError.response.status, apiError.response.data);
-      }
+      logger.warn('[ProposalAccept] Main API sync failed (continuing)', { error: apiError.message, status: apiError.response?.status });
       // Continua mesmo com erro na API principal
     }
     // Emite eventos WebSocket para atualização em tempo real
     try {
       const webSocketServer = req.app.get('webSocketServer');
       if (webSocketServer) {
-        console.log('📡 [Proposal Accept] Emitting WebSocket events for real-time updates...');
+        // Emitting WebSocket events
         
         // Dados da proposta aceita
         const acceptedProposalData = apiSyncSuccess && apiResponse?.data?.acceptedProposal 
@@ -557,12 +479,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         if (clientId) {
           webSocketServer.sendToUser(clientId, proposalAcceptedEvent);
-          console.log(`[Proposal Accept] 'proposal:accepted' sent to client: ${clientId}`);
         }
         
         if (boosterId) {
           webSocketServer.sendToUser(boosterId, proposalAcceptedEvent);
-          console.log(`[Proposal Accept] 'proposal:accepted' sent to booster: ${boosterId}`);
         }
         
         // Evento 2: conversation:updated (atualiza UI)
@@ -586,15 +506,13 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         
         if (clientId) {
           webSocketServer.sendToUser(clientId, conversationUpdateEvent);
-          console.log(`[Proposal Accept] 'conversation:updated' sent to client: ${clientId}`);
         }
         
         if (boosterId) {
           webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
-          console.log(`[Proposal Accept] 'conversation:updated' sent to booster: ${boosterId}`);
         }
         
-        console.log('[Proposal Accept] All WebSocket events emitted successfully');
+        // WebSocket events emitted successfully
         
         // ✅ BROADCAST VIA PROPOSAL HANDLER - Notifica todos os subscribers
         try {
@@ -605,27 +523,26 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               actualProposalId,
               conversationId
             );
-            console.log(`✅ [Proposal Accept] Broadcasted to all subscribers of boosting ${boostingId}`);
+            // Broadcasted to subscribers
           }
         } catch (broadcastError) {
-          console.error('❌ [Proposal Accept] Error broadcasting via ProposalHandler:', broadcastError);
+          logger.error('[ProposalAccept] Broadcast error', { error: broadcastError.message });
         }
         
       } else {
-        console.warn('⚠️ [Proposal Accept] WebSocket server not available for real-time updates');
+        logger.warn('[ProposalAccept] WebSocket server not available');
       }
     } catch (wsError) {
-      console.error('❌ [Proposal Accept] Error emitting WebSocket events:', wsError);
-      console.error('❌ [Proposal Accept] WebSocket error stack:', wsError.stack);
+      logger.error('[ProposalAccept] WebSocket emit error', { error: wsError.message, stack: wsError.stack });
     }
     
 
     // Retorna resposta apropriada
     if (apiSyncSuccess && apiResponse) {
-      console.log('[Proposal Accept] Returning API response');
+      // Returning API response
       return res.json(apiResponse.data);
     } else {
-      console.log('[Proposal Accept] Returning local acceptance response');
+      // Returning local response
       return res.json({
         success: true,
         message: 'Proposta aceita com sucesso',
@@ -653,10 +570,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
     
   } catch (error) {
-    console.error('❌ [Proposal Accept] Error:', error.message);
+    logger.error('[ProposalAccept] Unhandled error', { error: error.message });
     
     if (error.response) {
-      console.error('❌ [Proposal Accept] API Error Response:', error.response.data);
+      logger.error('[ProposalAccept] API Error', { status: error.response.status, data: error.response.data });
       return res.status(error.response.status).json(error.response.data);
     }
     
