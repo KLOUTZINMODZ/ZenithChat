@@ -25,7 +25,7 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
     
-    logger.warn('[ProposalAccept] GET method not allowed', { proposalId });
+    // GET method not allowed
     
     res.status(405).json({
       success: false,
@@ -36,7 +36,7 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
     });
     
   } catch (error) {
-    logger.error('[ProposalAccept] GET error', { error: error.message });
+    // GET error
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor',
@@ -87,14 +87,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           // Using actualProposalId from lookup
         }
       } catch (lookupError) {
-        logger.warn('[ProposalAccept] Lookup failed', { error: lookupError.message });
+        // Lookup failed
         
         const mongoose = require('mongoose');
         if (mongoose.Types.ObjectId.isValid(proposalId)) {
           // Using proposalId as boostingId
           boostingId = proposalId;
         } else {
-          logger.error('[ProposalAccept] Invalid proposalId', { proposalId });
+          // Invalid proposalId
           return res.status(400).json({
             success: false,
             message: 'Não foi possível encontrar o boostingId para esta proposta',
@@ -109,7 +109,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
     
     if (!boostingId || boostingId === 'undefined') {
-      logger.error('[ProposalAccept] Invalid boostingId', { boostingId });
+      // Invalid boostingId
       return res.status(500).json({
         success: false,
         message: 'BoostingId inválido ou não encontrado',
@@ -147,7 +147,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           actualProposalId = String(matchingProposal._id || matchingProposal.id);
           // Found matching proposal
         } else {
-          logger.error('[ProposalAccept] No matching proposal', { boosterId: boosterIdStr, proposalsCount: proposals.length });
+          // No matching proposal
           
           // Se não encontrou, retorna erro ao invés de continuar
           return res.status(404).json({
@@ -165,7 +165,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           });
         }
       } catch (error) {
-        logger.error('[ProposalAccept] Error fetching proposals', { error: error.message });
+        // Error fetching proposals
       }
     }
     
@@ -183,7 +183,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           // Found actualProposalId from conversation
         }
       } catch (error) {
-        logger.warn('[ProposalAccept] Error fetching conversation metadata', { error: error.message });
+        // Error fetching conversation metadata
       }
     }
     
@@ -361,7 +361,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 
                 // Client debited (escrow)
               } catch (escrowError) {
-                logger.error('[ProposalAccept] Escrow debit failed', { error: escrowError.message, clientId });
+                // Escrow debit failed
                 
                 // Reverter Agreement se débito falhou
                 await Agreement.deleteOne({ _id: agreement._id });
@@ -371,20 +371,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
               
               agreementCreated = agreement;
             } else {
-              logger.warn('[ProposalAccept] Client or Booster not found for Agreement');
+              // Client or Booster not found for Agreement
             }
           } else {
             // Agreement already exists
             agreementCreated = existingAgreement;
           }
       } catch (agreementError) {
-        logger.error('[ProposalAccept] CRITICAL - Agreement creation failed', { 
-          error: agreementError.message, 
-          conversationId, 
-          actualProposalId,
-          clientId,
-          boosterId
-        });
+        // CRITICAL - Agreement creation failed
         
         // ⚠️ IMPORTANTE: Agreement é CRÍTICO para confirmação de entrega
         // Propagar erro para impedir aceitação
@@ -400,7 +394,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       // Conversation accepted locally
       
     } catch (localError) {
-      logger.error('[ProposalAccept] FATAL ERROR accepting locally', { error: localError.message, stack: localError.stack });
+      // FATAL ERROR accepting locally
       
       // ⚠️ RETORNAR ERRO para o cliente - NÃO continuar se Agreement falhou
       return res.status(500).json({
@@ -440,7 +434,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       apiSyncSuccess = true;
       
     } catch (apiError) {
-      logger.warn('[ProposalAccept] Main API sync failed (continuing)', { error: apiError.message, status: apiError.response?.status });
+      // Main API sync failed (continuing)
       // Continua mesmo com erro na API principal
     }
     // Emite eventos WebSocket para atualização em tempo real
@@ -526,14 +520,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             // Broadcasted to subscribers
           }
         } catch (broadcastError) {
-          logger.error('[ProposalAccept] Broadcast error', { error: broadcastError.message });
+          // Broadcast error
         }
         
       } else {
-        logger.warn('[ProposalAccept] WebSocket server not available');
+        // WebSocket server not available
       }
     } catch (wsError) {
-      logger.error('[ProposalAccept] WebSocket emit error', { error: wsError.message, stack: wsError.stack });
+      // WebSocket emit error
     }
     
 
@@ -570,10 +564,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
     
   } catch (error) {
-    logger.error('[ProposalAccept] Unhandled error', { error: error.message });
+    // Unhandled error
     
     if (error.response) {
-      logger.error('[ProposalAccept] API Error', { status: error.response.status, data: error.response.data });
+      // API Error
       return res.status(error.response.status).json(error.response.data);
     }
     

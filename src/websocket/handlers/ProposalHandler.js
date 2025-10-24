@@ -11,7 +11,6 @@ class ProposalHandler {
     this.connectionManager = connectionManager;
     // Map: boostingId -> Set<userId>
     this.boostingSubscriptions = new Map();
-    logger.info('ProposalHandler initialized with subscription system');
   }
 
   /**
@@ -48,8 +47,6 @@ class ProposalHandler {
   async handleProposalAccepted(ws, payload) {
     try {
       const { proposalId, conversationId, boostingId } = payload;
-      
-      logger.info(`🔄 Proposta aceita: ${proposalId}`);
 
 
       const conversation = await Conversation.findOne({
@@ -110,7 +107,7 @@ class ProposalHandler {
         });
       });
 
-      logger.info(`Proposta ${proposalId} processada com sucesso`);
+      // Proposta processada
 
     } catch (error) {
       logger.error('Erro ao processar proposta aceita:', error);
@@ -194,8 +191,6 @@ class ProposalHandler {
       // Adicionar userId ao set
       this.boostingSubscriptions.get(boostingId).add(userId.toString());
 
-      logger.info(`User ${userId} subscribed to boosting ${boostingId}. Total subscribers: ${this.boostingSubscriptions.get(boostingId).size}`);
-
       // Confirmar inscrição
       ws.send(JSON.stringify({
         type: 'proposal:subscribed',
@@ -222,12 +217,9 @@ class ProposalHandler {
       if (subscribers) {
         subscribers.delete(userId.toString());
 
-        logger.info(`User ${userId} unsubscribed from boosting ${boostingId}`);
-
         // Remover set vazio
         if (subscribers.size === 0) {
           this.boostingSubscriptions.delete(boostingId);
-          logger.info(`No more subscribers for boosting ${boostingId}, removed from map`);
         }
       }
 
@@ -251,7 +243,6 @@ class ProposalHandler {
       const subscribers = this.boostingSubscriptions.get(boostingId);
       
       if (!subscribers || subscribers.size === 0) {
-        logger.debug(`No subscribers for boosting ${boostingId}, skipping broadcast`);
         return;
       }
 
@@ -263,8 +254,6 @@ class ProposalHandler {
         },
         timestamp: new Date().toISOString()
       });
-
-      logger.info(`Broadcasting new proposal to ${subscribers.size} subscribers of boosting ${boostingId}`);
 
       let broadcastCount = 0;
       subscribers.forEach(userId => {
@@ -281,7 +270,7 @@ class ProposalHandler {
         });
       });
 
-      logger.info(`Successfully broadcasted new proposal to ${broadcastCount} connections`);
+      // Broadcasted new proposal
 
     } catch (error) {
       logger.error('Error in broadcastNewProposal:', error);
@@ -305,7 +294,7 @@ class ProposalHandler {
         timestamp: new Date().toISOString()
       });
 
-      logger.info(`Broadcasting updated proposal to ${subscribers.size} subscribers`);
+      // Broadcasting updated proposal
 
       subscribers.forEach(userId => {
         const connections = this.connectionManager.getUserConnections(userId);
@@ -340,7 +329,7 @@ class ProposalHandler {
         timestamp: new Date().toISOString()
       });
 
-      logger.info(`Broadcasting proposal rejected to ${subscribers.size} subscribers`);
+      // Broadcasting proposal rejected
 
       subscribers.forEach(userId => {
         const connections = this.connectionManager.getUserConnections(userId);
@@ -367,7 +356,6 @@ class ProposalHandler {
     try {
       const subscribers = this.boostingSubscriptions.get(boostingId);
       if (!subscribers || subscribers.size === 0) {
-        logger.debug(`No subscribers for accepted proposal on boosting ${boostingId}`);
         return;
       }
 
@@ -381,8 +369,6 @@ class ProposalHandler {
         },
         timestamp: new Date().toISOString()
       });
-
-      logger.info(`Broadcasting proposal accepted to ${subscribers.size} subscribers`);
 
       let broadcastCount = 0;
       subscribers.forEach(userId => {
@@ -399,7 +385,7 @@ class ProposalHandler {
         });
       });
 
-      logger.info(`Successfully broadcasted proposal acceptance to ${broadcastCount} connections`);
+      // Successfully broadcasted
 
     } catch (error) {
       logger.error('Error in broadcastProposalAccepted:', error);
@@ -421,7 +407,7 @@ class ProposalHandler {
         timestamp: new Date().toISOString()
       });
 
-      logger.info(`Broadcasting proposal cancelled to ${subscribers.size} subscribers`);
+      // Broadcasting proposal cancelled
 
       subscribers.forEach(userId => {
         const connections = this.connectionManager.getUserConnections(userId);
@@ -448,7 +434,6 @@ class ProposalHandler {
     try {
       const subscribers = this.boostingSubscriptions.get(boostingId);
       if (!subscribers || subscribers.size === 0) {
-        logger.debug(`No subscribers for cancelled boosting ${boostingId}`);
         return;
       }
 
@@ -458,7 +443,7 @@ class ProposalHandler {
         timestamp: new Date().toISOString()
       });
 
-      logger.info(`Broadcasting boosting cancelled to ${subscribers.size} subscribers`);
+      // Broadcasting boosting cancelled
 
       subscribers.forEach(userId => {
         const connections = this.connectionManager.getUserConnections(userId);
@@ -475,7 +460,6 @@ class ProposalHandler {
 
       // Limpar inscrições
       this.boostingSubscriptions.delete(boostingId);
-      logger.info(`Cleaned up subscriptions for cancelled boosting ${boostingId}`);
 
     } catch (error) {
       logger.error('Error in broadcastBoostingCancelled:', error);
@@ -505,8 +489,6 @@ class ProposalHandler {
    * Quando usuário se desconecta
    */
   onUserDisconnect(userId) {
-    logger.info(`ProposalHandler: User ${userId} disconnecting, cleaning up subscriptions`);
-    
     // Remover usuário de todas as inscrições
     let removedCount = 0;
     this.boostingSubscriptions.forEach((subscribers, boostingId) => {
@@ -521,9 +503,7 @@ class ProposalHandler {
       }
     });
 
-    if (removedCount > 0) {
-      logger.info(`Removed user ${userId} from ${removedCount} boosting subscriptions`);
-    }
+    // Subscriptions cleaned up
   }
 }
 
