@@ -119,11 +119,39 @@ const webhookLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Rate limiter para verificação 2FA (3 tentativas a cada 5 minutos por IP)
+// Mais restritivo que authLimiter para prevenir bruteforce
+const twoFactorLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutos
+  max: parseInt(process.env.RATE_LIMIT_2FA_MAX) || 3,
+  skipSuccessfulRequests: true, // Não contar tentativas bem-sucedidas
+  keyGenerator: (req) => {
+    // Rate limit por IP e tempToken (se fornecido)
+    const tempToken = req.body?.tempToken || '';
+    return `${req.ip}-${tempToken.slice(-8)}`; // Usar últimos 8 chars do token
+  },
+  message: {
+    success: false,
+    message: 'Too many 2FA verification attempts. Please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.warn(`2FA rate limit exceeded for IP: ${req.ip}`);
+    res.status(429).json({
+      success: false,
+      message: 'Too many verification attempts. Please try again in 5 minutes.',
+      retryAfter: Math.ceil((req.rateLimit.resetTime - Date.now()) / 1000)
+    });
+  }
+});
+
 module.exports = {
   apiLimiter,
   authLimiter,
   messageLimiter,
   uploadLimiter,
   adminLimiter,
-  webhookLimiter
+  webhookLimiter,
+  twoFactorLimiter
 };

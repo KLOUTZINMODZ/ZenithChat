@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const logger = require('../utils/logger');
 const emailVerificationController = require('../controllers/emailVerificationController');
+const twoFactorAuthController = require('../controllers/twoFactorAuthController');
+const { twoFactorLimiter } = require('../middleware/rateLimiters');
 
 
 router.post('/validate', async (req, res) => {
@@ -98,5 +100,16 @@ router.post('/verify-email-code', emailVerificationController.verifyEmailCode);
 
 // POST /api/auth/resend-verification-code - Reenviar código
 router.post('/resend-verification-code', emailVerificationController.resendVerificationCode);
+
+// ==================== TWO-FACTOR AUTHENTICATION ROUTES ====================
+
+// POST /api/auth/verify-2fa-login - Verificar código 2FA para login
+// Proteções implementadas:
+// - Rate limiting (3 tentativas a cada 5 minutos)
+// - Comparação constant-time para prevenir timing attacks
+// - Proteção contra replay attacks (tokens de uso único)
+// - Bloqueio após 5 tentativas incorretas (15 minutos)
+// - Logging seguro sem exposição de dados sensíveis
+router.post('/verify-2fa-login', twoFactorLimiter, twoFactorAuthController.verify2FALogin);
 
 module.exports = router;

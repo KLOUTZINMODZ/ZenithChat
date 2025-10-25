@@ -10,6 +10,7 @@ const PresenceHandler = require('./handlers/PresenceHandler');
 const ConnectionManager = require('./ConnectionManager');
 const NotificationIntegrationService = require('../services/NotificationIntegrationService');
 const { authenticateWebSocket } = require('../middleware/wsAuth');
+const { sanitizeWebSocketPayload } = require('../utils/dataSanitizer');
 
 class WebSocketServer {
   constructor(server) {
@@ -148,11 +149,12 @@ class WebSocketServer {
       });
 
 
+      // Enviar confirmação de conexão (sem expor userId - já está no token JWT)
       this.sendMessage(ws, {
         type: 'connection',
         status: 'connected',
-        userId: userId,
         timestamp: new Date().toISOString()
+        // userId removido: cliente já tem essa informação no JWT token
       });
 
 
@@ -345,7 +347,9 @@ class WebSocketServer {
 
   sendMessage(ws, message) {
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+      // Aplicar sanitização mesmo em mensagens diretas (defesa em profundidade)
+      const sanitized = sanitizeWebSocketPayload(message, ws.userId);
+      ws.send(JSON.stringify(sanitized));
     }
   }
 

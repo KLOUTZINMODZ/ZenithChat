@@ -859,7 +859,35 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
     const { messageIds = [] } = req.body;
     const userId = req.user._id || req.userId;
 
+    // VALIDAÇÃO DE AUTORIZAÇÃO: Verificar se usuário é participante da conversa
+    const conversation = await Conversation.findById(conversationId);
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation not found'
+      });
+    }
+    
+    // Verificar se userId está na lista de participantes
+    const isParticipant = conversation.participants.some(
+      p => p.toString() === userId.toString()
+    );
+    
+    if (!isParticipant) {
+      logger.warn('Unauthorized attempt to mark messages as read', {
+        userId,
+        conversationId,
+        ip: req.ip
+      });
+      
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: You are not a participant of this conversation'
+      });
+    }
 
+    // Marcar mensagens como lidas (apenas da conversa validada)
     await Message.updateMany(
       {
         _id: { $in: messageIds },
@@ -876,13 +904,12 @@ router.put('/conversations/:conversationId/read', auth, invalidationMiddleware([
       }
     );
 
-
-    const conversation = await Conversation.findById(conversationId);
-    if (conversation && conversation.unreadCount) {
+    // Zerar contador de não lidas
+    if (conversation.unreadCount) {
       conversation.unreadCount[userId.toString()] = 0;
       await conversation.save();
       
-
+      // Invalidar cache
       cache.invalidateUserCache(userId);
     }
 

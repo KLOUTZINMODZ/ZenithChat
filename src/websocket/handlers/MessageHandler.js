@@ -6,6 +6,12 @@ const { encryptMessage, decryptMessage } = require('../../utils/encryption');
 const cache = require('../../services/GlobalCache');
 const crypto = require('crypto');
 const { validateMessage } = require('../../utils/messageValidation');
+const {
+  sanitizeMessage,
+  sanitizeMessages,
+  sanitizeWebSocketPayload,
+  validateConversationAccess
+} = require('../../utils/dataSanitizer');
 
 const messageBuffer = new Map();
 const deliveryTimeouts = new Map();
@@ -150,10 +156,11 @@ class MessageHandler {
 
       await message.populate('sender', 'name email avatar');
 
-      const messageToSend = {
+      // Sanitizar mensagem antes de enviar (protege dados sensíveis)
+      const messageToSend = sanitizeMessage({
         ...message.toObject(),
         content: content
-      };
+      }, userId);
 
 
       const broadcastMessage = {
@@ -402,7 +409,8 @@ class MessageHandler {
         ...msg,
         content: decryptMessage(msg.content)
       }));
-
+      
+      const sanitizedMessages = sanitizeMessages(decryptedMessages, userId);
 
       cache.set(cacheKey, decryptedMessages, 600);
 
@@ -410,7 +418,7 @@ class MessageHandler {
         type: 'message:history',
         data: {
           conversationId,
-          messages: decryptedMessages.reverse()
+          messages: sanitizedMessages.reverse()
         },
         timestamp: new Date().toISOString()
       });
@@ -444,11 +452,12 @@ class MessageHandler {
 
 
         for (const [conversationId, messages] of messagesByConversation) {
+          const sanitizedMessages = sanitizeMessages(messages, userId);
           this.sendToUser(userId, {
             type: 'message:offline_recovery',
             data: {
               conversationId,
-              messages: messages,
+              messages: sanitizedMessages,
               cached: true,
               recovery: true
             },
@@ -487,11 +496,12 @@ class MessageHandler {
 
           if (msgs.length > 0) {
             const decrypted = msgs.map(m => ({ ...m, content: decryptMessage(m.content) }));
+            const sanitized = sanitizeMessages(decrypted, userId);
             this.sendToUser(userId, {
               type: 'message:pending',
               data: {
                 conversationId: conv._id,
-                messages: decrypted,
+                messages: sanitized,
                 requiresAck: true
               },
               timestamp: new Date().toISOString()
@@ -521,12 +531,13 @@ class MessageHandler {
               ...msg,
               content: decryptMessage(msg.content)
             }));
+            const sanitized = sanitizeMessages(decryptedMessages, userId);
   
             this.sendToUser(userId, {
               type: 'message:pending',
               data: {
                 conversationId: conversation._id,
-                messages: decryptedMessages,
+                messages: sanitized,
                 requiresAck: true
               },
               timestamp: new Date().toISOString()
@@ -553,6 +564,9 @@ class MessageHandler {
   }
 
   sendToUser(userId, message) {
+    // Sanitizar payload antes de enviar (camada extra de proteção)
+    const sanitizedMessage = sanitizeWebSocketPayload(message, userId);
+    
     const isUserOnline = this.connectionManager.isUserOnline(userId);
     
     if (isUserOnline) {
@@ -561,7 +575,7 @@ class MessageHandler {
       
       connections.forEach(ws => {
         if (ws.readyState === 1) {
-          ws.send(JSON.stringify(message));
+          ws.send(JSON.stringify(sanitizedMessage));
           messageSent = true;
         }
       });
@@ -570,7 +584,7 @@ class MessageHandler {
       if (!messageSent) {
         logger.info(`🔄 CACHE: User ${userId} online but send failed - caching message`);
         cache.cacheOfflineMessage(userId, {
-          ...message,
+          ...sanitizedMessage,
           cached_reason: 'send_failed',
           cached_at: new Date().toISOString()
         });
@@ -579,7 +593,7 @@ class MessageHandler {
 
       logger.info(`📦 CACHE: User ${userId} is offline - caching message type: ${message.type}`);
       cache.cacheOfflineMessage(userId, {
-        ...message,
+        ...sanitizedMessage,
         cached_reason: 'user_offline',
         cached_at: new Date().toISOString()
       });

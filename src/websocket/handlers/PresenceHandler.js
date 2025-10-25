@@ -1,5 +1,6 @@
 const cache = require('../../services/GlobalCache');
 const logger = require('../../utils/logger');
+const Conversation = require('../../models/Conversation');
 
 /**
  * PresenceHandler
@@ -71,16 +72,33 @@ class PresenceHandler {
     }
   }
 
-  handleSubscribe(ws, payload) {
+  async handleSubscribe(ws, payload) {
     try {
+      const requesterId = ws.userId;
+      if (!requesterId) {
+        this.safeSend(ws, { type: 'error', error: 'Unauthorized', timestamp: new Date().toISOString() });
+        return;
+      }
+
       const ids = Array.isArray(payload?.userIds) ? payload.userIds.map(String) : [];
+      
+      // Validação: usuário só pode se inscrever para presença de participantes autorizados
+      const authorizedIds = await this.getAuthorizedUserIds(requesterId, ids);
+      
+      if (authorizedIds.length === 0) {
+        this.safeSend(ws, { type: 'presence:snapshot', data: { statuses: [] } });
+        return;
+      }
+      
       const set = this.subscriptions.get(ws) || new Set();
-      ids.forEach(id => set.add(String(id)));
+      authorizedIds.forEach(id => set.add(String(id)));
       this.subscriptions.set(ws, set);
-      // Send immediate snapshot
-      const statuses = ids.map(id => this.getStatus(id));
+      
+      // Send immediate snapshot (apenas IDs autorizados)
+      const statuses = authorizedIds.map(id => this.getStatus(id));
       this.safeSend(ws, { type: 'presence:snapshot', data: { statuses } });
     } catch (e) {
+      logger.error('presence:subscribe error', { error: e.message });
       this.safeSend(ws, { type: 'error', error: 'presence:subscribe failed', timestamp: new Date().toISOString() });
     }
   }
@@ -97,13 +115,62 @@ class PresenceHandler {
     }
   }
 
-  handleQuery(ws, payload) {
+  async handleQuery(ws, payload) {
     try {
+      const requesterId = ws.userId;
+      if (!requesterId) {
+        this.safeSend(ws, { type: 'error', error: 'Unauthorized', timestamp: new Date().toISOString() });
+        return;
+      }
+
       const ids = Array.isArray(payload?.userIds) ? payload.userIds.map(String) : [];
-      const statuses = ids.map(id => this.getStatus(id));
+      
+      // Validação: usuário só pode consultar presença de participantes de suas conversas
+      const authorizedIds = await this.getAuthorizedUserIds(requesterId, ids);
+      
+      if (authorizedIds.length === 0) {
+        this.safeSend(ws, { type: 'presence:snapshot', data: { statuses: [] } });
+        return;
+      }
+      
+      // Retornar apenas status de usuários autorizados
+      const statuses = authorizedIds.map(id => this.getStatus(id));
       this.safeSend(ws, { type: 'presence:snapshot', data: { statuses } });
     } catch (e) {
+      logger.error('presence:query error', { error: e.message });
       this.safeSend(ws, { type: 'error', error: 'presence:query failed', timestamp: new Date().toISOString() });
+    }
+  }
+  
+  /**
+   * Retorna apenas IDs de usuários que o requester tem permissão de ver
+   * (participantes de conversas em comum)
+   */
+  async getAuthorizedUserIds(requesterId, requestedIds) {
+    try {
+      if (!requestedIds || requestedIds.length === 0) return [];
+      
+      // Buscar conversas onde o requester é participante
+      const conversations = await Conversation.find({
+        participants: requesterId
+      }).select('participants').lean();
+      
+      // Extrair todos os participantes de conversas em comum
+      const authorizedSet = new Set();
+      conversations.forEach(conv => {
+        if (conv.participants && Array.isArray(conv.participants)) {
+          conv.participants.forEach(p => {
+            const pId = p._id?.toString() || p.toString();
+            authorizedSet.add(pId);
+          });
+        }
+      });
+      
+      // Filtrar apenas IDs requisitados que estão autorizados
+      return requestedIds.filter(id => authorizedSet.has(id.toString()));
+    } catch (error) {
+      logger.error('getAuthorizedUserIds error', { error: error.message });
+      return [];
     }
   }
 

@@ -9,6 +9,7 @@ const User = require('../../models/User');
 const Purchase = require('../../models/Purchase');
 const logger = require('../../utils/logger');
 const { decryptMessage } = require('../../utils/encryption');
+const { sanitizeUserData, sanitizeConversation } = require('../../utils/dataSanitizer');
 
 class ConversationHandler {
   constructor(connectionManager) {
@@ -378,12 +379,21 @@ class ConversationHandler {
           // Enriquecimento específico para Marketplace (não afeta boosting)
           await this.enrichMarketplaceConversation(plainConv);
 
-          // Normaliza participants no formato compacto esperado pelo front
+          // Normaliza participants no formato compacto esperado pelo front (com sanitização)
           try {
             if (Array.isArray(plainConv.participants)) {
               const seen = new Set();
               plainConv.participants = plainConv.participants
-                .map(p => p && p._id ? { _id: p._id, name: p.name, email: p.email, profileImage: p.avatar || p.profileImage || null } : p)
+                .map(p => {
+                  if (!p || !p._id) return p;
+                  // Sanitizar dados do participante (remove email)
+                  return sanitizeUserData(p, {
+                    includeEmail: false,
+                    includeAvatar: true,
+                    includeId: true,
+                    requesterId: userId
+                  });
+                })
                 .filter(p => {
                   const id = p && (p._id?.toString ? p._id.toString() : String(p));
                   if (!id || seen.has(id)) return false;
