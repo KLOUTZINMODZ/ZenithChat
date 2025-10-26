@@ -12,6 +12,7 @@ const walletLedgerSchema = new mongoose.Schema({
     'withdraw_reserve',
     'withdraw_refund',
     'withdraw_settle',
+    'withdraw_fee',            // Taxa de saque creditada ao mediador
     'deposit_credit',
     'deposit_revert',
     'adjustment',
