@@ -12,6 +12,9 @@ const crypto = require('crypto');
 
 const FEE_PERCENT = 0;
 const WITHDRAW_FEE = 5.00; // Taxa fixa de saque em R$
+const MAX_WITHDRAW_AMOUNT = 1000000.00; // Limite máximo de saque: R$ 1.000.000,00
+const MAX_FAILED_ATTEMPTS = 5; // Máximo de tentativas falhas por hora
+const BLOCK_DURATION_MS = 60 * 60 * 1000; // 1 hora em milissegundos
 
 function round2(v) {
   return Math.round(Number(v) * 100) / 100;
@@ -1354,13 +1357,79 @@ router.post('/withdraw', auth, async (req, res) => {
     const idempotencyKey = String(req.body?.idempotencyKey || idemHeader || '').trim() || undefined;
     const amountNum = Number(amount);
     
-    // Validação de valor mínimo (deve ser maior que a taxa)
+    // 🛡️ VALIDAÇÃO 1: Verificar bloqueio por tentativas falhas
+    try {
+      const oneHourAgo = new Date(Date.now() - BLOCK_DURATION_MS);
+      const failedAttempts = await WalletTransaction.countDocuments({
+        userId: user._id,
+        type: 'withdraw',
+        status: 'failed',
+        createdAt: { $gte: oneHourAgo },
+        'logs.message': { $in: ['Withdraw transfer create failed', 'Wallet reserve failed'] }
+      });
+      
+      if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        // Calcular tempo restante
+        const oldestFailed = await WalletTransaction.findOne({
+          userId: user._id,
+          type: 'withdraw',
+          status: 'failed',
+          createdAt: { $gte: oneHourAgo }
+        }).sort({ createdAt: 1 }).select('createdAt');
+        
+        const blockUntil = new Date(oldestFailed.createdAt.getTime() + BLOCK_DURATION_MS);
+        const remainingMs = blockUntil.getTime() - Date.now();
+        const remainingMinutes = Math.ceil(remainingMs / 60000);
+        
+        logger.warn('[WITHDRAW] User blocked due to failed attempts', { 
+          userId: user._id.toString(), 
+          failedAttempts, 
+          remainingMinutes 
+        });
+        
+        return res.status(429).json({
+          success: false,
+          message: `Você excedeu o limite de ${MAX_FAILED_ATTEMPTS} tentativas falhas. Tente novamente em ${remainingMinutes} minuto${remainingMinutes > 1 ? 's' : ''}.`,
+          error: 'TOO_MANY_FAILED_ATTEMPTS',
+          data: {
+            failedAttempts,
+            maxAttempts: MAX_FAILED_ATTEMPTS,
+            blockUntil: blockUntil.toISOString(),
+            remainingMinutes
+          }
+        });
+      }
+    } catch (blockCheckErr) {
+      logger.error('[WITHDRAW] Error checking failed attempts', { error: blockCheckErr.message });
+    }
+    
+    // 🛡️ VALIDAÇÃO 2: Valor mínimo (deve ser maior que a taxa)
     if (!amountNum || amountNum <= WITHDRAW_FEE) {
       return res.status(400).json({ 
         success: false, 
         message: `Valor inválido. O valor mínimo de saque é R$ ${(WITHDRAW_FEE + 0.01).toFixed(2)} (taxa de R$ ${WITHDRAW_FEE.toFixed(2)} + valor líquido)`,
         error: 'INVALID_AMOUNT',
         data: { minAmount: WITHDRAW_FEE + 0.01, withdrawFee: WITHDRAW_FEE }
+      });
+    }
+    
+    // 🛡️ VALIDAÇÃO 3: Limite máximo de saque
+    if (amountNum > MAX_WITHDRAW_AMOUNT) {
+      logger.warn('[WITHDRAW] Amount exceeds maximum limit', { 
+        userId: user._id.toString(), 
+        requestedAmount: amountNum, 
+        maxAmount: MAX_WITHDRAW_AMOUNT 
+      });
+      
+      return res.status(400).json({
+        success: false,
+        message: `O valor máximo por saque é de R$ ${MAX_WITHDRAW_AMOUNT.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
+        error: 'AMOUNT_EXCEEDS_LIMIT',
+        data: {
+          requestedAmount: amountNum,
+          maxAmount: MAX_WITHDRAW_AMOUNT,
+          difference: amountNum - MAX_WITHDRAW_AMOUNT
+        }
       });
     }
 
@@ -1738,6 +1807,81 @@ router.post('/withdraw', auth, async (req, res) => {
 });
 
 
+// 🛡️ GET /wallet/withdraw/status - Verificar status de bloqueio por tentativas falhas
+router.get('/withdraw/status', auth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const oneHourAgo = new Date(Date.now() - BLOCK_DURATION_MS);
+    
+    // Contar tentativas falhas na última hora
+    const failedAttempts = await WalletTransaction.countDocuments({
+      userId,
+      type: 'withdraw',
+      status: 'failed',
+      createdAt: { $gte: oneHourAgo },
+      'logs.message': { $in: ['Withdraw transfer create failed', 'Wallet reserve failed'] }
+    });
+    
+    // Se não está bloqueado
+    if (failedAttempts < MAX_FAILED_ATTEMPTS) {
+      return res.json({
+        success: true,
+        data: {
+          blocked: false,
+          failedAttempts,
+          maxAttempts: MAX_FAILED_ATTEMPTS,
+          remainingAttempts: MAX_FAILED_ATTEMPTS - failedAttempts
+        }
+      });
+    }
+    
+    // Está bloqueado: calcular tempo restante
+    const oldestFailed = await WalletTransaction.findOne({
+      userId,
+      type: 'withdraw',
+      status: 'failed',
+      createdAt: { $gte: oneHourAgo }
+    }).sort({ createdAt: 1 }).select('createdAt');
+    
+    if (!oldestFailed) {
+      // Não deveria acontecer, mas retorna desbloqueado por segurança
+      return res.json({
+        success: true,
+        data: { blocked: false, failedAttempts: 0 }
+      });
+    }
+    
+    const blockUntil = new Date(oldestFailed.createdAt.getTime() + BLOCK_DURATION_MS);
+    const remainingMs = blockUntil.getTime() - Date.now();
+    const remainingMinutes = Math.ceil(remainingMs / 60000);
+    
+    // Se o bloqueio já expirou
+    if (remainingMs <= 0) {
+      return res.json({
+        success: true,
+        data: { blocked: false, failedAttempts: 0 }
+      });
+    }
+    
+    return res.json({
+      success: true,
+      data: {
+        blocked: true,
+        failedAttempts,
+        maxAttempts: MAX_FAILED_ATTEMPTS,
+        blockUntil: blockUntil.toISOString(),
+        remainingMinutes
+      }
+    });
+  } catch (error) {
+    logger.error('[WITHDRAW] Error checking withdraw status', { error: error.message });
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Erro ao verificar status de saque', 
+      error: error.message 
+    });
+  }
+});
 
 router.post('/withdraw/sync', auth, async (req, res) => {
   try {
