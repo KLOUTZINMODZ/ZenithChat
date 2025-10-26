@@ -35,6 +35,7 @@ const purchasesRoutes = require('./src/routes/purchasesRoutes');
 const supportRoutes = require('./src/routes/supportRoutes');
 const userRoutes = require('./src/routes/userRoutes');
 const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseService');
+const cleanupService = require('./src/services/CleanupService');
 const mongoose = require('mongoose');
 const adminRoutes = require('./src/routes/adminRoutes');
 const adminReviewRoutes = require('./src/routes/adminReviewRoutes');
@@ -313,6 +314,7 @@ function gracefulShutdown(signal = 'SIGTERM') {
   // Stop background services (clear intervals/timeouts)
   try { temporaryChatCleanupService.stop(); } catch (e) { logger.warn('Error stopping TemporaryChatCleanupService', e); }
   try { purchaseAutoReleaseService.stop(); } catch (e) { logger.warn('Error stopping PurchaseAutoReleaseService', e); }
+  try { cleanupService.stop(); } catch (e) { logger.warn('Error stopping CleanupService', e); }
 
   // Close WebSocket server first so HTTP can close cleanly
   try { wsServer.close(); } catch (e) { logger.warn('Error closing WebSocket server', e); }
@@ -362,6 +364,14 @@ connectDB()
         logger.info('Purchase auto-release service started');
       } catch (e) {
         logger.error('Failed to start purchase auto-release service:', e);
+      }
+
+      // Start cleanup service (boosting expiration, etc.)
+      try {
+        cleanupService.start();
+        logger.info('✅ Cleanup service started (boosting expiration)');
+      } catch (e) {
+        logger.error('Failed to start cleanup service:', e);
       }
     });
   })

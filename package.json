@@ -28,7 +28,8 @@
     "images:test-base64": "node ./scripts/testBase64Storage.js",
     "images:list": "node ./scripts/listAllImages.js",
     "reviews:fix-indexes": "node ./scripts/fixReviewIndexes.js",
-    "optimize:indexes": "node ./scripts/add-performance-indexes.js"
+    "optimize:indexes": "node ./scripts/add-performance-indexes.js",
+    "boosting:clean-expired": "node ./scripts/cleanExpiredBoostings.js"
   },
   "keywords": [
     "websocket",
