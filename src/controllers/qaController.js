@@ -341,5 +341,135 @@ module.exports = {
       logger.error('Failed to create QA report:', error);
       return res.status(500).json({ success: false, message: 'Erro interno ao criar denúncia' });
     }
+  },
+
+  // ===== ADMIN ROUTES =====
+
+  // GET /api/admin/qa - Listar todas as perguntas (admin)
+  async listAll(req, res) {
+    try {
+      const { page = 1, limit = 20, status, search } = req.query;
+      const skip = (Number(page) - 1) * Number(limit);
+
+      const filter = {};
+      if (status && ['pending', 'answered'].includes(status)) {
+        filter.status = status;
+      }
+      if (search && String(search).trim()) {
+        filter.$or = [
+          { question: { $regex: String(search).trim(), $options: 'i' } },
+          { answer: { $regex: String(search).trim(), $options: 'i' } }
+        ];
+      }
+
+      const [questions, total] = await Promise.all([
+        QAQuestion.find(filter)
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(Number(limit))
+          .lean(),
+        QAQuestion.countDocuments(filter)
+      ]);
+
+      // Popular informações dos itens
+      const itemIds = questions.map(q => q.itemId).filter(Boolean);
+      const items = await MarketItem.find({ _id: { $in: itemIds } }).lean();
+      const itemMap = new Map(items.map(item => [String(item._id), item]));
+
+      const enrichedQuestions = questions.map(q => ({
+        ...q,
+        itemInfo: itemMap.get(String(q.itemId)) || null
+      }));
+
+      return res.json({
+        success: true,
+        data: {
+          questions: enrichedQuestions,
+          pagination: {
+            page: Number(page),
+            limit: Number(limit),
+            total,
+            pages: Math.ceil(total / Number(limit))
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to list all Q&A (admin):', error);
+      return res.status(500).json({ success: false, message: 'Erro interno ao listar perguntas' });
+    }
+  },
+
+  // DELETE /api/admin/qa/:id - Deletar pergunta (admin)
+  async deleteQuestion(req, res) {
+    try {
+      const { id } = req.params;
+
+      const qa = await QAQuestion.findById(id);
+      if (!qa) {
+        return res.status(404).json({ success: false, message: 'Pergunta não encontrada' });
+      }
+
+      await QAQuestion.findByIdAndDelete(id);
+
+      // Log da ação admin
+      logger.info(`[ADMIN] Q&A deleted: ${id} by admin ${req.userId}`);
+
+      return res.json({ success: true, message: 'Pergunta deletada com sucesso' });
+    } catch (error) {
+      logger.error('Failed to delete Q&A (admin):', error);
+      return res.status(500).json({ success: false, message: 'Erro interno ao deletar pergunta' });
+    }
+  },
+
+  // PUT /api/admin/qa/:id - Editar pergunta/resposta (admin)
+  async updateQuestion(req, res) {
+    try {
+      const { id } = req.params;
+      const { question, answer, status } = req.body || {};
+
+      const qa = await QAQuestion.findById(id);
+      if (!qa) {
+        return res.status(404).json({ success: false, message: 'Pergunta não encontrada' });
+      }
+
+      // Atualizar campos permitidos
+      if (question !== undefined) {
+        const text = String(question).trim();
+        if (text.length > 5000) {
+          return res.status(400).json({ success: false, message: 'A pergunta excede o limite de 5000 caracteres' });
+        }
+        qa.question = text;
+      }
+
+      if (answer !== undefined) {
+        if (answer === null || answer === '') {
+          qa.answer = null;
+          qa.answeredAt = null;
+          qa.status = 'pending';
+        } else {
+          const text = String(answer).trim();
+          if (text.length > 5000) {
+            return res.status(400).json({ success: false, message: 'A resposta excede o limite de 5000 caracteres' });
+          }
+          qa.answer = text;
+          qa.answeredAt = qa.answeredAt || new Date();
+          qa.status = 'answered';
+        }
+      }
+
+      if (status && ['pending', 'answered'].includes(status)) {
+        qa.status = status;
+      }
+
+      await qa.save();
+
+      // Log da ação admin
+      logger.info(`[ADMIN] Q&A updated: ${id} by admin ${req.userId}`);
+
+      return res.json({ success: true, data: { question: qa }, message: 'Pergunta atualizada com sucesso' });
+    } catch (error) {
+      logger.error('Failed to update Q&A (admin):', error);
+      return res.status(500).json({ success: false, message: 'Erro interno ao atualizar pergunta' });
+    }
   }
 };

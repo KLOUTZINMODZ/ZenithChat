@@ -931,4 +931,16 @@ router.post('/send-custom-email', requireAdminKey, async (req, res) => {
   }
 });
 
+// ===== Q&A Management Routes =====
+const qaController = require('../controllers/qaController');
+
+// Listar todas as perguntas (com filtros e paginação)
+router.get('/qa', requireAdminKey, qaController.listAll);
+
+// Deletar pergunta
+router.delete('/qa/:id', requireAdminKey, qaController.deleteQuestion);
+
+// Editar pergunta/resposta
+router.put('/qa/:id', requireAdminKey, qaController.updateQuestion);
+
 module.exports = router;
