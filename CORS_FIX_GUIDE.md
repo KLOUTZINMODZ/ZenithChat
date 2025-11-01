@@ -4,14 +4,14 @@
 
 ### **1. CORS Policy Error**
 ```
-Access to fetch at 'https://zenithapi-steel.vercel.app/api/hero-banners' 
+Access to fetch at 'https://zenithggapi.vercel.app/api/hero-banners' 
 from origin 'https://zenithpaineladm.vercel.app' has been blocked by CORS policy: 
 No 'Access-Control-Allow-Origin' header is present on the requested resource.
 ```
 
 ### **2. 413 Content Too Large**
 ```
-POST https://zenithapi-steel.vercel.app/api/hero-banners net::ERR_FAILED 413
+POST https://zenithggapi.vercel.app/api/hero-banners net::ERR_FAILED 413
 ```
 
 ---
@@ -207,7 +207,7 @@ O Vercel detectará o `vercel.json` e aplicará as configurações.
 
 ### **1. Testar CORS:**
 ```bash
-curl -X OPTIONS https://zenithapi-steel.vercel.app/api/hero-banners \
+curl -X OPTIONS https://zenithggapi.vercel.app/api/hero-banners \
   -H "Origin: https://zenithpaineladm.vercel.app" \
   -H "Access-Control-Request-Method: POST" \
   -H "Access-Control-Request-Headers: Content-Type,X-Panel-Proxy-Secret" \
