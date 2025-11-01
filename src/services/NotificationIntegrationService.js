@@ -144,7 +144,7 @@ class NotificationIntegrationService {
       }
 
       const message = {
-        type: 'notification:new',
+        type: 'new_notification',
         data: {
           notification,
           timestamp: new Date().toISOString()
