@@ -1109,7 +1109,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       try {
         const notificationService = req.app?.locals?.notificationService;
         if (notificationService) {
-
+       
           await notificationService.sendToUser(txLocked.userId.toString(), {
             type: 'wallet:balance_updated',
             data: {
@@ -1123,20 +1123,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
               timestamp: new Date().toISOString()
             }
           });
-
-
-          await notificationService.sendNotification(txLocked.userId.toString(), {
-            title: 'Depósito confirmado',
-            body: `R$ ${txLocked.amountNet.toFixed(2)} creditados.`,
-            type: 'wallet_deposit',
-            data: {
-              transactionId: txLocked._id,
-              amountGross: txLocked.amountGross,
-              feeAmount: txLocked.feeAmount,
-              amountNet: txLocked.amountNet,
-              balance: user.walletBalance
-            }
-          });
+         
         }
       } catch (_) {}
 
