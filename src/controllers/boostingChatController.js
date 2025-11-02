@@ -1354,7 +1354,7 @@ class BoostingChatController {
         client: {
           userid: clientData.userid,
           name: clientData.name,
-          email: clientData.email,
+          // email: clientData.email,  // ✅ REMOVIDO - PII não deve ser salvo no banco
           avatar: clientData.avatar,
           isVerified: clientData.isVerified || false,
           totalOrders: clientData.totalOrders || 0,
@@ -1364,7 +1364,7 @@ class BoostingChatController {
         booster: {
           userid: boosterData.userid,
           name: boosterData.name,
-          email: boosterData.email,
+          // email: boosterData.email,  // ✅ REMOVIDO - PII não deve ser salvo no banco
           avatar: boosterData.avatar,
           isVerified: boosterData.isVerified || false,
           rating: boosterData.rating || 0,

@@ -205,7 +205,7 @@ class TemporaryChatController {
         client: {
           userid: clientUser._id,
           name: clientUser.name,
-          email: clientUser.email,
+          // email: clientUser.email,  // ✅ REMOVIDO - PII não deve ser salvo no banco
           avatar: clientUser.avatar,
           isVerified: clientUser.isVerified || false,
           totalOrders: clientUser.totalOrders || 0,
@@ -215,7 +215,7 @@ class TemporaryChatController {
         booster: {
           userid: boosterUser._id,
           name: boosterUser.name,
-          email: boosterUser.email,
+          // email: boosterUser.email,  // ✅ REMOVIDO - PII não deve ser salvo no banco
           avatar: boosterUser.avatar,
           isVerified: boosterUser.isVerified || false,
           rating: boosterUser.rating || 0,

@@ -222,11 +222,31 @@ function sanitizeConversation(conversation, requesterId = null) {
   // ✅ Data de expiração (se temporária)
   if (convObj.expiresAt) sanitized.expiresAt = convObj.expiresAt;
   
-  // ✅ Marketplace/Client/Booster - SHALLOW COPY (não sanitizado aqui)
-  // ⚠️ IMPORTANTE: Sanitizar userids aninhados no ConversationHandler
-  if (convObj.marketplace) sanitized.marketplace = { ...convObj.marketplace };
-  if (convObj.client) sanitized.client = { ...convObj.client };
-  if (convObj.booster) sanitized.booster = { ...convObj.booster };
+  // ✅ Marketplace/Client/Booster - REMOVER EMAILS SALVOS NO BANCO
+  // ⚠️ CRÍTICO: Emails são salvos diretamente no schema Conversation, não apenas via populate
+  if (convObj.client) {
+    sanitized.client = { ...convObj.client };
+    delete sanitized.client.email;  // ✅ Remover email salvo no banco
+  }
+  
+  if (convObj.booster) {
+    sanitized.booster = { ...convObj.booster };
+    delete sanitized.booster.email;  // ✅ Remover email salvo no banco
+  }
+  
+  if (convObj.marketplace) {
+    sanitized.marketplace = { ...convObj.marketplace };
+    
+    if (sanitized.marketplace.buyer) {
+      sanitized.marketplace.buyer = { ...sanitized.marketplace.buyer };
+      delete sanitized.marketplace.buyer.email;  // ✅ Remover email salvo no banco
+    }
+    
+    if (sanitized.marketplace.seller) {
+      sanitized.marketplace.seller = { ...sanitized.marketplace.seller };
+      delete sanitized.marketplace.seller.email;  // ✅ Remover email salvo no banco
+    }
+  }
   
   // ✅ Metadata - APENAS campos seguros e públicos
   if (convObj.metadata) {
