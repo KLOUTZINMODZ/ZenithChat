@@ -22,10 +22,10 @@ router.get('/v1/messages/conversations', auth, async (req, res) => {
       participants: userId,
       isActive: true
     })
-      .populate('participants', 'name email avatar profileImage')
+      .populate('participants', 'name avatar profileImage')
       .populate('lastMessage')
-      .populate('client.userid', 'name email avatar profileImage')
-      .populate('booster.userid', 'name email avatar profileImage')
+      .populate('client.userid', 'name avatar profileImage')
+      .populate('booster.userid', 'name avatar profileImage')
       .sort('-lastMessageAt')
       .skip(skip)
       .limit(parseInt(limit))
@@ -224,7 +224,7 @@ router.get('/v1/messages/conversations/:conversationId/messages', auth, async (r
       conversation: conversationId,
       isDeleted: { $ne: true }
     })
-      .populate('sender', 'name email avatar profileImage')
+      .populate('sender', 'name avatar profileImage')
       .sort('-createdAt')
       .skip(skip)
       .limit(parseInt(limit))

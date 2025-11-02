@@ -327,14 +327,15 @@ class ConversationHandler {
     try {
 
       // Corrige query/populate para o schema real (participants é ObjectId de User)
+      // ✅ SEGURANÇA: Nunca incluir email nos populates
       const conversations = await Conversation.find({
         participants: userId
       })
-      .populate('participants', 'name avatar profileImage email')
-      .populate('client.userid', 'name avatar profileImage email')
-      .populate('booster.userid', 'name avatar profileImage email')
-      .populate('marketplace.buyer.userid', 'name avatar profileImage email')
-      .populate('marketplace.seller.userid', 'name avatar profileImage email')
+      .populate('participants', 'name avatar profileImage')
+      .populate('client.userid', 'name avatar profileImage')
+      .populate('booster.userid', 'name avatar profileImage')
+      .populate('marketplace.buyer.userid', 'name avatar profileImage')
+      .populate('marketplace.seller.userid', 'name avatar profileImage')
       .populate({
         path: 'lastMessage',
         populate: {
@@ -342,7 +343,8 @@ class ConversationHandler {
           select: 'name avatar profileImage'
         }
       })
-      .sort({ updatedAt: -1 })
+      .sort({ lastMessageAt: -1, updatedAt: -1 })
+      .select('-__v')  // ✅ Excluir campo interno
       .lean();
 
 
@@ -360,50 +362,64 @@ class ConversationHandler {
             } catch (_) { return 0; }
           })();
 
-          const plainConv = { ...conv };
-          // Decrypt lastMessage preview if available
+          // ✅ Decrypt lastMessage preview if available
           try {
-            if (plainConv.lastMessage && plainConv.lastMessage.content) {
-              plainConv.lastMessage.content = decryptMessage(plainConv.lastMessage.content);
+            if (conv.lastMessage && conv.lastMessage.content) {
+              conv.lastMessage.content = decryptMessage(conv.lastMessage.content);
             }
           } catch (_) {}
-          plainConv.unreadCount = unreadCount;
 
+          // ✅ Enriquecimento específico para Marketplace (não afeta boosting)
+          await this.enrichMarketplaceConversation(conv);
+
+          // ✅ SEGURANÇA: Usar sanitizeConversation para remover dados sensíveis
+          let sanitized = sanitizeConversation(conv, userId);
+          
+          // ✅ Adicionar unreadCount e hasUpdate após sanitização
+          sanitized.unreadCount = unreadCount;
+          
           if (lastCheck) {
             const lastCheckDate = new Date(parseInt(lastCheck));
-            plainConv.hasUpdate = conv.updatedAt > lastCheckDate;
+            sanitized.hasUpdate = conv.updatedAt > lastCheckDate;
           } else {
-            plainConv.hasUpdate = true;
+            sanitized.hasUpdate = true;
           }
 
-          // Enriquecimento específico para Marketplace (não afeta boosting)
-          await this.enrichMarketplaceConversation(plainConv);
-
-          // Normaliza participants no formato compacto esperado pelo front (com sanitização)
-          try {
-            if (Array.isArray(plainConv.participants)) {
-              const seen = new Set();
-              plainConv.participants = plainConv.participants
-                .map(p => {
-                  if (!p || !p._id) return p;
-                  // Sanitizar dados do participante (remove email)
-                  return sanitizeUserData(p, {
-                    includeEmail: false,
-                    includeAvatar: true,
-                    includeId: true,
-                    requesterId: userId
-                  });
-                })
-                .filter(p => {
-                  const id = p && (p._id?.toString ? p._id.toString() : String(p));
-                  if (!id || seen.has(id)) return false;
-                  seen.add(id);
-                  return true;
-                });
+          // ✅ Sanitizar client/booster/marketplace userids aninhados
+          if (sanitized.client && sanitized.client.userid) {
+            sanitized.client.userid = sanitizeUserData(sanitized.client.userid, {
+              includeEmail: false,
+              includeAvatar: true,
+              includeId: true
+            });
+          }
+          
+          if (sanitized.booster && sanitized.booster.userid) {
+            sanitized.booster.userid = sanitizeUserData(sanitized.booster.userid, {
+              includeEmail: false,
+              includeAvatar: true,
+              includeId: true
+            });
+          }
+          
+          if (sanitized.marketplace) {
+            if (sanitized.marketplace.buyer && sanitized.marketplace.buyer.userid) {
+              sanitized.marketplace.buyer.userid = sanitizeUserData(sanitized.marketplace.buyer.userid, {
+                includeEmail: false,
+                includeAvatar: true,
+                includeId: true
+              });
             }
-          } catch (_) {}
+            if (sanitized.marketplace.seller && sanitized.marketplace.seller.userid) {
+              sanitized.marketplace.seller.userid = sanitizeUserData(sanitized.marketplace.seller.userid, {
+                includeEmail: false,
+                includeAvatar: true,
+                includeId: true
+              });
+            }
+          }
 
-          return plainConv;
+          return sanitized;
         })
       );
 

@@ -71,6 +71,7 @@ router.get('/reviews', auth, adminAuth, async (req, res) => {
         .sort(sortOptions)
         .skip(skip)
         .limit(limitNum)
+        // ⚠️ ADMIN: Email necessário para identificação/moderação
         .populate('userId', 'name email avatar profileImage')
         .populate('targetId', 'name email avatar profileImage rating')
         .lean(),

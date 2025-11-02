@@ -71,7 +71,7 @@ router.post('/', auth, async (req, res) => {
     }
 
     const populated = await Review.findById(doc._id)
-      .populate('userId', 'name email avatar profileImage')
+      .populate('userId', 'name avatar profileImage')
       .lean();
 
     const { helpful, notHelpful } = summarizeVoteCounts(populated);
@@ -130,7 +130,7 @@ router.get('/user/:userId', async (req, res) => {
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
-          .populate('userId', 'name email avatar profileImage')
+          .populate('userId', 'name avatar profileImage')
           .lean()
       ]);
     } catch (e) {
@@ -311,7 +311,7 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     }
 
     const populated = await Review.findById(review._id)
-      .populate('userId', 'name email avatar profileImage')
+      .populate('userId', 'name avatar profileImage')
       .lean();
 
     const { helpful, notHelpful } = summarizeVoteCounts(populated);

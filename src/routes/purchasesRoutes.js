@@ -363,7 +363,7 @@ router.get('/:purchaseId/review', auth, async (req, res) => {
     if (!isParticipant) return res.status(403).json({ success: false, message: 'Acesso negado' });
 
     const existing = await Review.findOne({ purchaseId: p._id })
-      .populate('userId', 'name email avatar profileImage')
+      .populate('userId', 'name avatar profileImage')
       .lean();
 
     const role = (p.buyerId?.toString() === userId) ? 'buyer' : 'seller';

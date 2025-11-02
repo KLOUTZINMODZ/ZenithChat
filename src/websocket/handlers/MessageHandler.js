@@ -89,7 +89,7 @@ class MessageHandler {
 
 
       const [conversation] = await Promise.all([
-        Conversation.findById(conversationId).populate('participants', 'name email'),
+        Conversation.findById(conversationId).populate('participants', 'name avatar'),
       ]);
 
       if (!conversation) {
@@ -154,7 +154,7 @@ class MessageHandler {
       }
 
 
-      await message.populate('sender', 'name email avatar');
+      await message.populate('sender', 'name avatar');
 
       // Sanitizar mensagem antes de enviar (protege dados sensíveis)
       const messageToSend = sanitizeMessage({
@@ -399,7 +399,7 @@ class MessageHandler {
       }
 
       const messages = await Message.find(query)
-        .populate('sender', 'name email avatar')
+        .populate('sender', 'name avatar')
         .sort('-createdAt')
         .limit(limit)
         .lean();
@@ -489,7 +489,7 @@ class MessageHandler {
             sender: { $ne: userId },
             'readBy.user': { $ne: userId }
           })
-            .populate('sender', 'name email avatar')
+            .populate('sender', 'name avatar')
             .sort('createdAt')
             .limit(MAX_MSG)
             .lean();
@@ -521,7 +521,7 @@ class MessageHandler {
             sender: { $ne: userId },
             'readBy.user': { $ne: userId }
           })
-            .populate('sender', 'name email avatar')
+            .populate('sender', 'name avatar')
             .sort('createdAt')
             .limit(this.pendingReplayMessagesLimit)
             .lean();
@@ -833,7 +833,7 @@ class MessageHandler {
         messagePayload = { ...msgObj };
       } else {
 
-        const dbMsg = await Message.findById(messageId).populate('sender', 'name email avatar');
+        const dbMsg = await Message.findById(messageId).populate('sender', 'name avatar');
         if (dbMsg) {
           conversationId = dbMsg.conversation?.toString() || null;
           messagePayload = {

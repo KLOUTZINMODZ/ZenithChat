@@ -325,7 +325,7 @@ class WebSocketServer {
       });
 
       await message.save();
-      await message.populate('sender', 'name email avatar');
+      await message.populate('sender', 'name avatar');
 
 
       const messageId = await this.messageHandler.sendMessageWithDelivery(

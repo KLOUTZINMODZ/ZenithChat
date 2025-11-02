@@ -139,7 +139,7 @@ router.post('/warm/:userId', auth, async (req, res) => {
     const conversations = await Conversation.find({
       participants: userId
     })
-      .populate('participants', 'name email avatar')
+      .populate('participants', 'name avatar')
       .populate('lastMessage')
       .sort('-lastMessageAt')
       .limit(50);
@@ -155,7 +155,7 @@ router.post('/warm/:userId', auth, async (req, res) => {
       const messages = await Message.find({
         conversation: conv._id
       })
-        .populate('sender', 'name email avatar')
+        .populate('sender', 'name avatar')
         .sort('-createdAt')
         .limit(50);
 

@@ -152,6 +152,7 @@ function sanitizeMessages(messages, requesterId = null) {
 
 /**
  * Sanitizar dados de conversação
+ * ✅ Remove metadados internos, IDs de sistema, e informações sensíveis
  */
 function sanitizeConversation(conversation, requesterId = null) {
   if (!conversation) return null;
@@ -164,20 +165,28 @@ function sanitizeConversation(conversation, requesterId = null) {
     isActive: convObj.isActive,
     status: convObj.status,
     lastMessageAt: convObj.lastMessageAt,
-    createdAt: convObj.createdAt,
-    updatedAt: convObj.updatedAt
+    createdAt: convObj.createdAt
+    // ✅ updatedAt removido - desnecessário para o cliente
   };
   
   // Participants: sanitizar dados de cada participante
   if (convObj.participants && Array.isArray(convObj.participants)) {
-    sanitized.participants = convObj.participants.map(participant => 
-      sanitizeUserData(participant, {
-        includeEmail: false,
-        includeAvatar: true,
-        includeId: true,
-        requesterId
-      })
-    );
+    const seen = new Set();
+    sanitized.participants = convObj.participants
+      .map(participant => 
+        sanitizeUserData(participant, {
+          includeEmail: false,
+          includeAvatar: true,
+          includeId: true,
+          requesterId: null  // ✅ Nunca expor email, mesmo do próprio usuário
+        })
+      )
+      .filter(p => {
+        const id = p && p._id;
+        if (!id || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
   }
   
   // UnreadCount: apenas incluir o contador do próprio usuário
@@ -195,15 +204,61 @@ function sanitizeConversation(conversation, requesterId = null) {
     }
   }
   
-  // Metadados seguros da conversação
-  if (convObj.isTemporary !== undefined) {
-    sanitized.isTemporary = convObj.isTemporary;
+  // ✅ Campos booleanos seguros
+  if (convObj.isTemporary !== undefined) sanitized.isTemporary = convObj.isTemporary;
+  if (convObj.isFinalized !== undefined) sanitized.isFinalized = convObj.isFinalized;
+  if (convObj.isReported !== undefined) sanitized.isReported = convObj.isReported;
+  
+  // ✅ Status de boosting (público)
+  if (convObj.boostingStatus) sanitized.boostingStatus = convObj.boostingStatus;
+  
+  // ✅ Proposal ID (apenas ID, sem dados internos)
+  if (convObj.proposal) {
+    sanitized.proposal = typeof convObj.proposal === 'object' 
+      ? convObj.proposal._id 
+      : convObj.proposal;
   }
   
-  // IDs de marketplace/client/booster (sem dados sensíveis)
-  if (convObj.marketplace) sanitized.marketplace = convObj.marketplace;
-  if (convObj.client) sanitized.client = convObj.client;
-  if (convObj.booster) sanitized.booster = convObj.booster;
+  // ✅ Data de expiração (se temporária)
+  if (convObj.expiresAt) sanitized.expiresAt = convObj.expiresAt;
+  
+  // ✅ Marketplace/Client/Booster - SHALLOW COPY (não sanitizado aqui)
+  // ⚠️ IMPORTANTE: Sanitizar userids aninhados no ConversationHandler
+  if (convObj.marketplace) sanitized.marketplace = { ...convObj.marketplace };
+  if (convObj.client) sanitized.client = { ...convObj.client };
+  if (convObj.booster) sanitized.booster = { ...convObj.booster };
+  
+  // ✅ Metadata - APENAS campos seguros e públicos
+  if (convObj.metadata) {
+    const safeMetadata = {};
+    
+    // Campos seguros para expor ao cliente
+    const safeFields = [
+      'proposalData',
+      'clientData',
+      'boosterData',
+      'boostingId',
+      'proposalId',
+      'status'
+    ];
+    
+    safeFields.forEach(field => {
+      if (convObj.metadata[field] !== undefined) {
+        safeMetadata[field] = convObj.metadata[field];
+      }
+    });
+    
+    // ✅ Remover IDs internos de sistema de metadata.latestAgreementId
+    // Apenas manter se for absolutamente necessário
+    if (convObj.metadata.latestAgreementId) {
+      // ❌ NÃO expor agreement IDs - são internos do sistema
+      // safeMetadata.latestAgreementId = convObj.metadata.latestAgreementId;
+    }
+    
+    if (Object.keys(safeMetadata).length > 0) {
+      sanitized.metadata = safeMetadata;
+    }
+  }
   
   return sanitized;
 }

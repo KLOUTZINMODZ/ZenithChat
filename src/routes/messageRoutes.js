@@ -34,7 +34,7 @@ router.get('/sync/:conversationId', auth, async (req, res) => {
       conversation: conversationId,
       createdAt: { $gte: sinceDate }
     })
-    .populate('sender', 'name email avatar')
+    .populate('sender', 'name avatar')
     .sort('createdAt')
     .limit(100);
     
@@ -76,7 +76,7 @@ router.get('/conversations/boosting/:boostingId', auth, async (req, res) => {
       'metadata.boostingId': boostingId,
       isActive: true
     })
-    .populate('participants', 'name email avatar')
+    .populate('participants', 'name avatar')
     .populate('lastMessage');
 
     if (!conversation) {
@@ -119,12 +119,12 @@ router.get('/conversations', auth, cacheMiddleware(120), async (req, res) => {
       participants: userId,
       isActive: true
     })
-      .populate('participants', 'name email avatar profileImage')
+      .populate('participants', 'name avatar profileImage')
       .populate('lastMessage')
-      .populate('client.userid', 'name email avatar profileImage')
-      .populate('booster.userid', 'name email avatar profileImage')
-      .populate('marketplace.buyer.userid', 'name email avatar profileImage')
-      .populate('marketplace.seller.userid', 'name email avatar profileImage')
+      .populate('client.userid', 'name avatar profileImage')
+      .populate('booster.userid', 'name avatar profileImage')
+      .populate('marketplace.buyer.userid', 'name avatar profileImage')
+      .populate('marketplace.seller.userid', 'name avatar profileImage')
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
@@ -482,7 +482,7 @@ router.get('/conversations/:conversationId', auth, async (req, res) => {
     const userId = req.user._id || req.userId;
 
     const conversation = await Conversation.findById(conversationId)
-      .populate('participants', 'name email avatar')
+      .populate('participants', 'name avatar')
       .populate('lastMessage');
 
     if (!conversation) {
@@ -546,7 +546,7 @@ router.get('/conversations/:conversationId/messages', auth, cacheMiddleware(300)
     const messages = await Message.find({
       conversation: conversationId
     })
-      .populate('sender', 'name email avatar')
+      .populate('sender', 'name avatar')
       .sort('-createdAt')
       .skip(skip)
       .limit(parseInt(limit))

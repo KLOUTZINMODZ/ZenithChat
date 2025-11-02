@@ -433,7 +433,7 @@ class WhatsAppMessageHandler {
 
   async validateConversation(conversationId, userId) {
     const conversation = await Conversation.findById(conversationId)
-      .populate('participants', '_id name email');
+      .populate('participants', '_id name avatar');
 
     if (!conversation) return null;
 
@@ -479,7 +479,7 @@ class WhatsAppMessageHandler {
   }
 
   async prepareMessageForDelivery(message) {
-    await message.populate('sender', 'name email avatar');
+    await message.populate('sender', 'name avatar');
     
     return {
       ...message.toObject(),
