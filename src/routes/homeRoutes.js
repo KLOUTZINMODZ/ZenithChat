@@ -47,10 +47,9 @@ router.get('/data', optionalAuth, async (req, res) => {
       .populate('clientId', 'name username avatar')
       .lean();
     
-    // Buscar avaliações recentes (top 6 avaliações 4-5 estrelas)
+    // Buscar avaliações recentes aprovadas (todas as notas)
     const reviews = await Review.find({ 
-      status: 'approved',
-      rating: { $gte: 4 }
+      status: 'approved'
     })
       .sort({ createdAt: -1 })
       .limit(6)
