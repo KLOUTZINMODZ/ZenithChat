@@ -168,9 +168,8 @@ const userSchema = new mongoose.Schema({
 
   pixKeyFingerprint: {
     type: String,
-    unique: true,
-    sparse: true,
     default: null
+    // Índice definido explicitamente abaixo com { unique: true, sparse: true }
   },
   pixKeyLocked: {
     type: Boolean,
@@ -209,7 +208,8 @@ const userSchema = new mongoose.Schema({
     default: null // null = banimento permanente
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  autoIndex: false // Desabilita criação automática de índices (evita conflitos)
 });
 
 
