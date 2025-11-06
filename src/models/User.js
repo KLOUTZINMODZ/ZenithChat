@@ -55,35 +55,6 @@ const userSchema = new mongoose.Schema({
     default: null,
     trim: true
   },
-  
-  // Google OAuth fields
-  googleId: {
-    type: String,
-    unique: true,
-    sparse: true,
-    index: true
-  },
-  authProvider: {
-    type: String,
-    enum: ['local', 'google'],
-    default: 'local'
-  },
-  emailVerified: {
-    type: Boolean,
-    default: false
-  },
-  requiresPhoneSetup: {
-    type: Boolean,
-    default: false,
-    index: true
-  },
-  googleProfile: {
-    picture: String,
-    locale: String,
-    given_name: String,
-    family_name: String
-  },
-  
   walletBalance: {
     type: Number,
     default: 0
@@ -237,12 +208,10 @@ const userSchema = new mongoose.Schema({
 
 
 userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ pixKeyFingerprint: 1 }, { unique: true, sparse: true });
 userSchema.index({ phoneNormalized: 1 }, { unique: true, sparse: true });
 userSchema.index({ complaintsReceived: -1 });
 userSchema.index({ complaintsSent: -1 });
-userSchema.index({ requiresPhoneSetup: 1 });
 
 
 userSchema.virtual('displayName').get(function() {
