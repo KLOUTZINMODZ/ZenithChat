@@ -52,7 +52,9 @@ exports.googleCallback = async (req, res) => {
       if (!user.googleId) {
         user.googleId = googleId;
         await user.save();
-        console.log('🔄 GoogleId adicionado ao usuário existente');
+        console.log('🔄 GoogleId adicionado ao usuário existente:', googleId);
+      } else {
+        console.log('✅ GoogleId já existe no usuário:', user.googleId);
       }
 
       const token = jwt.sign(
@@ -70,6 +72,7 @@ exports.googleCallback = async (req, res) => {
           name: user.name,
           phone: user.phone,
           avatar: user.avatar || picture,
+          googleId: user.googleId || googleId,
           isVerified: user.isVerified
         }
       });
