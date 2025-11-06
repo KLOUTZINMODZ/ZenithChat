@@ -1,5 +1,6 @@
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const User = require('../src/models/User');
 
 const googleClient = new OAuth2Client(
@@ -54,7 +55,7 @@ exports.googleCallback = async (req, res) => {
       }
 
       const token = jwt.sign(
-        { userId: user._id, email: user.email },
+        { id: user._id, email: user.email },
         process.env.JWT_SECRET,
         { expiresIn: '7d' }
       );
@@ -103,10 +104,10 @@ exports.googleCallback = async (req, res) => {
   }
 };
 
-// Endpoint 2: Completar registro com telefone
+// Endpoint 2: Completar registro com telefone (e senha opcional)
 exports.completeGoogleRegistration = async (req, res) => {
   try {
-    const { googleToken, phone } = req.body;
+    const { googleToken, phone, password } = req.body;
 
     if (!googleToken || !phone) {
       return res.status(400).json({
@@ -116,6 +117,9 @@ exports.completeGoogleRegistration = async (req, res) => {
     }
 
     console.log('📱 Completando registro Google com telefone...');
+    if (password) {
+      console.log('🔐 Senha fornecida (login híbrido habilitado)');
+    }
 
     // Validar e decodificar token temporário
     let decoded;
@@ -162,7 +166,7 @@ exports.completeGoogleRegistration = async (req, res) => {
     }
 
     // Criar novo usuário
-    const user = new User({
+    const userData = {
       email: decoded.email,
       name: decoded.name,
       phone: cleanPhone,
@@ -170,14 +174,22 @@ exports.completeGoogleRegistration = async (req, res) => {
       avatar: decoded.picture,
       isVerified: true,
       createdAt: new Date()
-    });
+    };
 
+    // Se senha foi fornecida, adicionar hash
+    if (password && password.trim().length >= 6) {
+      const salt = await bcrypt.genSalt(10);
+      userData.password = await bcrypt.hash(password, salt);
+      console.log('✅ Senha adicionada (login híbrido habilitado)');
+    }
+
+    const user = new User(userData);
     await user.save();
     console.log('✅ Usuário criado com sucesso:', user._id);
 
     // Gerar JWT final
     const token = jwt.sign(
-      { userId: user._id, email: user.email },
+      { id: user._id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
