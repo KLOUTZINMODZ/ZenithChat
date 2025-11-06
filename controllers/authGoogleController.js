@@ -1,8 +1,8 @@
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
-const User = require('../src/models/User');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const axios = require('axios');
+const User = require('../src/models/User');
 
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -178,9 +178,10 @@ exports.completeGoogleRegistration = async (req, res) => {
     };
 
     // Se senha foi fornecida, adicionar hash
+    let hashedPassword = null;
     if (password && password.trim().length >= 6) {
-      const salt = await bcrypt.genSalt(10);
-      userData.password = await bcrypt.hash(password, salt);
+      hashedPassword = await bcrypt.hash(password, 10);
+      userData.password = hashedPassword;
       console.log('✅ Senha adicionada (login híbrido habilitado)');
     }
 
@@ -188,17 +189,17 @@ exports.completeGoogleRegistration = async (req, res) => {
     await user.save();
     console.log('✅ Usuário criado com sucesso:', user._id);
 
-    // CRÍTICO: Sincronizar com HackLoteAPI (banco principal) se senha foi definida
-    if (userData.password) {
+    // CRÍTICO: Sincronizar senha com HackLoteAPI (banco principal)
+    if (hashedPassword) {
       try {
         const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
         const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
         
-        console.log(`[SYNC] Sincronizando usuário Google com senha para ${user.email}`);
+        console.log(`[SYNC] Sincronizando senha do registro Google para ${user.email} com ${mainApiUrl}/api/v1/admin/sync-password`);
         
         const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-password`, {
           email: user.email,
-          hashedPassword: userData.password
+          hashedPassword: hashedPassword
         }, {
           headers: {
             'X-Admin-Secret': adminSecret
@@ -206,15 +207,15 @@ exports.completeGoogleRegistration = async (req, res) => {
           timeout: 5000
         });
         
-        console.log(`[SYNC] ✅ Usuário sincronizado com HackLoteAPI: ${response.data.message}`);
+        console.log(`[SYNC] ✅ Senha sincronizada com sucesso: ${response.data.message}`);
       } catch (syncError) {
-        console.error(`[SYNC] ⚠️ Erro ao sincronizar com HackLoteAPI:`, {
+        console.error(`[SYNC] ❌ Erro ao sincronizar senha para ${user.email}:`, {
           message: syncError.message,
           response: syncError.response?.data,
           status: syncError.response?.status
         });
         // NÃO falhar o registro mesmo se sincronização falhar
-        // Usuário pode fazer reset de senha se necessário
+        // Usuário pode resetar senha depois se necessário
       }
     }
 
