@@ -20,9 +20,9 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-const MONGO_URI = process.env.MONGO_URI;
+const MONGODB_URI = process.env.MONGODB_URI;
 
-if (!MONGO_URI) {
+if (!MONGODB_URI) {
   console.error('❌ ERRO: MONGO_URI não encontrado no .env');
   process.exit(1);
 }
