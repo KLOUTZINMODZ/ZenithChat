@@ -189,17 +189,21 @@ exports.completeGoogleRegistration = async (req, res) => {
     await user.save();
     console.log('✅ Usuário criado com sucesso:', user._id);
 
-    // CRÍTICO: Sincronizar senha com HackLoteAPI (banco principal)
+    // CRÍTICO: Sincronizar usuário completo com HackLoteAPI (banco principal)
     if (hashedPassword) {
       try {
         const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
         const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
         
-        console.log(`[SYNC] Sincronizando senha do registro Google para ${user.email} com ${mainApiUrl}/api/v1/admin/sync-password`);
+        console.log(`[SYNC] Sincronizando usuário Google para ${user.email} com ${mainApiUrl}/api/v1/admin/sync-password`);
         
         const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-password`, {
           email: user.email,
-          hashedPassword: hashedPassword
+          hashedPassword: hashedPassword,
+          name: user.name,
+          phone: cleanPhone,
+          googleId: decoded.googleId,
+          avatar: user.avatar
         }, {
           headers: {
             'X-Admin-Secret': adminSecret
@@ -207,9 +211,9 @@ exports.completeGoogleRegistration = async (req, res) => {
           timeout: 5000
         });
         
-        console.log(`[SYNC] ✅ Senha sincronizada com sucesso: ${response.data.message}`);
+        console.log(`[SYNC] ✅ Usuário sincronizado com sucesso: ${response.data.message} (created: ${response.data.created})`);
       } catch (syncError) {
-        console.error(`[SYNC] ❌ Erro ao sincronizar senha para ${user.email}:`, {
+        console.error(`[SYNC] ❌ Erro ao sincronizar usuário para ${user.email}:`, {
           message: syncError.message,
           response: syncError.response?.data,
           status: syncError.response?.status
