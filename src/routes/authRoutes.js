@@ -7,6 +7,7 @@ const emailVerificationController = require('../controllers/emailVerificationCon
 const twoFactorAuthController = require('../controllers/twoFactorAuthController');
 const authGoogleController = require('../../controllers/authGoogleController');
 const { twoFactorLimiter } = require('../middleware/rateLimiters');
+const { auth: authMiddleware } = require('../middleware/auth');
 
 
 router.post('/validate', async (req, res) => {
@@ -120,5 +121,8 @@ router.post('/google/callback', authGoogleController.googleCallback);
 
 // POST /api/auth/google/complete-registration - Completar registro com telefone
 router.post('/google/complete-registration', authGoogleController.completeGoogleRegistration);
+
+// POST /api/auth/google/link-account - Vincular conta existente ao Google (requer autenticação)
+router.post('/google/link-account', authMiddleware, authGoogleController.linkGoogleAccount);
 
 module.exports = router;

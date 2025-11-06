@@ -250,3 +250,99 @@ exports.completeGoogleRegistration = async (req, res) => {
     });
   }
 };
+
+// Endpoint 3: Vincular conta existente ao Google
+exports.linkGoogleAccount = async (req, res) => {
+  try {
+    const { googleId, email } = req.body;
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
+
+    console.log('🔗 [LINK] Tentando vincular conta ao Google...');
+    console.log('🔗 [LINK] Email:', email);
+    console.log('🔗 [LINK] GoogleId:', googleId);
+    console.log('🔗 [LINK] UserId do token:', userId);
+
+    if (!googleId || !email) {
+      return res.status(400).json({
+        success: false,
+        error: 'GoogleId e email são obrigatórios'
+      });
+    }
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Usuário não autenticado'
+      });
+    }
+
+    // Buscar usuário atual pelo ID do token
+    const currentUser = await User.findById(userId);
+    
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Usuário não encontrado'
+      });
+    }
+
+    console.log('🔗 [LINK] Usuário encontrado:', currentUser.email);
+
+    // Verificar se o email do Google é o mesmo da conta
+    if (currentUser.email.toLowerCase() !== email.toLowerCase()) {
+      console.log('❌ [LINK] Emails não coincidem:', currentUser.email, 'vs', email);
+      return res.status(400).json({
+        success: false,
+        error: 'O email do Google deve ser o mesmo da sua conta'
+      });
+    }
+
+    // Verificar se já está vinculado
+    if (currentUser.googleId) {
+      console.log('⚠️ [LINK] Conta já vinculada ao Google');
+      return res.status(400).json({
+        success: false,
+        error: 'Esta conta já está vinculada ao Google'
+      });
+    }
+
+    // Verificar se o googleId já está sendo usado por outra conta
+    const existingGoogleUser = await User.findOne({ googleId });
+    
+    if (existingGoogleUser && existingGoogleUser._id.toString() !== userId.toString()) {
+      console.log('❌ [LINK] GoogleId já vinculado a outra conta');
+      return res.status(400).json({
+        success: false,
+        error: 'Esta conta Google já está vinculada a outro usuário'
+      });
+    }
+
+    // Vincular o Google à conta
+    currentUser.googleId = googleId;
+    currentUser.isVerified = true; // Marcar como verificado
+    await currentUser.save();
+
+    console.log('✅ [LINK] Conta vinculada com sucesso!');
+
+    // Retornar dados atualizados
+    res.json({
+      success: true,
+      message: 'Conta vinculada com sucesso ao Google',
+      user: {
+        _id: currentUser._id,
+        email: currentUser.email,
+        name: currentUser.name,
+        phone: currentUser.phone,
+        avatar: currentUser.avatar,
+        googleId: currentUser.googleId,
+        isVerified: currentUser.isVerified
+      }
+    });
+  } catch (error) {
+    console.error('❌ [LINK] Erro ao vincular conta:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao vincular conta: ' + error.message
+    });
+  }
+};
