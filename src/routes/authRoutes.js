@@ -5,6 +5,7 @@ const User = require('../models/User');
 const logger = require('../utils/logger');
 const emailVerificationController = require('../controllers/emailVerificationController');
 const twoFactorAuthController = require('../controllers/twoFactorAuthController');
+const authGoogleController = require('../../controllers/authGoogleController');
 const { twoFactorLimiter } = require('../middleware/rateLimiters');
 
 
@@ -111,5 +112,13 @@ router.post('/resend-verification-code', emailVerificationController.resendVerif
 // - Bloqueio após 5 tentativas incorretas (15 minutos)
 // - Logging seguro sem exposição de dados sensíveis
 router.post('/verify-2fa-login', twoFactorLimiter, twoFactorAuthController.verify2FALogin);
+
+// ==================== GOOGLE OAUTH ROUTES ====================
+
+// POST /api/auth/google/callback - Processar callback do Google OAuth
+router.post('/google/callback', authGoogleController.googleCallback);
+
+// POST /api/auth/google/complete-registration - Completar registro com telefone
+router.post('/google/complete-registration', authGoogleController.completeGoogleRegistration);
 
 module.exports = router;

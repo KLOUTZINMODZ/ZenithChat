@@ -1,0 +1,204 @@
+const { OAuth2Client } = require('google-auth-library');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+const googleClient = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET
+);
+
+// Endpoint 1: Callback do Google OAuth
+exports.googleCallback = async (req, res) => {
+  try {
+    const { code, redirectUri } = req.body;
+
+    if (!code || !redirectUri) {
+      return res.status(400).json({
+        success: false,
+        error: 'Código ou URI de redirecionamento ausente'
+      });
+    }
+
+    console.log('🔵 Google OAuth - Trocando código por tokens...');
+
+    // Trocar código por tokens
+    const { tokens } = await googleClient.getToken({
+      code,
+      redirect_uri: redirectUri
+    });
+
+    console.log('✅ Tokens obtidos do Google');
+
+    // Verificar token ID
+    const ticket = await googleClient.verifyIdToken({
+      idToken: tokens.id_token,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    console.log(`📧 Email do usuário: ${email}`);
+
+    // Verificar se usuário já existe
+    let user = await User.findOne({ email });
+
+    if (user) {
+      console.log('✅ Usuário existente encontrado');
+      
+      // Atualizar googleId se não existir
+      if (!user.googleId) {
+        user.googleId = googleId;
+        await user.save();
+        console.log('🔄 GoogleId adicionado ao usuário existente');
+      }
+
+      const token = jwt.sign(
+        { userId: user._id, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      return res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          avatar: user.avatar || picture,
+          isVerified: user.isVerified
+        }
+      });
+    } else {
+      console.log('🆕 Novo usuário - precisa completar cadastro');
+      
+      // Novo usuário - precisa completar cadastro com telefone
+      const tempToken = jwt.sign(
+        {
+          email,
+          googleId,
+          name,
+          picture,
+          purpose: 'complete-registration'
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' } // 15 minutos para completar
+      );
+
+      return res.json({
+        success: true,
+        needsAdditionalInfo: true,
+        googleToken: tempToken,
+        email
+      });
+    }
+  } catch (error) {
+    console.error('❌ Erro no Google OAuth callback:', error);
+    res.status(400).json({
+      success: false,
+      error: 'Erro na autenticação com Google: ' + error.message
+    });
+  }
+};
+
+// Endpoint 2: Completar registro com telefone
+exports.completeGoogleRegistration = async (req, res) => {
+  try {
+    const { googleToken, phone } = req.body;
+
+    if (!googleToken || !phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Token ou telefone ausente'
+      });
+    }
+
+    console.log('📱 Completando registro Google com telefone...');
+
+    // Validar e decodificar token temporário
+    let decoded;
+    try {
+      decoded = jwt.verify(googleToken, process.env.JWT_SECRET);
+    } catch (err) {
+      console.error('❌ Token expirado ou inválido:', err.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Token expirado ou inválido. Por favor, tente fazer login novamente.'
+      });
+    }
+
+    // Verificar propósito do token
+    if (decoded.purpose !== 'complete-registration') {
+      return res.status(400).json({
+        success: false,
+        error: 'Token inválido'
+      });
+    }
+
+    // Validar formato do telefone
+    const phoneRegex = /^\d{10,13}$/;
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    if (!phoneRegex.test(cleanPhone)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Formato de telefone inválido'
+      });
+    }
+
+    console.log(`📧 Email: ${decoded.email}`);
+    console.log(`📱 Telefone: ${cleanPhone}`);
+
+    // Verificar se email já foi registrado
+    const existingUser = await User.findOne({ email: decoded.email });
+    if (existingUser) {
+      console.log('⚠️ Email já registrado');
+      return res.status(400).json({
+        success: false,
+        error: 'Este email já está registrado'
+      });
+    }
+
+    // Criar novo usuário
+    const user = new User({
+      email: decoded.email,
+      name: decoded.name,
+      phone: cleanPhone,
+      googleId: decoded.googleId,
+      avatar: decoded.picture,
+      isVerified: true,
+      createdAt: new Date()
+    });
+
+    await user.save();
+    console.log('✅ Usuário criado com sucesso:', user._id);
+
+    // Gerar JWT final
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        avatar: user.avatar,
+        isVerified: true
+      }
+    });
+  } catch (error) {
+    console.error('❌ Erro ao completar registro:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Erro ao completar registro: ' + error.message
+    });
+  }
+};

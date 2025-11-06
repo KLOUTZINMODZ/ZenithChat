@@ -16,6 +16,12 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true, // Permite null mas deve ser único se existir
+    default: null
+  },
   birthDate: {
     type: Date,
     default: null
