@@ -124,7 +124,7 @@ exports.requestPasswordReset = async (req, res) => {
       
       res.status(500).json({
         success: false,
-        message: 'Erro ao enviar email. Tente novamente mais tarde.'
+        message: 'Erro ao enviar email.'
       });
     }
 
