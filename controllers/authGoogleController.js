@@ -1,7 +1,8 @@
 const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
 const User = require('../src/models/User');
+const bcrypt = require('bcryptjs');
+const axios = require('axios');
 
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -186,6 +187,36 @@ exports.completeGoogleRegistration = async (req, res) => {
     const user = new User(userData);
     await user.save();
     console.log('✅ Usuário criado com sucesso:', user._id);
+
+    // CRÍTICO: Sincronizar com HackLoteAPI (banco principal) se senha foi definida
+    if (userData.password) {
+      try {
+        const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
+        const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
+        
+        console.log(`[SYNC] Sincronizando usuário Google com senha para ${user.email}`);
+        
+        const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-password`, {
+          email: user.email,
+          hashedPassword: userData.password
+        }, {
+          headers: {
+            'X-Admin-Secret': adminSecret
+          },
+          timeout: 5000
+        });
+        
+        console.log(`[SYNC] ✅ Usuário sincronizado com HackLoteAPI: ${response.data.message}`);
+      } catch (syncError) {
+        console.error(`[SYNC] ⚠️ Erro ao sincronizar com HackLoteAPI:`, {
+          message: syncError.message,
+          response: syncError.response?.data,
+          status: syncError.response?.status
+        });
+        // NÃO falhar o registro mesmo se sincronização falhar
+        // Usuário pode fazer reset de senha se necessário
+      }
+    }
 
     // Gerar JWT final
     const token = jwt.sign(
