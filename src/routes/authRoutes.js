@@ -112,4 +112,39 @@ router.post('/resend-verification-code', emailVerificationController.resendVerif
 // - Logging seguro sem exposição de dados sensíveis
 router.post('/verify-2fa-login', twoFactorLimiter, twoFactorAuthController.verify2FALogin);
 
+// ==================== GOOGLE OAUTH ROUTES ====================
+
+const googleOAuthController = require('../controllers/googleOAuthController');
+const rateLimit = require('express-rate-limit');
+
+// Rate limiter para OAuth (10 tentativas em 15 minutos)
+const oauthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Muitas tentativas de autenticação. Tente novamente em 15 minutos.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiter para setup de telefone (3 tentativas em 15 minutos)
+const phoneSetupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  message: 'Muitas tentativas de configuração. Tente novamente em 15 minutos.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// GET /api/auth/google/login - Iniciar fluxo OAuth
+router.get('/google/login', oauthLimiter, googleOAuthController.initiateGoogleLogin);
+
+// GET /api/auth/google/callback - Callback OAuth
+router.get('/google/callback', oauthLimiter, googleOAuthController.handleGoogleCallback);
+
+// POST /api/auth/google/complete-setup - Completar setup com telefone
+router.post('/google/complete-setup', phoneSetupLimiter, googleOAuthController.completePhoneSetup);
+
+// POST /api/auth/google/unlink - Desvincular conta Google
+router.post('/google/unlink', googleOAuthController.unlinkGoogle);
+
 module.exports = router;
