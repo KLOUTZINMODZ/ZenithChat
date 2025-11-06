@@ -7,7 +7,6 @@ const Report = require('../models/Report');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const { decryptMessage } = require('../utils/encryption');
-const indexManager = require('../services/indexManager');
 
 const router = express.Router();
 
@@ -943,52 +942,5 @@ router.delete('/qa/:id', requireAdminKey, qaController.deleteQuestion);
 
 // Editar pergunta/resposta
 router.put('/qa/:id', requireAdminKey, qaController.updateQuestion);
-
-// ============================================
-// ENDPOINT: Health Check de Índices
-// ============================================
-router.get('/indexes/health', requireAdminKey, async (req, res) => {
-  try {
-    const health = await indexManager.checkIndexHealth();
-    
-    return res.status(health.allHealthy ? 200 : 500).json({
-      success: health.allHealthy,
-      health,
-      message: health.allHealthy 
-        ? 'Todos os índices estão saudáveis' 
-        : 'Alguns índices precisam de correção'
-    });
-  } catch (error) {
-    logger.error('Erro ao verificar saúde dos índices:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao verificar índices',
-      details: error.message
-    });
-  }
-});
-
-// ============================================
-// ENDPOINT: Forçar Correção de Índices
-// ============================================
-router.post('/indexes/fix', requireAdminKey, async (req, res) => {
-  try {
-    logger.info('🔧 [ADMIN] Correção manual de índices solicitada');
-    const result = await indexManager.ensureCorrectIndexes();
-    
-    return res.json({
-      success: true,
-      message: 'Índices verificados e corrigidos com sucesso',
-      result
-    });
-  } catch (error) {
-    logger.error('Erro ao corrigir índices:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Erro ao corrigir índices',
-      details: error.message
-    });
-  }
-});
 
 module.exports = router;

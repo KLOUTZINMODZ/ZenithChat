@@ -37,7 +37,6 @@ const userRoutes = require('./src/routes/userRoutes');
 const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseService');
 const cleanupService = require('./src/services/CleanupService');
 const mongoose = require('mongoose');
-const indexManager = require('./src/services/indexManager');
 const adminRoutes = require('./src/routes/adminRoutes');
 const adminReviewRoutes = require('./src/routes/adminReviewRoutes');
 const qaRoutes = require('./src/routes/qaRoutes');
@@ -345,14 +344,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 const PORT = process.env.PORT || 5000;
 connectDB()
-  .then(async () => {
-    // ✅ VERIFICAR E CORRIGIR ÍNDICES AUTOMATICAMENTE
-    try {
-      await indexManager.ensureCorrectIndexes();
-    } catch (error) {
-      logger.error('❌ Erro ao verificar índices, mas servidor continuará rodando:', error);
-    }
-    
+  .then(() => {
     server.listen(PORT, () => {
       logger.info(`🚀 Chat API Server running on port ${PORT}`);
       logger.info(`🔌 WebSocket server ready for connections`);
