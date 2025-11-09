@@ -3,6 +3,7 @@ const AcceptedProposal = require('../models/AcceptedProposal');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const BoostingOrder = require('../models/BoostingOrder');
 const axios = require('axios');
 
 class AgreementController {
@@ -106,6 +107,14 @@ class AgreementController {
 
       await agreement.save();
 
+      // Criar BoostingOrder para persistência dos dados
+      try {
+        await BoostingOrder.createFromAgreement(agreement);
+        console.log('BoostingOrder criado para agreement:', agreement.agreementId);
+      } catch (boError) {
+        console.error('Erro ao criar BoostingOrder:', boError);
+        // Não falhar a criação do agreement se BoostingOrder falhar
+      }
 
       const conversation = await Conversation.findById(conversationId);
       if (conversation) {
@@ -278,6 +287,21 @@ class AgreementController {
         completedVia: 'api'
       }, idempotencyKey);
 
+      // Atualizar BoostingOrder
+      try {
+        const boostingOrder = await BoostingOrder.findOne({ agreementId: agreement._id });
+        if (boostingOrder) {
+          await boostingOrder.syncFromAgreement(agreement);
+          console.log('BoostingOrder atualizado após conclusão:', agreement.agreementId);
+        } else {
+          // Criar se não existir
+          await BoostingOrder.createFromAgreement(agreement);
+          console.log('BoostingOrder criado durante conclusão:', agreement.agreementId);
+        }
+      } catch (boError) {
+        console.error('Erro ao atualizar BoostingOrder:', boError);
+      }
+
       // Atualizar estatísticas do booster
       try {
         const User = require('../models/User');
@@ -416,6 +440,20 @@ class AgreementController {
 
       await agreement.cancel(userId, cancelReason, idempotencyKey);
 
+      // Atualizar BoostingOrder
+      try {
+        const boostingOrder = await BoostingOrder.findOne({ agreementId: agreement._id });
+        if (boostingOrder) {
+          await boostingOrder.syncFromAgreement(agreement);
+          console.log('BoostingOrder atualizado após cancelamento:', agreement.agreementId);
+        } else {
+          // Criar se não existir
+          await BoostingOrder.createFromAgreement(agreement);
+          console.log('BoostingOrder criado durante cancelamento:', agreement.agreementId);
+        }
+      } catch (boError) {
+        console.error('Erro ao atualizar BoostingOrder:', boError);
+      }
 
       const systemMessage = new Message({
         conversation: agreement.conversationId,

@@ -12,6 +12,7 @@ const Report = require('../models/Report');
 const Review = require('../models/Review');
 const Agreement = require('../models/Agreement');
 const BoostingRequest = require('../models/BoostingRequest');
+const BoostingOrder = require('../models/BoostingOrder');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 const axios = require('axios');
@@ -193,85 +194,56 @@ router.get('/list', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // ========== BOOSTING AGREEMENTS ==========
+    // ========== BOOSTING ORDERS ==========
     const boostingFilter = {};
     
-    // Filtrar por status se especificado (converter status de marketplace para agreement)
+    // Filtrar por status se especificado
     if (statusParam) {
       const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
-      // Mapear status de marketplace para agreement (completed, cancelled, active, pending)
-      const agreementStatuses = [];
-      if (statuses.includes('completed')) agreementStatuses.push('completed');
-      if (statuses.includes('cancelled')) agreementStatuses.push('cancelled');
-      if (statuses.includes('initiated') || statuses.includes('escrow_reserved') || statuses.includes('shipped')) {
-        agreementStatuses.push('active', 'pending');
-      }
-      if (agreementStatuses.length > 0) {
-        boostingFilter.status = { $in: agreementStatuses };
+      if (statuses.length > 0) {
+        boostingFilter.status = { $in: statuses };
       }
     }
     
     if (type === 'sales') {
-      boostingFilter['parties.booster.userid'] = userId;
+      boostingFilter.boosterId = userId;
     } else if (type === 'purchases') {
-      boostingFilter['parties.client.userid'] = userId;
+      boostingFilter.clientId = userId;
     } else {
       boostingFilter.$or = [
-        { 'parties.booster.userid': userId },
-        { 'parties.client.userid': userId }
+        { boosterId: userId },
+        { clientId: userId }
       ];
     }
 
-    const agreements = await Agreement.find(boostingFilter)
-      .sort({ createdAt: -1, completedAt: -1, cancelledAt: -1 })
+    const boostingOrders = await BoostingOrder.find(boostingFilter)
+      .sort({ createdAt: -1 })
       .lean();
 
-    // ========== BUSCAR CONVERSATIONS PARA FALLBACK ==========
-    const conversationIds = Array.from(new Set((agreements || []).map(a => (a.conversationId || '').toString()).filter(Boolean)));
-    const conversations = await Conversation.find({ _id: { $in: conversationIds } })
-      .select('_id metadata')
-      .lean();
-    
-    const conversationMap = new Map((conversations || []).map(c => [String(c._id), c]));
-
-    // ========== POPULATE DATA ==========
+    // ========== BUSCAR DADOS ADICIONAIS ==========
     const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
-    
-    // Coletar boostingIds tanto do agreement quanto da conversa (fallback)
-    const boostingIdsFromAgreements = (agreements || [])
-      .map(a => {
-        if (a.boostingRequestId) return String(a.boostingRequestId);
-        const conv = conversationMap.get(String(a.conversationId));
-        const boostingId = conv?.metadata?.get?.('boostingId') || conv?.metadata?.boostingId;
-        return boostingId ? String(boostingId) : null;
-      })
-      .filter(Boolean);
-    
-    const boostingIds = Array.from(new Set(boostingIdsFromAgreements));
     const allBuyerIds = Array.from(new Set([
       ...(purchases || []).map(p => (p.buyerId || '').toString()).filter(Boolean),
-      ...(agreements || []).map(a => (a.parties?.client?.userid || '').toString()).filter(Boolean)
+      ...(boostingOrders || []).map(bo => (bo.clientId || '').toString()).filter(Boolean)
     ]));
     const allSellerIds = Array.from(new Set([
       ...(purchases || []).map(p => (p.sellerId || '').toString()).filter(Boolean),
-      ...(agreements || []).map(a => (a.parties?.booster?.userid || '').toString()).filter(Boolean)
+      ...(boostingOrders || []).map(bo => (bo.boosterId || '').toString()).filter(Boolean)
     ]));
 
-    // Buscar reviews para verificar quais purchases já foram avaliadas
+    // Buscar reviews para verificar quais pedidos já foram avaliados
     const purchaseIds = (purchases || []).map(p => p._id);
-    const agreementIds = (agreements || []).map(a => a._id);
+    const boostingOrderIds = (boostingOrders || []).map(bo => bo.agreementId);
     
-    const [items, boostingRequests, buyers, sellers, purchaseReviews, agreementReviews] = await Promise.all([
+    const [items, buyers, sellers, purchaseReviews, boostingReviews] = await Promise.all([
       MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images').lean(),
-      BoostingRequest.find({ _id: { $in: boostingIds } }).select('_id game title currentRank desiredRank price').lean(),
       User.find({ _id: { $in: allBuyerIds } }).select('_id name legalName username avatar').lean(),
       User.find({ _id: { $in: allSellerIds } }).select('_id name legalName username avatar').lean(),
       Review.find({ purchaseId: { $in: purchaseIds } }).select('purchaseId').lean(),
-      Review.find({ agreementId: { $in: agreementIds } }).select('agreementId').lean()
+      Review.find({ agreementId: { $in: boostingOrderIds } }).select('agreementId').lean()
     ]);
 
     const itemMap = new Map((items || []).map(d => [String(d._id), d]));
-    const boostingMap = new Map((boostingRequests || []).map(b => [String(b._id), b]));
     const buyerMap = new Map((buyers || []).map(u => [String(u._id), u]));
     const sellerMap = new Map((sellers || []).map(u => [String(u._id), u]));
     const userName = (u) => (u?.name || u?.legalName || u?.username || 'Usuário');
@@ -304,76 +276,71 @@ router.get('/list', auth, async (req, res) => {
     });
 
     // ========== FORMAT BOOSTING ORDERS ==========
-    const boostingOrders = (agreements || []).map(a => {
-      // Fallback: buscar boostingRequestId da conversa se não estiver no agreement
-      let boostingRequestId = a.boostingRequestId;
-      if (!boostingRequestId) {
-        const conv = conversationMap.get(String(a.conversationId));
-        boostingRequestId = conv?.metadata?.get?.('boostingId') || conv?.metadata?.boostingId;
-      }
-
-      const boost = boostingMap.get(String(boostingRequestId)) || {};
-      const buyer = buyerMap.get(String(a.parties?.client?.userid));
-      const seller = sellerMap.get(String(a.parties?.booster?.userid));
+    const formattedBoostingOrders = (boostingOrders || []).map(bo => {
+      // BoostingOrder já tem todos os dados estruturados!
+      const buyer = buyerMap.get(String(bo.clientId));
+      const seller = sellerMap.get(String(bo.boosterId));
       
-      // Título: preferir boost.title, depois boost.game, depois proposalSnapshot
-      const title = boost.title || 
-                   (boost.game ? `Boosting ${boost.game}` : null) ||
-                   (a.proposalSnapshot?.game ? `Boosting ${a.proposalSnapshot.game}` : 'Boosting');
+      const title = bo.serviceSnapshot?.game 
+        ? `Boosting ${bo.serviceSnapshot.game}` 
+        : 'Boosting';
       
-      // Preço: preferir agreement.price, depois proposalSnapshot.price, depois boost.price
-      const price = Number(a.price) || Number(a.proposalSnapshot?.price) || Number(boost.price) || 0;
+      // Mapear status do BoostingOrder para status compatível com marketplace UI
+      const boostingStatus = String(bo.status || 'active').toLowerCase();
+      let mappedStatus = boostingStatus;
       
-      // Mapear status do agreement para status compatível com marketplace
-      const agreementStatus = String(a.status || 'active').toLowerCase();
-      let mappedStatus = agreementStatus;
-      
-      // Converter status de agreement para equivalente de marketplace para consistência na UI
-      if (agreementStatus === 'active') {
+      if (boostingStatus === 'active') {
         mappedStatus = 'shipped'; // Em andamento
-      } else if (agreementStatus === 'pending') {
+      } else if (boostingStatus === 'pending') {
         mappedStatus = 'initiated'; // Pendente
-      } else if (agreementStatus === 'completed') {
-        mappedStatus = 'completed';
-      } else if (agreementStatus === 'cancelled') {
-        mappedStatus = 'cancelled';
       }
+      // completed e cancelled permanecem iguais
       
       // Determinar timestamp correto baseado no status
-      let orderTimestamp = a.createdAt;
-      if (agreementStatus === 'completed' && a.completedAt) {
-        orderTimestamp = a.completedAt;
-      } else if (agreementStatus === 'cancelled' && a.cancelledAt) {
-        orderTimestamp = a.cancelledAt;
-      } else if (a.activatedAt) {
-        orderTimestamp = a.activatedAt;
+      let orderTimestamp = bo.createdAt;
+      if (boostingStatus === 'completed' && bo.completedAt) {
+        orderTimestamp = bo.completedAt;
+      } else if (boostingStatus === 'cancelled' && bo.cancelledAt) {
+        orderTimestamp = bo.cancelledAt;
+      } else if (bo.activatedAt) {
+        orderTimestamp = bo.activatedAt;
       }
       
       return {
-        _id: String(a._id),
-        orderNumber: String(a.agreementId || String(a._id).slice(-8).toUpperCase()),
-        status: mappedStatus, // Usar status real do agreement
-        price: price,
+        _id: String(bo._id),
+        orderNumber: bo.orderNumber || String(bo._id).slice(-8).toUpperCase(),
+        status: mappedStatus,
+        price: Number(bo.price) || 0,
         feePercent: 0,
         feeAmount: 0,
-        sellerReceives: price,
-        createdAt: orderTimestamp, // Usar timestamp correto
+        sellerReceives: Number(bo.price) || 0,
+        createdAt: orderTimestamp,
         type: 'boosting',
-        hasReview: agreementReviewSet.has(String(a._id)), // Verifica se já foi avaliado
-        item: { _id: String(boostingRequestId || ''), title, image: '' },
-        buyer: { _id: String(a.parties?.client?.userid || ''), name: userName(buyer) },
-        seller: { _id: String(a.parties?.booster?.userid || ''), name: userName(seller) },
+        hasReview: bo.hasReview || agreementReviewSet.has(String(bo.agreementId)),
+        item: { 
+          _id: String(bo.boostingRequestId || ''), 
+          title, 
+          image: '' 
+        },
+        buyer: { 
+          _id: String(bo.clientId || ''), 
+          name: bo.clientData?.name || userName(buyer)
+        },
+        seller: { 
+          _id: String(bo.boosterId || ''), 
+          name: bo.boosterData?.name || userName(seller)
+        },
         boostingRequest: {
-          _id: String(boostingRequestId || ''),
-          game: boost.game || a.proposalSnapshot?.game || '',
-          currentRank: boost.currentRank || a.proposalSnapshot?.currentRank,
-          desiredRank: boost.desiredRank || a.proposalSnapshot?.desiredRank
+          _id: String(bo.boostingRequestId || ''),
+          game: bo.serviceSnapshot?.game || '',
+          currentRank: bo.serviceSnapshot?.currentRank,
+          desiredRank: bo.serviceSnapshot?.desiredRank
         }
       };
     });
 
     // ========== MERGE AND PAGINATE ==========
-    const allOrders = [...marketplaceOrders, ...boostingOrders].sort((a, b) => 
+    const allOrders = [...marketplaceOrders, ...formattedBoostingOrders].sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
