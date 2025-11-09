@@ -8,10 +8,10 @@ const auth = require('../middleware/auth');
  * Endpoints para consultar pedidos de boosting persistentes
  */
 
-// Buscar boosting order por ID
-router.get('/:orderId', auth, boostingOrderController.getBoostingOrder);
-
 // Listar boosting orders do usuário
-router.get('/', auth, boostingOrderController.listBoostingOrders);
+router.get('/', auth, (req, res) => boostingOrderController.listBoostingOrders(req, res));
+
+// Buscar boosting order por ID (deve vir depois para não capturar '/')
+router.get('/:orderId', auth, (req, res) => boostingOrderController.getBoostingOrder(req, res));
 
 module.exports = router;
