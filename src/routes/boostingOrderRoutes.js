@@ -1,17 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const boostingOrderController = require('../controllers/boostingOrderController');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 
 /**
  * Rotas para BoostingOrders
  * Endpoints para consultar pedidos de boosting persistentes
  */
 
-// Listar boosting orders do usuário
-router.get('/', auth, (req, res) => boostingOrderController.listBoostingOrders(req, res));
+// Aplicar autenticação em todas as rotas
+router.use(auth);
 
-// Buscar boosting order por ID (deve vir depois para não capturar '/')
-router.get('/:orderId', auth, (req, res) => boostingOrderController.getBoostingOrder(req, res));
+// Listar boosting orders do usuário
+router.get('/', boostingOrderController.listBoostingOrders);
+
+// Buscar boosting order por ID
+router.get('/:orderId', boostingOrderController.getBoostingOrder);
 
 module.exports = router;

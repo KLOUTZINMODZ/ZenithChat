@@ -2,13 +2,11 @@ const BoostingOrder = require('../models/BoostingOrder');
 const Agreement = require('../models/Agreement');
 const User = require('../models/User');
 
-class BoostingOrderController {
-  
-  /**
-   * Buscar boosting order por ID (_id ou agreementId)
-   * Similar ao getAgreement, mas com fallback para Agreement se BoostingOrder não existir
-   */
-  async getBoostingOrder(req, res) {
+/**
+ * Buscar boosting order por ID (_id ou agreementId)
+ * Similar ao getAgreement, mas com fallback para Agreement se BoostingOrder não existir
+ */
+async function getBoostingOrder(req, res) {
     try {
       const { orderId } = req.params;
       const userId = req.user?.id || req.user?._id;
@@ -111,72 +109,74 @@ class BoostingOrderController {
         success: true,
         data: boostingOrder
       });
-    } catch (error) {
-      console.error('Erro ao buscar boosting order:', error);
-      res.status(500).json({ success: false, message: 'Erro interno do servidor' });
-    }
-  }
-
-  /**
-   * Listar boosting orders do usuário
-   */
-  async listBoostingOrders(req, res) {
-    try {
-      const userId = req.user?.id || req.user?._id;
-      const { type, status, page = 1, limit = 10 } = req.query;
-
-      if (!userId) {
-        return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
-      }
-
-      const query = {};
-
-      // Filtrar por tipo (cliente ou booster)
-      if (type === 'purchases') {
-        query.clientId = userId;
-      } else if (type === 'sales') {
-        query.boosterId = userId;
-      } else {
-        query.$or = [
-          { clientId: userId },
-          { boosterId: userId }
-        ];
-      }
-
-      // Filtrar por status
-      if (status && status !== 'all') {
-        const statuses = status.split(',').map(s => s.trim().toLowerCase());
-        query.status = { $in: statuses };
-      }
-
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-
-      const [orders, total] = await Promise.all([
-        BoostingOrder.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(parseInt(limit))
-          .lean(),
-        BoostingOrder.countDocuments(query)
-      ]);
-
-      res.json({
-        success: true,
-        data: {
-          orders,
-          pagination: {
-            total,
-            page: parseInt(page),
-            limit: parseInt(limit),
-            pages: Math.ceil(total / parseInt(limit))
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Erro ao listar boosting orders:', error);
-      res.status(500).json({ success: false, message: 'Erro interno do servidor' });
-    }
+  } catch (error) {
+    console.error('Erro ao buscar boosting order:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
   }
 }
 
-module.exports = new BoostingOrderController();
+/**
+ * Listar boosting orders do usuário
+ */
+async function listBoostingOrders(req, res) {
+  try {
+    const userId = req.user?.id || req.user?._id;
+    const { type, status, page = 1, limit = 10 } = req.query;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
+    }
+
+    const query = {};
+
+    // Filtrar por tipo (cliente ou booster)
+    if (type === 'purchases') {
+      query.clientId = userId;
+    } else if (type === 'sales') {
+      query.boosterId = userId;
+    } else {
+      query.$or = [
+        { clientId: userId },
+        { boosterId: userId }
+      ];
+    }
+
+    // Filtrar por status
+    if (status && status !== 'all') {
+      const statuses = status.split(',').map(s => s.trim().toLowerCase());
+      query.status = { $in: statuses };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [orders, total] = await Promise.all([
+      BoostingOrder.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      BoostingOrder.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        orders,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao listar boosting orders:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+  }
+}
+
+module.exports = {
+  getBoostingOrder,
+  listBoostingOrders
+};
