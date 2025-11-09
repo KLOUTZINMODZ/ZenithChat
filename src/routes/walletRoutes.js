@@ -520,7 +520,7 @@ router.post('/deposits/initiate', auth, async (req, res) => {
       if (!cpfCnpj || ![11, 14].includes(cpfCnpj.length)) {
         return res.status(400).json({
           success: false,
-          message: 'Para depósitos em produção é obrigatório informar CPF (11 dígitos) ou CNPJ (14 dígitos).',
+          message: 'Para depósitos é obrigatório informar CPF (11 dígitos) ou CNPJ (14 dígitos).',
           error: 'MISSING_CPF_CNPJ'
         });
       }

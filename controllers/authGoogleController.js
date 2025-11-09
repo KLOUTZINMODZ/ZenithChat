@@ -4,6 +4,37 @@ const bcrypt = require('bcrypt');
 const axios = require('axios');
 const User = require('../src/models/User');
 
+// Helper para garantir que o usuário tenha userid
+async function ensureUserIdExists(user) {
+  // Verificar se já tem userid no ChatApi (pode não ter o campo definido)
+  // Sempre sincronizar com HackLoteAPI para garantir
+  try {
+    const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
+    const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
+    
+    console.log(`[ENSURE-USERID] 🔒 Garantindo userid para ${user.email}`);
+    
+    const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-google-user`, {
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      googleId: user.googleId,
+      avatar: user.avatar
+    }, {
+      headers: {
+        'X-Admin-Secret': adminSecret
+      },
+      timeout: 5000
+    });
+    
+    console.log(`[ENSURE-USERID] ✅ Userid garantido: ${response.data.userid}`);
+    return response.data.userid;
+  } catch (error) {
+    console.error(`[ENSURE-USERID] ❌ Erro ao garantir userid:`, error.message);
+    throw new Error('Falha ao garantir userid do usuário');
+  }
+}
+
 const googleClient = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET
@@ -55,6 +86,17 @@ exports.googleCallback = async (req, res) => {
         console.log('🔄 GoogleId adicionado ao usuário existente:', googleId);
       } else {
         console.log('✅ GoogleId já existe no usuário:', user.googleId);
+      }
+
+      // CRÍTICO: Garantir que usuário tenha userid antes de retornar token
+      try {
+        await ensureUserIdExists(user);
+      } catch (ensureError) {
+        console.error(`[LOGIN] ❌ Erro crítico ao garantir userid:`, ensureError.message);
+        return res.status(500).json({
+          success: false,
+          error: 'Erro ao processar autenticação. Por favor, tente novamente.'
+        });
       }
 
       const token = jwt.sign(
@@ -193,12 +235,13 @@ exports.completeGoogleRegistration = async (req, res) => {
     console.log('✅ Usuário criado com sucesso:', user._id);
 
     // CRÍTICO: Sincronizar usuário completo com HackLoteAPI (banco principal)
-    if (hashedPassword) {
-      try {
-        const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
-        const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
-        
-        console.log(`[SYNC] Sincronizando usuário Google para ${user.email} com ${mainApiUrl}/api/v1/admin/sync-password`);
+    try {
+      const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
+      const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
+      
+      if (hashedPassword) {
+        // Usuário com senha - sincronizar com endpoint de senha
+        console.log(`[SYNC] Sincronizando usuário com senha para ${user.email}`);
         
         const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-password`, {
           email: user.email,
@@ -214,16 +257,37 @@ exports.completeGoogleRegistration = async (req, res) => {
           timeout: 5000
         });
         
-        console.log(`[SYNC] ✅ Usuário sincronizado com sucesso: ${response.data.message} (created: ${response.data.created})`);
-      } catch (syncError) {
-        console.error(`[SYNC] ❌ Erro ao sincronizar usuário para ${user.email}:`, {
-          message: syncError.message,
-          response: syncError.response?.data,
-          status: syncError.response?.status
+        console.log(`[SYNC] ✅ Usuário com senha sincronizado: ${response.data.message} (userid: ${response.data.userid})`);
+      } else {
+        // Usuário só com Google - sincronizar com endpoint específico
+        console.log(`[SYNC] Sincronizando usuário Google (sem senha) para ${user.email}`);
+        
+        const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-google-user`, {
+          email: user.email,
+          name: user.name,
+          phone: cleanPhone,
+          googleId: decoded.googleId,
+          avatar: user.avatar
+        }, {
+          headers: {
+            'X-Admin-Secret': adminSecret
+          },
+          timeout: 5000
         });
-        // NÃO falhar o registro mesmo se sincronização falhar
-        // Usuário pode resetar senha depois se necessário
+        
+        console.log(`[SYNC] ✅ Usuário Google sincronizado: ${response.data.message} (userid: ${response.data.userid})`);
       }
+    } catch (syncError) {
+      console.error(`[SYNC] ❌ Erro ao sincronizar usuário para ${user.email}:`, {
+        message: syncError.message,
+        response: syncError.response?.data,
+        status: syncError.response?.status
+      });
+      // FALHAR o registro se sincronização falhar (usuário não terá userid válido)
+      return res.status(500).json({
+        success: false,
+        error: 'Erro ao completar registro. Por favor, tente novamente.'
+      });
     }
 
     // Gerar JWT final

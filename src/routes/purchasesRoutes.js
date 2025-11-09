@@ -194,7 +194,23 @@ router.get('/list', auth, async (req, res) => {
       .lean();
 
     // ========== BOOSTING AGREEMENTS ==========
-    const boostingFilter = { status: 'completed' };
+    const boostingFilter = {};
+    
+    // Filtrar por status se especificado (converter status de marketplace para agreement)
+    if (statusParam) {
+      const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
+      // Mapear status de marketplace para agreement (completed, cancelled, active, pending)
+      const agreementStatuses = [];
+      if (statuses.includes('completed')) agreementStatuses.push('completed');
+      if (statuses.includes('cancelled')) agreementStatuses.push('cancelled');
+      if (statuses.includes('initiated') || statuses.includes('escrow_reserved') || statuses.includes('shipped')) {
+        agreementStatuses.push('active', 'pending');
+      }
+      if (agreementStatuses.length > 0) {
+        boostingFilter.status = { $in: agreementStatuses };
+      }
+    }
+    
     if (type === 'sales') {
       boostingFilter['parties.booster.userid'] = userId;
     } else if (type === 'purchases') {
@@ -207,7 +223,7 @@ router.get('/list', auth, async (req, res) => {
     }
 
     const agreements = await Agreement.find(boostingFilter)
-      .sort({ completedAt: -1 })
+      .sort({ createdAt: -1, completedAt: -1, cancelledAt: -1 })
       .lean();
 
     // ========== BUSCAR CONVERSATIONS PARA FALLBACK ==========
@@ -308,15 +324,40 @@ router.get('/list', auth, async (req, res) => {
       // Preço: preferir agreement.price, depois proposalSnapshot.price, depois boost.price
       const price = Number(a.price) || Number(a.proposalSnapshot?.price) || Number(boost.price) || 0;
       
+      // Mapear status do agreement para status compatível com marketplace
+      const agreementStatus = String(a.status || 'active').toLowerCase();
+      let mappedStatus = agreementStatus;
+      
+      // Converter status de agreement para equivalente de marketplace para consistência na UI
+      if (agreementStatus === 'active') {
+        mappedStatus = 'shipped'; // Em andamento
+      } else if (agreementStatus === 'pending') {
+        mappedStatus = 'initiated'; // Pendente
+      } else if (agreementStatus === 'completed') {
+        mappedStatus = 'completed';
+      } else if (agreementStatus === 'cancelled') {
+        mappedStatus = 'cancelled';
+      }
+      
+      // Determinar timestamp correto baseado no status
+      let orderTimestamp = a.createdAt;
+      if (agreementStatus === 'completed' && a.completedAt) {
+        orderTimestamp = a.completedAt;
+      } else if (agreementStatus === 'cancelled' && a.cancelledAt) {
+        orderTimestamp = a.cancelledAt;
+      } else if (a.activatedAt) {
+        orderTimestamp = a.activatedAt;
+      }
+      
       return {
         _id: String(a._id),
         orderNumber: String(a.agreementId || String(a._id).slice(-8).toUpperCase()),
-        status: 'completed',
+        status: mappedStatus, // Usar status real do agreement
         price: price,
         feePercent: 0,
         feeAmount: 0,
         sellerReceives: price,
-        createdAt: a.completedAt || a.createdAt,
+        createdAt: orderTimestamp, // Usar timestamp correto
         type: 'boosting',
         hasReview: agreementReviewSet.has(String(a._id)), // Verifica se já foi avaliado
         item: { _id: String(boostingRequestId || ''), title, image: '' },
