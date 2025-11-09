@@ -6,8 +6,6 @@ const agreementSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    index: true,
-
     default: () => `AGR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   },
   

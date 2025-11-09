@@ -32,6 +32,7 @@
     "boosting:clean-expired": "node ./scripts/cleanExpiredBoostings.js",
     "boosting:check": "node ./scripts/checkBoostingOrders.js",
     "boosting:migrate": "node ./scripts/migrateAgreementsToBoostingOrders.js",
+    "boosting:status": "node ./scripts/checkAgreementsAndBoostingOrders.js",
     "fix:phone-index": "node ./scripts/fixPhoneNormalizedIndex.js"
   },
   "keywords": [
