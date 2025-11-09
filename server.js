@@ -346,7 +346,15 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 const PORT = process.env.PORT || 5000;
 connectDB()
-  .then(() => {
+  .then(async () => {
+    // Garantir que os índices do User estejam corretos
+    try {
+      const User = require('./src/models/User');
+      await User.ensureIndexes();
+    } catch (error) {
+      logger.warn('Failed to ensure User indexes:', error.message);
+    }
+
     server.listen(PORT, () => {
       logger.info(`🚀 Chat API Server running on port ${PORT}`);
       logger.info(`🔌 WebSocket server ready for connections`);

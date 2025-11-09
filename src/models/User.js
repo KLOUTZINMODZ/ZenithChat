@@ -330,4 +330,44 @@ userSchema.methods.unbanUser = function() {
   return this.save();
 };
 
+/**
+ * Garante que os índices estejam corretos no banco de dados
+ * Corrige o problema do índice phoneNormalized sem sparse
+ */
+userSchema.statics.ensureIndexes = async function() {
+  try {
+    const collection = this.collection;
+    const indexes = await collection.indexes();
+    
+    // Verificar se phoneNormalized_1 existe e está correto
+    const phoneIndex = indexes.find(idx => idx.name === 'phoneNormalized_1');
+    
+    if (phoneIndex && phoneIndex.unique && !phoneIndex.sparse) {
+      console.log('⚠️  [User Model] Corrigindo índice phoneNormalized...');
+      
+      // Remover índice antigo
+      await collection.dropIndex('phoneNormalized_1');
+      console.log('✅ [User Model] Índice antigo removido');
+      
+      // Criar novo índice correto
+      await collection.createIndex(
+        { phoneNormalized: 1 }, 
+        { unique: true, sparse: true, name: 'phoneNormalized_1' }
+      );
+      console.log('✅ [User Model] Índice phoneNormalized criado corretamente (unique + sparse)');
+    } else if (!phoneIndex) {
+      // Criar índice se não existir
+      await collection.createIndex(
+        { phoneNormalized: 1 }, 
+        { unique: true, sparse: true, name: 'phoneNormalized_1' }
+      );
+      console.log('✅ [User Model] Índice phoneNormalized criado');
+    } else {
+      console.log('✅ [User Model] Índice phoneNormalized já está correto');
+    }
+  } catch (error) {
+    console.error('❌ [User Model] Erro ao garantir índices:', error.message);
+  }
+};
+
 module.exports = mongoose.model('User', userSchema);
