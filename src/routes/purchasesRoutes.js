@@ -250,7 +250,7 @@ router.get('/list', auth, async (req, res) => {
     
     // Criar Maps de reviews para verificação rápida
     const purchaseReviewSet = new Set((purchaseReviews || []).map(r => String(r.purchaseId)));
-    const agreementReviewSet = new Set((agreementReviews || []).map(r => String(r.agreementId)));
+    const agreementReviewSet = new Set((boostingReviews || []).map(r => String(r.agreementId)));
 
     // ========== FORMAT MARKETPLACE ORDERS ==========
     const marketplaceOrders = (purchases || []).map(p => {
