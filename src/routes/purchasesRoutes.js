@@ -220,6 +220,21 @@ router.get('/list', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    // Log de debug para diagnóstico
+    console.log('[PURCHASES LIST DEBUG]', {
+      userId: String(userId),
+      type,
+      statusParam,
+      marketplacePurchases: purchases.length,
+      boostingOrders: boostingOrders.length,
+      boostingFilter: JSON.stringify(boostingFilter),
+      boostingStatusDistribution: boostingOrders.reduce((acc, bo) => {
+        const status = String(bo.status || 'null');
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {})
+    });
+
     // ========== BUSCAR DADOS ADICIONAIS ==========
     const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
     const allBuyerIds = Array.from(new Set([
@@ -286,15 +301,20 @@ router.get('/list', auth, async (req, res) => {
         : 'Boosting';
       
       // Mapear status do BoostingOrder para status compatível com marketplace UI
-      const boostingStatus = String(bo.status || 'active').toLowerCase();
+      // Status possíveis: pending, active, completed, cancelled, expired, disputed
+      const boostingStatus = String(bo.status || 'pending').toLowerCase();
       let mappedStatus = boostingStatus;
       
       if (boostingStatus === 'active') {
         mappedStatus = 'shipped'; // Em andamento
       } else if (boostingStatus === 'pending') {
         mappedStatus = 'initiated'; // Pendente
+      } else if (boostingStatus === 'expired') {
+        mappedStatus = 'cancelled'; // Expirados tratados como cancelados
+      } else if (boostingStatus === 'disputed') {
+        mappedStatus = 'shipped'; // Disputados aparecem como em progresso (aguardando resolução)
       }
-      // completed e cancelled permanecem iguais
+      // completed e cancelled permanecem iguais (sem alteração)
       
       // Determinar timestamp correto baseado no status
       let orderTimestamp = bo.createdAt;
@@ -302,7 +322,9 @@ router.get('/list', auth, async (req, res) => {
         orderTimestamp = bo.completedAt;
       } else if (boostingStatus === 'cancelled' && bo.cancelledAt) {
         orderTimestamp = bo.cancelledAt;
-      } else if (bo.activatedAt) {
+      } else if (boostingStatus === 'expired' && bo.expiredAt) {
+        orderTimestamp = bo.expiredAt;
+      } else if (boostingStatus === 'active' && bo.activatedAt) {
         orderTimestamp = bo.activatedAt;
       }
       
@@ -346,6 +368,15 @@ router.get('/list', auth, async (req, res) => {
 
     const total = allOrders.length;
     const paginatedOrders = allOrders.slice((page - 1) * limit, page * limit);
+
+    // Log final
+    console.log('[PURCHASES LIST RESULT]', {
+      marketplaceOrders: marketplaceOrders.length,
+      formattedBoostingOrders: formattedBoostingOrders.length,
+      totalMerged: allOrders.length,
+      paginatedCount: paginatedOrders.length,
+      typesInPaginated: paginatedOrders.map(o => o.type)
+    });
 
     return res.json({
       success: true,
