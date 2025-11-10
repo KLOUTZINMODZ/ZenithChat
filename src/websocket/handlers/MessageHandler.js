@@ -157,9 +157,11 @@ class MessageHandler {
       await message.populate('sender', 'name avatar');
 
       // Sanitizar mensagem antes de enviar (protege dados sensíveis)
+      const messageObj = message.toObject();
       const messageToSend = sanitizeMessage({
-        ...message.toObject(),
-        content: content
+        ...messageObj,
+        content: content,
+        attachments: messageObj.attachments || attachments  // ✅ Garantir attachments
       }, userId);
 
 
