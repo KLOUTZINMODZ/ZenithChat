@@ -334,7 +334,24 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                   
                   console.log(`📦 Resposta da proposta (status ${proposalResponse.status}):`, JSON.stringify(proposalResponse.data, null, 2));
                   
-                  const proposal = proposalResponse.data?.proposal || proposalResponse.data?.data || proposalResponse.data;
+                  let proposal = proposalResponse.data?.proposal || proposalResponse.data?.data || proposalResponse.data;
+                  
+                  // Se a resposta contém orders (lista de boosting requests), extrai o correto pelo ID
+                  if (proposal && proposal.orders && Array.isArray(proposal.orders)) {
+                    console.log(`📦 Resposta contém ${proposal.orders.length} orders, buscando o correto...`);
+                    const matchingOrder = proposal.orders.find(order => 
+                      String(order._id) === String(boostingId)
+                    );
+                    
+                    if (matchingOrder) {
+                      console.log(`✅ Order encontrado:`, {
+                        _id: matchingOrder._id,
+                        price: matchingOrder.price,
+                        game: matchingOrder.game
+                      });
+                      proposal = matchingOrder;
+                    }
+                  }
                   
                   if (proposal && (proposal.price || proposal.proposedPrice || proposal.amount)) {
                     proposalPrice = proposal.price || proposal.proposedPrice || proposal.amount || 0;
