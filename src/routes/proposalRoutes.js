@@ -354,47 +354,49 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                       category: proposalData.category
                     });
                   } else {
-                    // Se endpoint específico não retornou preço, tenta buscar lista de propostas
-                    console.log(`⚠️ Proposta específica sem preço, buscando lista de propostas...`);
+                    // A API retornou orders, não proposals - vamos buscar do boosting request
+                    console.log(`⚠️ Resposta retornou orders. Buscando boosting request para extrair preço...`);
                     
                     try {
-                      const proposalsListUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals`;
-                      console.log(`📡 URL lista propostas: ${proposalsListUrl}`);
+                      // Busca o boosting request completo
+                      const boostingRequestUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}`;
+                      console.log(`📡 URL boosting request: ${boostingRequestUrl}`);
                       
-                      const proposalsResponse = await axios.get(proposalsListUrl, {
+                      const boostingResponse = await axios.get(boostingRequestUrl, {
                         headers: { Authorization: req.headers.authorization },
                         timeout: 10000
                       });
                       
-                      const proposals = proposalsResponse.data?.proposals || proposalsResponse.data?.data || [];
-                      console.log(`📦 Total de propostas encontradas: ${proposals.length}`);
+                      console.log(`📦 Boosting request encontrado:`, JSON.stringify(boostingResponse.data).substring(0, 300));
                       
-                      // Encontra a proposta pelo ID
-                      const matchingProposal = proposals.find(p => 
-                        String(p._id || p.id) === String(actualProposalId)
-                      );
+                      const boostingRequest = boostingResponse.data?.data || boostingResponse.data;
                       
-                      if (matchingProposal) {
-                        proposalPrice = matchingProposal.price || matchingProposal.proposedPrice || matchingProposal.amount || 0;
+                      if (boostingRequest) {
+                        // Extrai preço e dados do boosting request
+                        proposalPrice = boostingRequest.price || boostingRequest.proposedPrice || 0;
                         proposalData = {
                           price: proposalPrice,
-                          game: matchingProposal.game || metadata?.game || 'N/A',
-                          category: matchingProposal.category || metadata?.category || 'Boosting',
-                          currentRank: matchingProposal.currentRank || metadata?.currentRank || 'N/A',
-                          desiredRank: matchingProposal.desiredRank || metadata?.desiredRank || 'N/A',
-                          description: matchingProposal.description || metadata?.description || '',
-                          estimatedTime: matchingProposal.estimatedTime || metadata?.estimatedTime || ''
+                          game: boostingRequest.game || metadata?.game || 'N/A',
+                          category: boostingRequest.category || metadata?.category || 'Boosting',
+                          currentRank: boostingRequest.currentRank || 'N/A',
+                          desiredRank: boostingRequest.desiredRank || 'N/A',
+                          description: boostingRequest.description || '',
+                          estimatedTime: boostingRequest.estimatedTime || ''
                         };
                         
-                        console.log(`✅ Proposta encontrada na lista:`, {
+                        console.log(`✅ Dados do boosting request:`, {
                           price: proposalPrice,
-                          game: proposalData.game
+                          game: proposalData.game,
+                          estimatedTime: proposalData.estimatedTime
                         });
                       } else {
-                        console.error(`❌ Proposta ${actualProposalId} não encontrada na lista`);
+                        console.error(`❌ Boosting request não encontrado na resposta`);
                       }
-                    } catch (listError) {
-                      console.error(`❌ Erro ao buscar lista de propostas:`, listError.message);
+                    } catch (boostingError) {
+                      console.error(`❌ Erro ao buscar boosting request:`, {
+                        message: boostingError.message,
+                        status: boostingError.response?.status
+                      });
                     }
                   }
                 } catch (apiError) {
