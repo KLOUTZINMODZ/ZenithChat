@@ -231,8 +231,24 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           if (!existingAgreement) {
             
             // Busca dados do cliente e booster
-            const clientUser = await require('../models/User').findById(clientId);
-            const boosterUser = await require('../models/User').findById(boosterId);
+            const mongoose = require('mongoose');
+            const User = require('../models/User');
+            
+            // Busca cliente - verifica se é ObjectId ou userid
+            let clientUser;
+            if (mongoose.Types.ObjectId.isValid(clientId) && clientId.length === 24) {
+              clientUser = await User.findById(clientId);
+            } else {
+              clientUser = await User.findOne({ userid: clientId });
+            }
+            
+            // Busca booster - verifica se é ObjectId ou userid
+            let boosterUser;
+            if (mongoose.Types.ObjectId.isValid(boosterId) && boosterId.length === 24) {
+              boosterUser = await User.findById(boosterId);
+            } else {
+              boosterUser = await User.findOne({ userid: boosterId });
+            }
             
             if (!clientUser) {
               throw new Error(`Client user not found: ${clientId}`);
@@ -326,8 +342,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 const WalletLedger = require('../models/WalletLedger');
                 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
                 
-                // Buscar cliente novamente para ter saldo atualizado
-                const clientForDebit = await User.findById(clientId);
+                // Buscar cliente novamente para ter saldo atualizado (suporta ObjectId e userid)
+                let clientForDebit;
+                if (mongoose.Types.ObjectId.isValid(clientId) && clientId.length === 24) {
+                  clientForDebit = await User.findById(clientId);
+                } else {
+                  clientForDebit = await User.findOne({ userid: clientId });
+                }
+                
+                if (!clientForDebit) {
+                  throw new Error(`Cliente não encontrado para débito: ${clientId}`);
+                }
+                
                 const clientBalanceBefore = round2(clientForDebit.walletBalance || 0);
                 
                 // Verificar saldo suficiente
