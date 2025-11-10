@@ -220,21 +220,6 @@ router.get('/list', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    // Log de debug para diagnóstico
-    console.log('[PURCHASES LIST DEBUG]', {
-      userId: String(userId),
-      type,
-      statusParam,
-      marketplacePurchases: purchases.length,
-      boostingOrders: boostingOrders.length,
-      boostingFilter: JSON.stringify(boostingFilter),
-      boostingStatusDistribution: boostingOrders.reduce((acc, bo) => {
-        const status = String(bo.status || 'null');
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {})
-    });
-
     // ========== BUSCAR DADOS ADICIONAIS ==========
     const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
     const allBuyerIds = Array.from(new Set([

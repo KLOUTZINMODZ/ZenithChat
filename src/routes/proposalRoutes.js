@@ -60,6 +60,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     if (typeof clientId === 'object' && clientId) {
       clientId = clientId._id || clientId.id;
     }
+    
+    // Converte IDs para string (podem vir como números)
+    if (boosterId) {
+      boosterId = String(boosterId);
+    }
+    if (clientId) {
+      clientId = String(clientId);
+    }
 
     // Request received - removed info log for performance
     
