@@ -234,21 +234,49 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             const mongoose = require('mongoose');
             const User = require('../models/User');
             
-            // Busca cliente - verifica se é ObjectId ou userid
-            let clientUser;
-            if (mongoose.Types.ObjectId.isValid(clientId) && clientId.length === 24) {
-              clientUser = await User.findById(clientId);
-            } else {
-              clientUser = await User.findOne({ userid: clientId });
-            }
+            // Função auxiliar para buscar usuário (local ou API principal)
+            const fetchUser = async (userId) => {
+              // Tenta buscar localmente primeiro
+              let user;
+              if (mongoose.Types.ObjectId.isValid(userId) && userId.length === 24) {
+                user = await User.findById(userId);
+              }
+              
+              // Se não encontrou localmente, busca na API principal
+              if (!user) {
+                try {
+                  const userResponse = await axios.get(
+                    `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/users/${userId}`,
+                    { headers: { Authorization: req.headers.authorization } }
+                  );
+                  
+                  if (userResponse.data && userResponse.data.user) {
+                    // Retorna dados do usuário da API principal
+                    return {
+                      _id: userId,
+                      name: userResponse.data.user.name || userResponse.data.user.username,
+                      email: userResponse.data.user.email,
+                      avatar: userResponse.data.user.avatar,
+                      rating: userResponse.data.user.rating || 0,
+                      isVerified: userResponse.data.user.isVerified || false,
+                      totalBoosts: userResponse.data.user.totalBoosts || 0,
+                      completedBoosts: userResponse.data.user.completedBoosts || 0,
+                      totalOrders: userResponse.data.user.totalOrders || 0,
+                      walletBalance: userResponse.data.user.walletBalance || 0
+                    };
+                  }
+                } catch (apiError) {
+                  // Se falhar na API, continua sem o usuário
+                  console.error(`Failed to fetch user ${userId} from API:`, apiError.message);
+                }
+              }
+              
+              return user;
+            };
             
-            // Busca booster - verifica se é ObjectId ou userid
-            let boosterUser;
-            if (mongoose.Types.ObjectId.isValid(boosterId) && boosterId.length === 24) {
-              boosterUser = await User.findById(boosterId);
-            } else {
-              boosterUser = await User.findOne({ userid: boosterId });
-            }
+            // Busca cliente e booster
+            const clientUser = await fetchUser(clientId);
+            const boosterUser = await fetchUser(boosterId);
             
             if (!clientUser) {
               throw new Error(`Client user not found: ${clientId}`);
@@ -342,16 +370,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 const WalletLedger = require('../models/WalletLedger');
                 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
                 
-                // Buscar cliente novamente para ter saldo atualizado (suporta ObjectId e userid)
+                // Buscar cliente novamente para ter saldo atualizado
+                // IMPORTANTE: Só pode debitar se usuário existe localmente no MongoDB
                 let clientForDebit;
                 if (mongoose.Types.ObjectId.isValid(clientId) && clientId.length === 24) {
                   clientForDebit = await User.findById(clientId);
-                } else {
-                  clientForDebit = await User.findOne({ userid: clientId });
                 }
                 
                 if (!clientForDebit) {
-                  throw new Error(`Cliente não encontrado para débito: ${clientId}`);
+                  // Se cliente não existe localmente, não pode debitar
+                  // Escrow será processado pela API principal
+                  console.warn(`Cliente ${clientId} não encontrado localmente - escrow delegado à API principal`);
+                  throw new Error(`Débito de escrow delegado à API principal para cliente: ${clientId}`);
                 }
                 
                 const clientBalanceBefore = round2(clientForDebit.walletBalance || 0);
