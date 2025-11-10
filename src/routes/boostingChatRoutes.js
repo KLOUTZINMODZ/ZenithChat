@@ -8,8 +8,15 @@ const AgreementMigrationMiddleware = require('../middleware/agreementMigrationMi
 const router = express.Router();
 const controller = new BoostingChatController();
 
-
-
+// OPTIONS handler para CORS preflight
+router.options('*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.status(204).end();
+});
 
 
 // Rotas de proposta/conversação
