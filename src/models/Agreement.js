@@ -51,14 +51,14 @@ const agreementSchema = new mongoose.Schema({
 
   parties: {
     client: {
-      userid: { type: mongoose.Schema.Types.ObjectId, required: true },
+      userid: { type: String, required: true },  // Alterado para String (suporta ObjectId e userid numérico)
       name: { type: String, required: true },
       email: String,
       avatar: String,
       metadata: { type: Map, of: mongoose.Schema.Types.Mixed }
     },
     booster: {
-      userid: { type: mongoose.Schema.Types.ObjectId, required: true },
+      userid: { type: String, required: true },  // Alterado para String (suporta ObjectId e userid numérico)
       name: { type: String, required: true },
       email: String,
       avatar: String,

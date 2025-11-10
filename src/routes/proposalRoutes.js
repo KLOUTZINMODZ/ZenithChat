@@ -448,8 +448,27 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 validProposalId = conversationId;
               }
               
+              // Garantir que conversationId é ObjectId válido
+              if (!conversationId) {
+                throw new Error('conversationId is required');
+              }
+              
+              let validConversationId;
+              if (mongoose.Types.ObjectId.isValid(conversationId)) {
+                validConversationId = conversationId;
+              } else {
+                throw new Error(`Invalid conversationId: ${conversationId}`);
+              }
+              
+              console.log(`📋 IDs validados:`, {
+                conversationId: validConversationId,
+                proposalId: validProposalId,
+                clientId,
+                boosterId
+              });
+              
               const agreement = new Agreement({
-                conversationId,
+                conversationId: validConversationId,
                 proposalId: validProposalId,
                 proposalSnapshot: {
                   game: proposalData.game || metadata?.game || 'N/A',
