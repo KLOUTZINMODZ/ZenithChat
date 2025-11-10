@@ -90,10 +90,77 @@ async function findOrCreateUserFromAPI(id, options = {}) {
     return newUser;
     
   } catch (error) {
+    // Se for erro de API externa
     if (error.response) {
       console.error(`[USER] Erro ao buscar usuário ${idStr} na API:`, error.response.status);
       throw new Error(`Usuário ${idStr} não encontrado (API retornou ${error.response.status})`);
     }
+    
+    // Se for erro de duplicate key (E11000) - usuário já existe com aquele email
+    if (error.code === 11000 || error.message.includes('E11000')) {
+      console.log(`[USER] Usuário com email duplicado detectado, buscando usuário existente...`);
+      
+      try {
+        // Tentar extrair o email do erro
+        const emailMatch = error.message.match(/email: "([^"]+)"/);
+        const email = emailMatch ? emailMatch[1] : null;
+        
+        if (email) {
+          // Buscar usuário por email
+          const existingUser = await User.findOne({ email }, null, options);
+          
+          if (existingUser) {
+            console.log(`[USER] Usuário encontrado por email: ${existingUser.name} (userid: ${existingUser.userid})`);
+            
+            // Se o userid não está definido ou é diferente, atualizar
+            if (!existingUser.userid || String(existingUser.userid) !== idStr) {
+              console.log(`[USER] Atualizando userid de ${existingUser.userid} para ${idStr}`);
+              existingUser.userid = idStr;
+              
+              if (options.session) {
+                await existingUser.save({ session: options.session });
+              } else {
+                await existingUser.save();
+              }
+            }
+            
+            return existingUser;
+          }
+        }
+        
+        // Se não conseguiu buscar por email, tentar buscar por nome/outras formas
+        console.warn(`[USER] Não foi possível extrair email do erro, tentando buscar de outras formas...`);
+        
+        // Buscar qualquer usuário com userid similar ou null
+        const userByUserId = await User.findOne({ 
+          $or: [
+            { userid: idStr },
+            { userid: { $exists: false } },
+            { userid: null }
+          ]
+        }, null, options).limit(1);
+        
+        if (userByUserId) {
+          console.log(`[USER] Usuário encontrado: ${userByUserId.name}`);
+          
+          // Atualizar userid
+          userByUserId.userid = idStr;
+          if (options.session) {
+            await userByUserId.save({ session: options.session });
+          } else {
+            await userByUserId.save();
+          }
+          
+          return userByUserId;
+        }
+        
+      } catch (searchError) {
+        console.error(`[USER] Erro ao buscar usuário existente:`, searchError.message);
+      }
+      
+      throw new Error(`Usuário ${idStr} já existe no banco mas não foi possível localizá-lo`);
+    }
+    
     throw new Error(`Erro ao buscar/criar usuário ${idStr}: ${error.message}`);
   }
 }
