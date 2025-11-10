@@ -219,6 +219,42 @@ userSchema.index({ phoneNormalized: 1 }, { unique: true, sparse: true });
 userSchema.index({ complaintsReceived: -1 });
 userSchema.index({ complaintsSent: -1 });
 
+// ==================== HOOKS ====================
+
+/**
+ * PRE-SAVE HOOK: Normalizar telefone automaticamente
+ * CRÍTICO: Previne erro E11000 duplicate key error em phoneNormalized
+ * 
+ * Problema: Se phone existe mas phoneNormalized é null, múltiplos usuários 
+ * terão phoneNormalized: null, violando índice unique.
+ * 
+ * Solução: Sempre que phone é definido, phoneNormalized é automaticamente 
+ * preenchido com o telefone normalizado (apenas dígitos).
+ */
+userSchema.pre('save', function(next) {
+  // Se telefone foi modificado ou é novo, normalizar
+  if (this.isModified('phone') || this.isNew) {
+    if (this.phone && typeof this.phone === 'string') {
+      // Normalizar: remover tudo que não for dígito
+      const normalized = this.phone.replace(/\D/g, '');
+      
+      // Só definir phoneNormalized se temos dígitos
+      if (normalized.length > 0) {
+        this.phoneNormalized = normalized;
+        console.log(`[User Model] 📱 Telefone normalizado: ${this.phone} → ${normalized}`);
+      } else {
+        // Se phone está vazio ou inválido, garantir que phoneNormalized seja null
+        this.phoneNormalized = null;
+      }
+    } else {
+      // Se phone é null/undefined, phoneNormalized também deve ser null
+      this.phoneNormalized = null;
+    }
+  }
+  
+  next();
+});
+
 
 userSchema.virtual('displayName').get(function() {
   return this.name || this.email.split('@')[0];

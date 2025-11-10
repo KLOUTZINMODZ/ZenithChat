@@ -33,7 +33,8 @@
     "boosting:check": "node ./scripts/checkBoostingOrders.js",
     "boosting:migrate": "node ./scripts/migrateAgreementsToBoostingOrders.js",
     "boosting:status": "node ./scripts/checkAgreementsAndBoostingOrders.js",
-    "fix:phone-index": "node ./scripts/fixPhoneNormalizedIndex.js"
+    "fix:phone-index": "node ./scripts/fixPhoneNormalizedIndex.js",
+    "fix:phone-data": "node ./scripts/fixPhoneNormalizedData.js"
   },
   "keywords": [
     "websocket",
