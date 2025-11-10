@@ -81,10 +81,13 @@ class MessageHandler {
       }
 
       // Validar conteúdo restrito (URLs e números de telefone)
-      const validation = validateMessage(content);
-      if (!validation.isValid) {
-        logger.warn(`User ${userId} attempted to send restricted content: ${validation.detectedContent || 'unknown'}`);
-        throw new Error(validation.reason || 'Conteúdo não permitido detectado');
+      // ✅ Apenas validar mensagens de texto (imagens/arquivos não precisam validação de conteúdo)
+      if (finalType === 'text' && content && content.trim()) {
+        const validation = validateMessage(content);
+        if (!validation.isValid) {
+          logger.warn(`User ${userId} attempted to send restricted content: ${validation.detectedContent || 'unknown'}`);
+          throw new Error(validation.reason || 'Conteúdo não permitido detectado');
+        }
       }
 
 
