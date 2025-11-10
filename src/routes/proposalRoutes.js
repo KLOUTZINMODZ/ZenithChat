@@ -48,11 +48,16 @@ router.get('/:proposalId/accept', auth, async (req, res) => {
 router.post('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
+    
+    // 🔍 DEBUG: Log do body ANTES da desestruturação
+    console.log(`\n📥 REQUEST RECEBIDO /proposals/${proposalId}/accept`);
+    console.log(`📋 req.body RAW:`, req.body);
+    console.log(`📋 req.body type:`, typeof req.body);
+    console.log(`📋 req.body stringified:`, JSON.stringify(req.body, null, 2));
+    
     let { conversationId, boosterId, clientId, metadata = {} } = req.body;
     
-    // 🔍 DEBUG: Log do request recebido
-    console.log(`\n📥 REQUEST RECEBIDO /proposals/${proposalId}/accept`);
-    console.log(`📋 Body:`, JSON.stringify(req.body, null, 2));
+    // 🔍 DEBUG: Log após desestruturação
     console.log(`📋 conversationId extraído:`, conversationId);
     console.log(`📋 boosterId extraído:`, boosterId);
     console.log(`📋 clientId extraído:`, clientId);
@@ -78,10 +83,37 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       clientId = String(clientId);
     }
     
-    // 🔧 FALLBACK: Se conversationId não veio no body, tenta extrair do metadata
+    // 🔧 FALLBACK: Se conversationId não veio no body, tenta extrair do metadata ou buscar conversa
     if (!conversationId && metadata?.conversationId) {
       conversationId = metadata.conversationId;
       console.log(`⚠️ conversationId extraído do metadata:`, conversationId);
+    }
+    
+    // 🔧 FALLBACK 2: Se ainda não tem conversationId, busca conversa pelo proposalId
+    if (!conversationId) {
+      console.log(`⚠️ conversationId ausente, buscando conversa pelo proposalId...`);
+      try {
+        const Conversation = require('../models/Conversation');
+        const foundConv = await Conversation.findOne({
+          isTemporary: true,
+          status: 'temporary',
+          $or: [
+            { 'metadata.proposalId': actualProposalId },
+            { 'metadata.proposalId': proposalId },
+            { proposal: actualProposalId },
+            { proposal: proposalId }
+          ]
+        });
+        
+        if (foundConv) {
+          conversationId = foundConv._id.toString();
+          console.log(`✅ conversationId encontrado pela conversa:`, conversationId);
+        } else {
+          console.error(`❌ Nenhuma conversa encontrada para proposalId: ${proposalId}/${actualProposalId}`);
+        }
+      } catch (convError) {
+        console.error(`❌ Erro ao buscar conversa:`, convError.message);
+      }
     }
 
     // Request received - removed info log for performance
