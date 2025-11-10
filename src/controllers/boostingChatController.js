@@ -16,9 +16,29 @@ function round2(v) {
   return Math.round(Number(v) * 100) / 100; 
 }
 
+/**
+ * Busca usuário de forma flexível - aceita tanto ObjectId quanto userid numérico
+ * @param {string|number} id - ObjectId ou userid
+ * @param {object} options - Opções do Mongoose (ex: { session })
+ * @returns {Promise<User|null>}
+ */
+async function findUserFlexible(id, options = {}) {
+  if (!id) return null;
+  
+  const idStr = String(id);
+  
+  // Se for um ObjectId válido (24 caracteres hex), buscar por _id
+  if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
+    return await User.findById(idStr, null, options);
+  }
+  
+  // Caso contrário, buscar por userid (numérico)
+  return await User.findOne({ userid: idStr }, null, options);
+}
+
 async function sendBalanceUpdate(app, userId) {
   try {
-    const u = await User.findById(userId);
+    const u = await findUserFlexible(userId);
     const notificationService = app?.locals?.notificationService;
     if (notificationService) {
       notificationService.sendToUser(String(userId), {
@@ -387,10 +407,77 @@ class BoostingChatController {
 
       try {
         let agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
+        
+        // 🔧 NOVO: DEVOLVER ESCROW AO CLIENTE ANTES DE CANCELAR
         if (agreement && ['pending', 'active'].includes(agreement.status)) {
+          try {
+            await runTx(async (session) => {
+              // Buscar escrow do cliente
+              const clientUserId = agreement.parties?.client?.userid;
+              const existingEscrow = await WalletLedger.findOne({
+                userId: clientUserId,
+                reason: 'boosting_escrow',
+                'metadata.agreementId': agreement._id.toString()
+              }).session(session);
+              
+              if (existingEscrow && existingEscrow.amount > 0) {
+                console.log(`[BOOSTING CANCEL] Escrow encontrado, devolvendo R$ ${existingEscrow.amount} ao cliente ${clientUserId}`);
+                
+                // Devolver saldo ao cliente
+                const clientUser = await findUserFlexible(clientUserId, { session });
+                if (clientUser) {
+                  const balanceBefore = round2(clientUser.walletBalance || 0);
+                  const balanceAfter = round2(balanceBefore + existingEscrow.amount);
+                  clientUser.walletBalance = balanceAfter;
+                  await clientUser.save({ session });
+                  
+                  // Registrar devolução do escrow
+                  await WalletLedger.create([{
+                    userId: clientUserId,
+                    txId: null,
+                    direction: 'credit',
+                    reason: 'boosting_escrow_refund',
+                    amount: existingEscrow.amount,
+                    operationId: `boosting_escrow_refund:${agreement._id}`,
+                    balanceBefore: balanceBefore,
+                    balanceAfter: balanceAfter,
+                    metadata: {
+                      source: 'boosting',
+                      agreementId: agreement._id.toString(),
+                      conversationId: conversationId,
+                      cancelledBy: userId.toString(),
+                      cancelReason: reason || 'Serviço cancelado',
+                      originalEscrowId: existingEscrow._id.toString(),
+                      type: 'escrow_refund'
+                    }
+                  }], { session });
+                  
+                  console.log(`[BOOSTING CANCEL] Escrow devolvido ao cliente:`, {
+                    clientId: clientUserId.toString(),
+                    amount: existingEscrow.amount,
+                    balanceBefore,
+                    balanceAfter
+                  });
+                  
+                  // Enviar atualização de saldo via WebSocket
+                  await sendBalanceUpdate(req.app, clientUserId);
+                } else {
+                  console.warn(`[BOOSTING CANCEL] Cliente ${clientUserId} não encontrado para devolução de escrow`);
+                }
+              } else {
+                console.log(`[BOOSTING CANCEL] Nenhum escrow encontrado para devolver (agreement ${agreement._id})`);
+              }
+            });
+          } catch (escrowErr) {
+            console.error(`[BOOSTING CANCEL] Erro ao devolver escrow:`, escrowErr.message);
+            // Não bloqueia o cancelamento, apenas loga o erro
+          }
+          
+          // Agora sim, cancelar o agreement
           const idemKey = `cancel_${conversationId}_${Date.now()}`;
           await agreement.cancel(userId, reason || '', idemKey);
         }
+        
         let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
         if (acceptedProposal) {
           try { await acceptedProposal.cancel(); } catch (_) {}
@@ -594,7 +681,7 @@ class BoostingChatController {
           });
           
           // Apenas registrar a liberação do escrow (não altera saldo)
-          const clientUser = await User.findById(clientUserId).session(session);
+          const clientUser = await findUserFlexible(clientUserId, { session });
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           clientBalanceAfter = clientBalanceBefore; // Saldo não muda
           
@@ -631,7 +718,7 @@ class BoostingChatController {
           // Debitar agora
           console.warn('[BOOSTING] Cliente NÃO foi debitado no escrow, debitando agora (fluxo legado)');
           
-          const clientUser = await User.findById(clientUserId).session(session);
+          const clientUser = await findUserFlexible(clientUserId, { session });
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           
           // Verificar se cliente tem saldo suficiente
@@ -677,7 +764,7 @@ class BoostingChatController {
         }
 
         // 2. Transferir 95% ao booster
-        const boosterUser = await User.findById(boosterUserId).session(session);
+        const boosterUser = await findUserFlexible(boosterUserId, { session });
         const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
         boosterUser.walletBalance = boosterBalanceAfter;
