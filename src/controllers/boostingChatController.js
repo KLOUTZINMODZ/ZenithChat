@@ -101,13 +101,16 @@ async function findOrCreateUserFromAPI(id, options = {}) {
       console.log(`[USER] Usuário com email duplicado detectado, buscando usuário existente...`);
       
       try {
+        // IMPORTANTE: Buscar FORA da transação porque ela foi abortada após o erro E11000
+        // Não passar options.session aqui
+        
         // Tentar extrair o email do erro
         const emailMatch = error.message.match(/email: "([^"]+)"/);
         const email = emailMatch ? emailMatch[1] : null;
         
         if (email) {
-          // Buscar usuário por email
-          const existingUser = await User.findOne({ email }, null, options);
+          // Buscar usuário por email (SEM session, fora da transação)
+          const existingUser = await User.findOne({ email });
           
           if (existingUser) {
             console.log(`[USER] Usuário encontrado por email: ${existingUser.name} (userid: ${existingUser.userid})`);
@@ -117,39 +120,32 @@ async function findOrCreateUserFromAPI(id, options = {}) {
               console.log(`[USER] Atualizando userid de ${existingUser.userid} para ${idStr}`);
               existingUser.userid = idStr;
               
-              if (options.session) {
-                await existingUser.save({ session: options.session });
-              } else {
-                await existingUser.save();
-              }
+              // Salvar SEM session (fora da transação)
+              await existingUser.save();
             }
             
             return existingUser;
           }
         }
         
-        // Se não conseguiu buscar por email, tentar buscar por nome/outras formas
+        // Se não conseguiu buscar por email, tentar buscar por outras formas
         console.warn(`[USER] Não foi possível extrair email do erro, tentando buscar de outras formas...`);
         
-        // Buscar qualquer usuário com userid similar ou null
+        // Buscar qualquer usuário com userid similar ou null (SEM session)
         const userByUserId = await User.findOne({ 
           $or: [
             { userid: idStr },
             { userid: { $exists: false } },
             { userid: null }
           ]
-        }, null, options).limit(1);
+        }).limit(1);
         
         if (userByUserId) {
           console.log(`[USER] Usuário encontrado: ${userByUserId.name}`);
           
-          // Atualizar userid
+          // Atualizar userid (SEM session)
           userByUserId.userid = idStr;
-          if (options.session) {
-            await userByUserId.save({ session: options.session });
-          } else {
-            await userByUserId.save();
-          }
+          await userByUserId.save();
           
           return userByUserId;
         }
