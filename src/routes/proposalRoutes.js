@@ -235,55 +235,81 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             const User = require('../models/User');
             
             // Função auxiliar para buscar usuário (local ou API principal)
-            const fetchUser = async (userId) => {
+            const fetchUser = async (userId, userType = 'user') => {
               // Tenta buscar localmente primeiro
               let user;
               if (mongoose.Types.ObjectId.isValid(userId) && userId.length === 24) {
                 user = await User.findById(userId);
-              }
-              
-              // Se não encontrou localmente, busca na API principal
-              if (!user) {
-                try {
-                  const userResponse = await axios.get(
-                    `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/users/${userId}`,
-                    { headers: { Authorization: req.headers.authorization } }
-                  );
-                  
-                  if (userResponse.data && userResponse.data.user) {
-                    // Retorna dados do usuário da API principal
-                    return {
-                      _id: userId,
-                      name: userResponse.data.user.name || userResponse.data.user.username,
-                      email: userResponse.data.user.email,
-                      avatar: userResponse.data.user.avatar,
-                      rating: userResponse.data.user.rating || 0,
-                      isVerified: userResponse.data.user.isVerified || false,
-                      totalBoosts: userResponse.data.user.totalBoosts || 0,
-                      completedBoosts: userResponse.data.user.completedBoosts || 0,
-                      totalOrders: userResponse.data.user.totalOrders || 0,
-                      walletBalance: userResponse.data.user.walletBalance || 0
-                    };
-                  }
-                } catch (apiError) {
-                  // Se falhar na API, continua sem o usuário
-                  console.error(`Failed to fetch user ${userId} from API:`, apiError.message);
+                if (user) {
+                  console.log(`✅ ${userType} ${userId} encontrado no MongoDB local`);
+                  return user;
                 }
               }
               
-              return user;
+              // Se não encontrou localmente, busca na API principal
+              console.log(`🔍 Buscando ${userType} ${userId} na API principal...`);
+              
+              try {
+                const apiUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/users/${userId}`;
+                console.log(`📡 URL da API: ${apiUrl}`);
+                
+                const userResponse = await axios.get(apiUrl, {
+                  headers: { Authorization: req.headers.authorization },
+                  timeout: 10000
+                });
+                
+                console.log(`📦 Resposta da API (status ${userResponse.status}):`, JSON.stringify(userResponse.data).substring(0, 200));
+                
+                // Tenta múltiplos formatos de resposta
+                const userData = userResponse.data?.user || userResponse.data?.data || userResponse.data;
+                
+                if (userData && (userData.id || userData._id || userData.userid)) {
+                  console.log(`✅ ${userType} encontrado na API principal:`, userData.name || userData.username);
+                  
+                  return {
+                    _id: userId,
+                    name: userData.name || userData.username || 'Usuário',
+                    email: userData.email || `user${userId}@hacklote.com`,
+                    avatar: userData.avatar || null,
+                    rating: userData.rating || 0,
+                    isVerified: userData.isVerified || false,
+                    totalBoosts: userData.totalBoosts || 0,
+                    completedBoosts: userData.completedBoosts || 0,
+                    totalOrders: userData.totalOrders || 0,
+                    walletBalance: userData.walletBalance || 0
+                  };
+                }
+                
+                console.error(`❌ ${userType} ${userId} não encontrado na resposta da API`);
+              } catch (apiError) {
+                console.error(`❌ Erro ao buscar ${userType} ${userId} na API:`, {
+                  message: apiError.message,
+                  status: apiError.response?.status,
+                  data: apiError.response?.data
+                });
+              }
+              
+              return null;
             };
             
-            // Busca cliente e booster
-            const clientUser = await fetchUser(clientId);
-            const boosterUser = await fetchUser(boosterId);
+            // Busca cliente e booster com logs identificados
+            console.log(`\n🔍 Iniciando busca de usuários...`);
+            console.log(`📋 Cliente ID: ${clientId}`);
+            console.log(`📋 Booster ID: ${boosterId}`);
+            
+            const clientUser = await fetchUser(clientId, 'Cliente');
+            const boosterUser = await fetchUser(boosterId, 'Booster');
             
             if (!clientUser) {
+              console.error(`❌ ERRO CRÍTICO: Cliente ${clientId} não encontrado`);
               throw new Error(`Client user not found: ${clientId}`);
             }
             if (!boosterUser) {
+              console.error(`❌ ERRO CRÍTICO: Booster ${boosterId} não encontrado`);
               throw new Error(`Booster user not found: ${boosterId}`);
             }
+            
+            console.log(`✅ Ambos usuários encontrados - prosseguindo com Agreement...`);
             
             if (clientUser && boosterUser) {
               // Extrai dados da proposta (pode estar em metadata.proposalData ou direto no metadata)
