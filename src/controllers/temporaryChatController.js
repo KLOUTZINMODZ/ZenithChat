@@ -307,7 +307,48 @@ class TemporaryChatController {
       try {
         const wsServer = require('../websocket/WebSocketServer');
         if (wsServer && wsServer.sendToUser) {
+          
+          // Dados completos da conversa para o evento
+          const conversationData = {
+            _id: conversation._id,
+            participants: [
+              { user: clientData, role: 'client' },
+              { user: boosterData, role: 'booster' }
+            ],
+            isTemporary: true,
+            status: 'pending',
+            expiresAt: expiresAt,
+            metadata: {
+              proposalId,
+              proposalData
+            },
+            lastMessage: {
+              content: initialMessage.content,
+              createdAt: initialMessage.createdAt,
+              type: 'system'
+            },
+            unreadCount: 1,
+            updatedAt: conversation.updatedAt || new Date().toISOString(),
+            createdAt: conversation.createdAt || new Date().toISOString(),
+            type: 'boosting'
+          };
 
+          // ✅ NOVO: Emitir conversation:new com dados completos
+          wsServer.sendToUser(clientId, {
+            type: 'conversation:new',
+            data: {
+              conversation: conversationData
+            }
+          });
+          
+          wsServer.sendToUser(boosterId, {
+            type: 'conversation:new',
+            data: {
+              conversation: conversationData
+            }
+          });
+          
+          // ✅ Também manter proposal:received para compatibilidade
           wsServer.sendToUser(clientId, {
             type: 'proposal:received',
             data: {
@@ -333,6 +374,12 @@ class TemporaryChatController {
               expiresAt: expiresAt,
               timestamp: new Date().toISOString()
             }
+          });
+          
+          console.log('✅ Eventos WebSocket emitidos:', {
+            'conversation:new': true,
+            'proposal:received': true,
+            conversationId: conversation._id
           });
         }
       } catch (wsError) {
