@@ -36,6 +36,68 @@ async function findUserFlexible(id, options = {}) {
   return await User.findOne({ userid: idStr }, null, options);
 }
 
+/**
+ * Busca usuário localmente ou na API externa, criando localmente se necessário
+ * @param {string|number} id - ObjectId ou userid
+ * @param {object} options - Opções do Mongoose (ex: { session })
+ * @returns {Promise<User>}
+ * @throws {Error} Se usuário não for encontrado em lugar nenhum
+ */
+async function findOrCreateUserFromAPI(id, options = {}) {
+  // Primeiro tentar buscar localmente
+  let user = await findUserFlexible(id, options);
+  if (user) return user;
+  
+  // Se não encontrou localmente e é um userid numérico, buscar na API
+  const idStr = String(id);
+  const isNumericUserId = /^\d+$/.test(idStr);
+  
+  if (!isNumericUserId) {
+    throw new Error(`Usuário não encontrado: ${id}`);
+  }
+  
+  console.log(`[USER] Usuário ${idStr} não encontrado localmente, buscando na API externa...`);
+  
+  try {
+    const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
+    const response = await axios.get(`${apiUrl}/api/users/${idStr}`);
+    
+    if (!response.data?.success || !response.data?.data) {
+      throw new Error(`Usuário ${idStr} não encontrado na API externa`);
+    }
+    
+    const apiUser = response.data.data;
+    console.log(`[USER] Usuário encontrado na API: ${apiUser.name || apiUser.username}`);
+    
+    // Criar usuário localmente
+    const newUser = new User({
+      userid: apiUser.userid || idStr,
+      name: apiUser.name || apiUser.username || 'Usuário',
+      email: apiUser.email || null,
+      avatar: apiUser.avatar || null,
+      walletBalance: 0, // Saldo inicial zero
+      role: 'user'
+    });
+    
+    // Se temos uma session, salvar com ela
+    if (options.session) {
+      await newUser.save({ session: options.session });
+    } else {
+      await newUser.save();
+    }
+    
+    console.log(`[USER] Usuário ${idStr} criado localmente no MongoDB`);
+    return newUser;
+    
+  } catch (error) {
+    if (error.response) {
+      console.error(`[USER] Erro ao buscar usuário ${idStr} na API:`, error.response.status);
+      throw new Error(`Usuário ${idStr} não encontrado (API retornou ${error.response.status})`);
+    }
+    throw new Error(`Erro ao buscar/criar usuário ${idStr}: ${error.message}`);
+  }
+}
+
 async function sendBalanceUpdate(app, userId) {
   try {
     const u = await findUserFlexible(userId);
@@ -424,7 +486,7 @@ class BoostingChatController {
                 console.log(`[BOOSTING CANCEL] Escrow encontrado, devolvendo R$ ${existingEscrow.amount} ao cliente ${clientUserId}`);
                 
                 // Devolver saldo ao cliente
-                const clientUser = await findUserFlexible(clientUserId, { session });
+                const clientUser = await findOrCreateUserFromAPI(clientUserId, { session });
                 if (clientUser) {
                   const balanceBefore = round2(clientUser.walletBalance || 0);
                   const balanceAfter = round2(balanceBefore + existingEscrow.amount);
@@ -681,7 +743,7 @@ class BoostingChatController {
           });
           
           // Apenas registrar a liberação do escrow (não altera saldo)
-          const clientUser = await findUserFlexible(clientUserId, { session });
+          const clientUser = await findOrCreateUserFromAPI(clientUserId, { session });
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           clientBalanceAfter = clientBalanceBefore; // Saldo não muda
           
@@ -718,7 +780,7 @@ class BoostingChatController {
           // Debitar agora
           console.warn('[BOOSTING] Cliente NÃO foi debitado no escrow, debitando agora (fluxo legado)');
           
-          const clientUser = await findUserFlexible(clientUserId, { session });
+          const clientUser = await findOrCreateUserFromAPI(clientUserId, { session });
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           
           // Verificar se cliente tem saldo suficiente
@@ -764,7 +826,8 @@ class BoostingChatController {
         }
 
         // 2. Transferir 95% ao booster
-        const boosterUser = await findUserFlexible(boosterUserId, { session });
+        // Usar findOrCreateUserFromAPI pois o booster pode estar apenas na API externa
+        const boosterUser = await findOrCreateUserFromAPI(boosterUserId, { session });
         const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
         boosterUser.walletBalance = boosterBalanceAfter;
