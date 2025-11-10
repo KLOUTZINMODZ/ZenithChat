@@ -49,6 +49,15 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
   try {
     const { proposalId } = req.params;
     let { conversationId, boosterId, clientId, metadata = {} } = req.body;
+    
+    // 🔍 DEBUG: Log do request recebido
+    console.log(`\n📥 REQUEST RECEBIDO /proposals/${proposalId}/accept`);
+    console.log(`📋 Body:`, JSON.stringify(req.body, null, 2));
+    console.log(`📋 conversationId extraído:`, conversationId);
+    console.log(`📋 boosterId extraído:`, boosterId);
+    console.log(`📋 clientId extraído:`, clientId);
+    console.log(`📋 metadata extraído:`, JSON.stringify(metadata, null, 2));
+    
     let actualProposalId = proposalId;
     let boostingId = metadata?.boostingId;
     let lookupData = null;
@@ -67,6 +76,12 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     }
     if (clientId) {
       clientId = String(clientId);
+    }
+    
+    // 🔧 FALLBACK: Se conversationId não veio no body, tenta extrair do metadata
+    if (!conversationId && metadata?.conversationId) {
+      conversationId = metadata.conversationId;
+      console.log(`⚠️ conversationId extraído do metadata:`, conversationId);
     }
 
     // Request received - removed info log for performance
