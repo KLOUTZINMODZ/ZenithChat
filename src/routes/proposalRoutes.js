@@ -313,12 +313,66 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             
             if (clientUser && boosterUser) {
               // Extrai dados da proposta (pode estar em metadata.proposalData ou direto no metadata)
-              const proposalData = metadata?.proposalData || {};
-              const proposalPrice = proposalData.price || metadata?.price || metadata?.proposedPrice || 0;
+              let proposalData = metadata?.proposalData || {};
+              let proposalPrice = proposalData.price || metadata?.price || metadata?.proposedPrice || 0;
+              
+              // Se preço não foi passado no metadata, busca da API principal
+              if (!proposalPrice || proposalPrice <= 0) {
+                console.log(`⚠️ Preço não encontrado no metadata, buscando proposta na API...`);
+                console.log(`📋 Proposal ID: ${actualProposalId}`);
+                console.log(`📋 Boosting ID: ${boostingId}`);
+                
+                try {
+                  // Busca a proposta completa da API principal
+                  const proposalUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${actualProposalId}`;
+                  console.log(`📡 URL da proposta: ${proposalUrl}`);
+                  
+                  const proposalResponse = await axios.get(proposalUrl, {
+                    headers: { Authorization: req.headers.authorization },
+                    timeout: 10000
+                  });
+                  
+                  console.log(`📦 Resposta da proposta (status ${proposalResponse.status})`);
+                  
+                  const proposal = proposalResponse.data?.proposal || proposalResponse.data?.data || proposalResponse.data;
+                  
+                  if (proposal) {
+                    proposalPrice = proposal.price || proposal.proposedPrice || proposal.amount || 0;
+                    proposalData = {
+                      price: proposalPrice,
+                      game: proposal.game || metadata?.game || 'N/A',
+                      category: proposal.category || metadata?.category || 'Boosting',
+                      currentRank: proposal.currentRank || metadata?.currentRank || 'N/A',
+                      desiredRank: proposal.desiredRank || metadata?.desiredRank || 'N/A',
+                      description: proposal.description || metadata?.description || '',
+                      estimatedTime: proposal.estimatedTime || metadata?.estimatedTime || ''
+                    };
+                    
+                    console.log(`✅ Dados da proposta obtidos da API:`, {
+                      price: proposalPrice,
+                      game: proposalData.game,
+                      category: proposalData.category
+                    });
+                  }
+                } catch (apiError) {
+                  console.error(`❌ Erro ao buscar proposta da API:`, {
+                    message: apiError.message,
+                    status: apiError.response?.status,
+                    data: apiError.response?.data
+                  });
+                }
+              }
               
               if (!proposalPrice || proposalPrice <= 0) {
-                throw new Error(`Invalid proposal price: ${proposalPrice}`);
+                console.error(`❌ ERRO CRÍTICO: Preço inválido após todas tentativas:`, {
+                  proposalPrice,
+                  metadata,
+                  proposalData
+                });
+                throw new Error(`Invalid proposal price: ${proposalPrice}. Metadata: ${JSON.stringify(metadata)}`);
               }
+              
+              console.log(`✅ Preço validado: R$ ${proposalPrice.toFixed(2)}`);
               
               // Validar e converter proposalId para ObjectId válido
               const mongoose = require('mongoose');
