@@ -332,11 +332,11 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                     timeout: 10000
                   });
                   
-                  console.log(`📦 Resposta da proposta (status ${proposalResponse.status})`);
+                  console.log(`📦 Resposta da proposta (status ${proposalResponse.status}):`, JSON.stringify(proposalResponse.data, null, 2));
                   
                   const proposal = proposalResponse.data?.proposal || proposalResponse.data?.data || proposalResponse.data;
                   
-                  if (proposal) {
+                  if (proposal && (proposal.price || proposal.proposedPrice || proposal.amount)) {
                     proposalPrice = proposal.price || proposal.proposedPrice || proposal.amount || 0;
                     proposalData = {
                       price: proposalPrice,
@@ -353,6 +353,49 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                       game: proposalData.game,
                       category: proposalData.category
                     });
+                  } else {
+                    // Se endpoint específico não retornou preço, tenta buscar lista de propostas
+                    console.log(`⚠️ Proposta específica sem preço, buscando lista de propostas...`);
+                    
+                    try {
+                      const proposalsListUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals`;
+                      console.log(`📡 URL lista propostas: ${proposalsListUrl}`);
+                      
+                      const proposalsResponse = await axios.get(proposalsListUrl, {
+                        headers: { Authorization: req.headers.authorization },
+                        timeout: 10000
+                      });
+                      
+                      const proposals = proposalsResponse.data?.proposals || proposalsResponse.data?.data || [];
+                      console.log(`📦 Total de propostas encontradas: ${proposals.length}`);
+                      
+                      // Encontra a proposta pelo ID
+                      const matchingProposal = proposals.find(p => 
+                        String(p._id || p.id) === String(actualProposalId)
+                      );
+                      
+                      if (matchingProposal) {
+                        proposalPrice = matchingProposal.price || matchingProposal.proposedPrice || matchingProposal.amount || 0;
+                        proposalData = {
+                          price: proposalPrice,
+                          game: matchingProposal.game || metadata?.game || 'N/A',
+                          category: matchingProposal.category || metadata?.category || 'Boosting',
+                          currentRank: matchingProposal.currentRank || metadata?.currentRank || 'N/A',
+                          desiredRank: matchingProposal.desiredRank || metadata?.desiredRank || 'N/A',
+                          description: matchingProposal.description || metadata?.description || '',
+                          estimatedTime: matchingProposal.estimatedTime || metadata?.estimatedTime || ''
+                        };
+                        
+                        console.log(`✅ Proposta encontrada na lista:`, {
+                          price: proposalPrice,
+                          game: proposalData.game
+                        });
+                      } else {
+                        console.error(`❌ Proposta ${actualProposalId} não encontrada na lista`);
+                      }
+                    } catch (listError) {
+                      console.error(`❌ Erro ao buscar lista de propostas:`, listError.message);
+                    }
                   }
                 } catch (apiError) {
                   console.error(`❌ Erro ao buscar proposta da API:`, {
