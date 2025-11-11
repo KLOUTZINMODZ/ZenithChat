@@ -220,27 +220,71 @@ router.get('/list', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    // ========== FALLBACK: BUSCAR AGREEMENTS (para boostings não migrados) ==========
+    const agreementFilter = {};
+    
+    // Filtrar por status se especificado (mapear para status de Agreement)
+    if (statusParam) {
+      const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
+      if (statuses.length > 0) {
+        // Mapear status UI para status de Agreement
+        const mappedStatuses = statuses.map(s => {
+          if (s === 'shipped') return 'active';
+          if (s === 'initiated') return 'pending';
+          return s; // completed, cancelled permanecem iguais
+        });
+        agreementFilter.status = { $in: mappedStatuses };
+      }
+    }
+    
+    if (type === 'sales') {
+      agreementFilter['parties.booster.userid'] = userId;
+    } else if (type === 'purchases') {
+      agreementFilter['parties.client.userid'] = userId;
+    } else {
+      agreementFilter.$or = [
+        { 'parties.booster.userid': userId },
+        { 'parties.client.userid': userId }
+      ];
+    }
+
+    // Buscar apenas agreements que NÃO foram migrados (não têm BoostingOrder correspondente)
+    const existingBoostingOrderAgreementIds = (boostingOrders || []).map(bo => String(bo.agreementId)).filter(Boolean);
+    if (existingBoostingOrderAgreementIds.length > 0) {
+      agreementFilter._id = { $nin: existingBoostingOrderAgreementIds.map(id => mongoose.Types.ObjectId(id)) };
+    }
+
+    const agreementsNotMigrated = await Agreement.find(agreementFilter)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    console.log('[PURCHASES LIST] BoostingOrders:', boostingOrders.length, 'Agreements não migrados:', agreementsNotMigrated.length);
+
     // ========== BUSCAR DADOS ADICIONAIS ==========
     const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
     const allBuyerIds = Array.from(new Set([
       ...(purchases || []).map(p => (p.buyerId || '').toString()).filter(Boolean),
-      ...(boostingOrders || []).map(bo => (bo.clientId || '').toString()).filter(Boolean)
+      ...(boostingOrders || []).map(bo => (bo.clientId || '').toString()).filter(Boolean),
+      ...(agreementsNotMigrated || []).map(ag => (ag.parties?.client?.userid || '').toString()).filter(Boolean)
     ]));
     const allSellerIds = Array.from(new Set([
       ...(purchases || []).map(p => (p.sellerId || '').toString()).filter(Boolean),
-      ...(boostingOrders || []).map(bo => (bo.boosterId || '').toString()).filter(Boolean)
+      ...(boostingOrders || []).map(bo => (bo.boosterId || '').toString()).filter(Boolean),
+      ...(agreementsNotMigrated || []).map(ag => (ag.parties?.booster?.userid || '').toString()).filter(Boolean)
     ]));
 
     // Buscar reviews para verificar quais pedidos já foram avaliados
     const purchaseIds = (purchases || []).map(p => p._id);
     const boostingOrderIds = (boostingOrders || []).map(bo => bo.agreementId);
+    const agreementIds = (agreementsNotMigrated || []).map(ag => ag._id);
+    const allAgreementIds = [...boostingOrderIds, ...agreementIds];
     
     const [items, buyers, sellers, purchaseReviews, boostingReviews] = await Promise.all([
       MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images').lean(),
       User.find({ _id: { $in: allBuyerIds } }).select('_id name legalName username avatar').lean(),
       User.find({ _id: { $in: allSellerIds } }).select('_id name legalName username avatar').lean(),
       Review.find({ purchaseId: { $in: purchaseIds } }).select('purchaseId').lean(),
-      Review.find({ agreementId: { $in: boostingOrderIds } }).select('agreementId').lean()
+      Review.find({ agreementId: { $in: allAgreementIds } }).select('agreementId').lean()
     ]);
 
     const itemMap = new Map((items || []).map(d => [String(d._id), d]));
@@ -346,8 +390,75 @@ router.get('/list', auth, async (req, res) => {
       };
     });
 
+    // ========== FORMAT AGREEMENTS NÃO MIGRADOS ==========
+    const formattedAgreements = (agreementsNotMigrated || []).map(ag => {
+      const clientId = ag.parties?.client?.userid || '';
+      const boosterId = ag.parties?.booster?.userid || '';
+      const buyer = buyerMap.get(String(clientId));
+      const seller = sellerMap.get(String(boosterId));
+      
+      const title = ag.proposalSnapshot?.game 
+        ? `Boosting ${ag.proposalSnapshot.game}` 
+        : ag.metadata?.boostingData?.game
+        ? `Boosting ${ag.metadata.boostingData.game}`
+        : 'Boosting';
+      
+      // Mapear status do Agreement para status compatível com marketplace UI
+      const agreementStatus = String(ag.status || 'pending').toLowerCase();
+      let mappedStatus = agreementStatus;
+      
+      if (agreementStatus === 'active') {
+        mappedStatus = 'shipped'; // Em andamento
+      } else if (agreementStatus === 'pending') {
+        mappedStatus = 'initiated'; // Pendente
+      }
+      // completed e cancelled permanecem iguais
+      
+      // Determinar timestamp correto baseado no status
+      let orderTimestamp = ag.createdAt;
+      if (agreementStatus === 'completed' && ag.completedAt) {
+        orderTimestamp = ag.completedAt;
+      } else if (agreementStatus === 'cancelled' && ag.cancelledAt) {
+        orderTimestamp = ag.cancelledAt;
+      } else if (agreementStatus === 'active' && ag.activatedAt) {
+        orderTimestamp = ag.activatedAt;
+      }
+      
+      return {
+        _id: String(ag._id),
+        orderNumber: ag.agreementId || String(ag._id).slice(-8).toUpperCase(),
+        status: mappedStatus,
+        price: Number(ag.proposalSnapshot?.price || ag.price || 0),
+        feePercent: 0,
+        feeAmount: 0,
+        sellerReceives: Number(ag.proposalSnapshot?.price || ag.price || 0),
+        createdAt: orderTimestamp,
+        type: 'boosting',
+        hasReview: agreementReviewSet.has(String(ag._id)),
+        item: { 
+          _id: String(ag.boostingRequestId || ''), 
+          title, 
+          image: '' 
+        },
+        buyer: { 
+          _id: String(clientId), 
+          name: ag.parties?.client?.name || userName(buyer)
+        },
+        seller: { 
+          _id: String(boosterId), 
+          name: ag.parties?.booster?.name || userName(seller)
+        },
+        boostingRequest: {
+          _id: String(ag.boostingRequestId || ''),
+          game: ag.proposalSnapshot?.game || ag.metadata?.boostingData?.game || '',
+          currentRank: ag.proposalSnapshot?.currentRank || ag.metadata?.boostingData?.currentRank,
+          desiredRank: ag.proposalSnapshot?.desiredRank || ag.metadata?.boostingData?.desiredRank
+        }
+      };
+    });
+
     // ========== MERGE AND PAGINATE ==========
-    const allOrders = [...marketplaceOrders, ...formattedBoostingOrders].sort((a, b) => 
+    const allOrders = [...marketplaceOrders, ...formattedBoostingOrders, ...formattedAgreements].sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
@@ -358,6 +469,7 @@ router.get('/list', auth, async (req, res) => {
     console.log('[PURCHASES LIST RESULT]', {
       marketplaceOrders: marketplaceOrders.length,
       formattedBoostingOrders: formattedBoostingOrders.length,
+      formattedAgreements: formattedAgreements.length,
       totalMerged: allOrders.length,
       paginatedCount: paginatedOrders.length,
       typesInPaginated: paginatedOrders.map(o => o.type)
