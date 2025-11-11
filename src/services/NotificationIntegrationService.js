@@ -251,6 +251,18 @@ class NotificationIntegrationService {
         notifications = notifications.filter(n => !n.isRead);
       }
 
+      // ✅ Garantir que todas as notificações tenham timestamp válido
+      notifications = notifications.map(n => {
+        if (!n.timestamp || isNaN(new Date(n.timestamp).getTime())) {
+          logger.warn(`Notification ${n.id || n._id} missing or invalid timestamp, adding fallback`);
+          return {
+            ...n,
+            timestamp: n.createdAt || n.deliveredAt || new Date().toISOString()
+          };
+        }
+        return n;
+      });
+
       return notifications.slice(0, limit);
 
     } catch (error) {
