@@ -251,7 +251,7 @@ router.get('/list', auth, async (req, res) => {
     // Buscar apenas agreements que NÃO foram migrados (não têm BoostingOrder correspondente)
     const existingBoostingOrderAgreementIds = (boostingOrders || []).map(bo => String(bo.agreementId)).filter(Boolean);
     if (existingBoostingOrderAgreementIds.length > 0) {
-      agreementFilter._id = { $nin: existingBoostingOrderAgreementIds.map(id => mongoose.Types.ObjectId(id)) };
+      agreementFilter._id = { $nin: existingBoostingOrderAgreementIds.map(id => new mongoose.Types.ObjectId(id)) };
     }
 
     const agreementsNotMigrated = await Agreement.find(agreementFilter)
