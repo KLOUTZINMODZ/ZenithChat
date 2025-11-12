@@ -98,6 +98,19 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Lista de itens favoritos do usuário
+  favorites: {
+    type: [{
+      itemId: { type: String, required: true },
+      title: { type: String, required: true },
+      price: { type: Number, required: true },
+      image: { type: String, default: null },
+      category: { type: String, default: null },
+      addedAt: { type: Date, default: Date.now }
+    }],
+    default: []
+  },
+  
   preferences: {
     notifications: {
       newProposal: {

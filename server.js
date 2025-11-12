@@ -35,6 +35,7 @@ const temporaryChatCleanupService = require('./src/services/temporaryChatCleanup
 const purchasesRoutes = require('./src/routes/purchasesRoutes');
 const supportRoutes = require('./src/routes/supportRoutes');
 const userRoutes = require('./src/routes/userRoutes');
+const favoritesRoutes = require('./src/routes/favoritesRoutes');
 const purchaseAutoReleaseService = require('./src/services/purchaseAutoReleaseService');
 const cleanupService = require('./src/services/CleanupService');
 const mongoose = require('mongoose');
@@ -220,6 +221,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminLimiter, adminRoutes);
 app.use('/api/admin', adminLimiter, adminReviewRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/favorites', favoritesRoutes);
 app.use('/api/email', emailVerificationRoutes);
 app.use('/api/qa', qaRoutes);
 app.use('/api/ai/support', aiSupportRoutes);
