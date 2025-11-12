@@ -97,6 +97,15 @@ app.use(cors(corsOptions));
 // Apenas erros são logados via winston logger
 
 app.use(express.json({ limit: '30mb' })); // Aumentado para suportar uploads de até 25 MB
+
+// Middleware de diagnóstico para todas as requisições
+app.use((req, res, next) => {
+  logger.error(`GLOBAL ROUTE DEBUG: ${req.method} ${req.originalUrl}`);
+  if (req.method === 'POST' || req.method === 'PUT') {
+    logger.error(`BODY: ${JSON.stringify(req.body)}`);
+  }
+  next();
+});
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
 // Middleware para servir imagens do banco de dados (com fallback para disco)
@@ -138,6 +147,27 @@ app.use('/uploads/*', (req, res) => {
 // Rate limiters específicos removidos daqui - aplicados por rota abaixo
 
 
+// Endpoints de teste direto no server.js
+app.get('/api/direct-test', (req, res) => {
+  logger.error('GET /api/direct-test chamado');
+  res.json({
+    success: true,
+    message: 'GET test endpoint works!',
+    method: 'GET'
+  });
+});
+
+app.post('/api/direct-test', (req, res) => {
+  logger.error('POST /api/direct-test chamado');
+  logger.error('Body recebido: ' + JSON.stringify(req.body));
+  res.json({
+    success: true,
+    message: 'POST test endpoint works!',
+    method: 'POST',
+    receivedData: req.body
+  });
+});
+
 app.get('/', (req, res) => {
   res.json({
     name: 'Zenith Chat API',
@@ -146,6 +176,7 @@ app.get('/', (req, res) => {
     description: 'WebSocket-based real-time messaging API for Zenith marketplace',
     endpoints: {
       health: 'GET /health',
+      directTest: 'GET/POST /api/direct-test',
       auth: {
         validate: 'POST /api/auth/validate',
         wsToken: 'GET /api/auth/ws-token'
