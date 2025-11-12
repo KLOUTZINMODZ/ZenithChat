@@ -32,6 +32,10 @@ const getFavorites = async (req, res) => {
  */
 const addFavorite = async (req, res) => {
   try {
+    console.log('addFavorite chamado com método:', req.method);
+    console.log('Headers recebidos:', req.headers);
+    console.log('Body recebido:', req.body);
+    
     const { itemId, title, price, image, category } = req.body;
     
     // Validação básica
