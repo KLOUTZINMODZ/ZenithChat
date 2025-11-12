@@ -1,8 +1,8 @@
 const winston = require('winston');
 const path = require('path');
 
-// Configurando para logs mais detalhados durante desenvolvimento
-const logLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV !== 'production' ? 'info' : 'error');
+// Apenas erros para evitar consumo excessivo de memória e logs desnecessárias
+const logLevel = process.env.LOG_LEVEL || 'error';
 
 const logger = winston.createLogger({
   level: logLevel,
@@ -24,20 +24,14 @@ const logger = winston.createLogger({
   ],
 });
 
-// Em desenvolvimento, exibir logs mais detalhados no console
+// Console apenas para erros críticos em desenvolvimento
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
-    level: 'info', // Alterado de error para info
+    level: 'error',
     format: winston.format.combine(
       winston.format.colorize(),
       winston.format.simple()
     )
-  }));
-
-  // Adiciona transporte para arquivo de debug separado
-  logger.add(new winston.transports.File({
-    filename: path.join('logs', 'debug.log'),
-    level: 'debug'
   }));
 }
 

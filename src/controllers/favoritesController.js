@@ -1,5 +1,4 @@
 const User = require('../models/User');
-const logger = require('../utils/logger');
 
 /**
  * Obtém todos os favoritos do usuário
@@ -33,11 +32,6 @@ const getFavorites = async (req, res) => {
  */
 const addFavorite = async (req, res) => {
   try {
-    // Usando logger.error para garantir que apareça nos logs
-    logger.error('DEBUG: addFavorite chamado com método: ' + req.method);
-    logger.error('DEBUG: Headers recebidos: ' + JSON.stringify(req.headers));
-    logger.error('DEBUG: Body recebido: ' + JSON.stringify(req.body));
-    
     const { itemId, title, price, image, category } = req.body;
     
     // Validação básica

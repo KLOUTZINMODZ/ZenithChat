@@ -2,14 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { auth } = require('../middleware/auth');
 const favoritesController = require('../controllers/favoritesController');
-const logger = require('../utils/logger');
-
-// Middleware de log para todas as rotas deste router
-router.use((req, res, next) => {
-  logger.error(`DEBUG FAVORITES: ${req.method} ${req.originalUrl}`);
-  logger.error(`DEBUG FAVORITES BODY: ${JSON.stringify(req.body)}`);
-  next();
-});
 
 /**
  * @route   GET /api/favorites
