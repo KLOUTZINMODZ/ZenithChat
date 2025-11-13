@@ -457,8 +457,45 @@ router.get('/list', auth, async (req, res) => {
       };
     });
 
-    // ========== MERGE AND PAGINATE ==========
-    const allOrders = [...marketplaceOrders, ...formattedBoostingOrders, ...formattedAgreements].sort((a, b) => 
+    // ========== MERGE AND DEDUPLICATE ==========
+    // Primeiro juntamos todos os pedidos
+    let allOrdersWithDuplicates = [...marketplaceOrders, ...formattedBoostingOrders, ...formattedAgreements];
+    
+    // Criamos um Map para detectar duplicatas baseado em propriedades relevantes
+    const orderMap = new Map();
+    const uniqueOrders = [];
+    
+    allOrdersWithDuplicates.forEach(order => {
+      // Criar uma chave única baseada em identificação relevante
+      // Para boosting, usamos o agreementId ou boostingRequestId se disponível
+      let key;
+      if (order.type === 'boosting') {
+        // Para boosting, tentamos usar o request ID ou o item ID
+        key = `boosting:${order.boostingRequest?._id || order.item?._id || order._id}`;
+      } else {
+        // Para marketplace, usamos o ID do item e do comprador
+        key = `marketplace:${order.item?._id || ''}:${order.buyer?._id || ''}`;
+      }
+      
+      // Se já temos um pedido com esta chave, vamos decidir qual manter
+      if (orderMap.has(key)) {
+        const existingOrder = orderMap.get(key);
+        
+        // Se o pedido existente é mais recente, ignoramos o atual
+        if (new Date(existingOrder.createdAt) >= new Date(order.createdAt)) {
+          return;
+        }
+      }
+      
+      // Armazenar o pedido no map e na lista de únicos
+      orderMap.set(key, order);
+      uniqueOrders.push(order);
+    });
+    
+    console.log(`[PURCHASES] Removidas ${allOrdersWithDuplicates.length - uniqueOrders.length} duplicatas`);
+    
+    // Ordenar por data de criação (mais recente primeiro)
+    const allOrders = uniqueOrders.sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 

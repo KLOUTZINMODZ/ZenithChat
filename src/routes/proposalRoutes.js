@@ -661,8 +661,34 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       acceptedConv.isTemporary = false;
       acceptedConv.status = 'accepted';
       acceptedConv.expiresAt = null;
-      acceptedConv.boostingStatus = 'active';
+      acceptedConv.boostingStatus = 'in_progress'; // Alterado de 'active' para 'in_progress' para evitar status inconsistentes
+      
+      // Armazenar referência ao Agreement criado
+      if (!acceptedConv.metadata) acceptedConv.metadata = {};
+      acceptedConv.metadata.agreementCreated = true;
+      acceptedConv.metadata.agreementId = agreementCreated?._id?.toString();
+      
       await acceptedConv.save();
+      
+      // IMPORTANTE: Verificar se já existe outra conversa para o mesmo acordo para evitar duplicação
+      try {
+        const duplicateCheck = await Conversation.findOne({
+          _id: { $ne: acceptedConv._id },
+          'metadata.latestAgreementId': agreementCreated?.agreementId,
+          isActive: true
+        });
+        
+        if (duplicateCheck) {
+          console.warn(`⚠️ Detectada conversa duplicada para o mesmo acordo: ${duplicateCheck._id}. Marcando como inativa.`);
+          duplicateCheck.isActive = false;
+          duplicateCheck.metadata = duplicateCheck.metadata || {};
+          duplicateCheck.metadata.deactivationReason = 'Conversa duplicada durante aceitação de proposta';
+          duplicateCheck.metadata.primaryConversationId = acceptedConv._id;
+          await duplicateCheck.save();
+        }
+      } catch (dupErr) {
+        console.error('Erro ao verificar conversas duplicadas:', dupErr);
+      }
       // Conversation accepted locally
       
     } catch (localError) {
@@ -758,14 +784,19 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             conversationId,
             status: 'accepted',
             isTemporary: false,
-            boostingStatus: 'active',
+            boostingStatus: 'in_progress', // Alterado de 'active' para 'in_progress' para manter consistência
             updatedAt: new Date().toISOString(),
             conversation: acceptedConv ? {
               _id: acceptedConv._id,
               status: acceptedConv.status,
               isTemporary: acceptedConv.isTemporary,
               boostingStatus: acceptedConv.boostingStatus,
-              participants: acceptedConv.participants
+              participants: acceptedConv.participants,
+              // Incluir informações do agreement para facilitar rastreamento
+              metadata: {
+                agreementId: agreementCreated?.agreementId,
+                proposalId: actualProposalId
+              }
             } : null
           }
         };
@@ -826,7 +857,14 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           _id: acceptedConv._id,
           status: acceptedConv.status,
           isTemporary: acceptedConv.isTemporary,
-          boostingStatus: acceptedConv.boostingStatus
+          boostingStatus: acceptedConv.boostingStatus,
+          agreementId: agreementCreated?.agreementId
+        } : null,
+        agreement: agreementCreated ? {
+          _id: agreementCreated._id,
+          agreementId: agreementCreated.agreementId,
+          status: agreementCreated.status,
+          price: agreementCreated.proposalSnapshot?.price
         } : null,
         sync: {
           mainApi: apiSyncSuccess,
