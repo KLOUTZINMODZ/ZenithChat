@@ -5,6 +5,7 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const BoostingOrder = require('../models/BoostingOrder');
 const axios = require('axios');
+const { calculateAndSendEscrowUpdate } = require('../routes/walletRoutes');
 
 class AgreementController {
   
@@ -439,6 +440,20 @@ class AgreementController {
 
 
       await agreement.cancel(userId, cancelReason, idempotencyKey);
+
+      // Atualizar saldo bloqueado para o cliente
+      try {
+        // Obtém o ID do cliente do acordo
+        const clientUserId = agreement.parties?.client?.userid;
+        if (clientUserId) {
+          // Atualizar a exibição do saldo bloqueado na interface do cliente
+          await calculateAndSendEscrowUpdate(req.app, clientUserId);
+          console.log(`Saldo bloqueado atualizado para cliente ${clientUserId} após cancelamento`);
+        }
+      } catch (escrowUpdateError) {
+        console.error('Erro ao atualizar saldo bloqueado:', escrowUpdateError);
+        // Não bloqueia o processo de cancelamento
+      }
 
       // Atualizar BoostingOrder
       try {

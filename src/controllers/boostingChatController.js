@@ -10,6 +10,7 @@ const mongoose = require('mongoose');
 const axios = require('axios');
 
 const { sendSupportTicketNotification } = require('../services/TelegramService');
+const { calculateAndSendEscrowUpdate } = require('../routes/walletRoutes');
 
 // Helper functions
 function round2(v) { 
@@ -586,6 +587,9 @@ class BoostingChatController {
                   
                   // Enviar atualização de saldo via WebSocket
                   await sendBalanceUpdate(req.app, clientUserId);
+                  
+                  // Atualizar valor do Saldo Bloqueado na interface
+                  await calculateAndSendEscrowUpdate(req.app, clientUserId);
                 } else {
                   console.warn(`[BOOSTING CANCEL] Cliente ${clientUserId} não encontrado para devolução de escrow`);
                 }

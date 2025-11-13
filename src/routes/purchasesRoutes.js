@@ -13,6 +13,7 @@ const Review = require('../models/Review');
 const Agreement = require('../models/Agreement');
 const BoostingRequest = require('../models/BoostingRequest');
 const BoostingOrder = require('../models/BoostingOrder');
+const { calculateAndSendEscrowUpdate } = require('./walletRoutes');
 const cache = require('../services/GlobalCache');
 const logger = require('../utils/logger');
 const axios = require('axios');
@@ -1474,6 +1475,13 @@ router.post('/:purchaseId/cancel', auth, async (req, res) => {
     await emitMarketplaceStatusChanged(req.app, purchase, 'cancelled');
 
     await sendBalanceUpdate(req.app, purchase.buyerId);
+    
+    // Atualizar o Saldo Bloqueado para o vendedor
+    try {
+      await calculateAndSendEscrowUpdate(req.app, purchase.sellerId);
+    } catch (escrowUpdateError) {
+      console.error('Erro ao atualizar saldo bloqueado do vendedor:', escrowUpdateError);
+    }
 
     try {
       const ns = req.app?.locals?.notificationService;
