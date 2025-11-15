@@ -23,6 +23,118 @@ class ConversationHandler {
     this.marketplaceCache = new Map(); // key: purchaseId or conversationId -> { data, expires }
   }
 
+  async processConversation(conv, userId, lastCheck = null) {
+    if (!conv) return null;
+
+    // Use stored unreadCount map on Conversation instead of heavy COUNTs
+    const uc = conv.unreadCount;
+    const unreadCount = (() => {
+      try {
+        if (!uc) return 0;
+        if (typeof uc.get === 'function') return uc.get(userId.toString()) || 0;
+        if (typeof uc === 'object') return uc[userId?.toString?.()] || 0;
+        if (typeof uc === 'number') return uc;
+        return 0;
+      } catch (_) { return 0; }
+    })();
+
+    // ✅ Decrypt lastMessage preview if available
+    try {
+      if (conv.lastMessage && conv.lastMessage.content) {
+        conv.lastMessage.content = decryptMessage(conv.lastMessage.content);
+      }
+    } catch (_) {}
+
+    // ✅ Enriquecimento específico para Marketplace (não afeta boosting)
+    await this.enrichMarketplaceConversation(conv);
+
+    // ✅ SEGURANÇA: Usar sanitizeConversation para remover dados sensíveis
+    let sanitized = sanitizeConversation(conv, userId);
+
+    // ✅ Adicionar unreadCount e hasUpdate após sanitização
+    sanitized.unreadCount = unreadCount;
+
+    if (lastCheck) {
+      const lastCheckDate = new Date(parseInt(lastCheck));
+      sanitized.hasUpdate = conv.updatedAt > lastCheckDate;
+    } else {
+      sanitized.hasUpdate = true;
+    }
+
+    // ✅ Sanitizar client/booster/marketplace userids aninhados
+    if (sanitized.client && sanitized.client.userid) {
+      sanitized.client.userid = sanitizeUserData(sanitized.client.userid, {
+        includeEmail: false,
+        includeAvatar: true,
+        includeId: true
+      });
+    }
+
+    if (sanitized.booster && sanitized.booster.userid) {
+      sanitized.booster.userid = sanitizeUserData(sanitized.booster.userid, {
+        includeEmail: false,
+        includeAvatar: true,
+        includeId: true
+      });
+    }
+
+    if (sanitized.marketplace) {
+      if (sanitized.marketplace.buyer && sanitized.marketplace.buyer.userid) {
+        sanitized.marketplace.buyer.userid = sanitizeUserData(sanitized.marketplace.buyer.userid, {
+          includeEmail: false,
+          includeAvatar: true,
+          includeId: true
+        });
+      }
+      if (sanitized.marketplace.seller && sanitized.marketplace.seller.userid) {
+        sanitized.marketplace.seller.userid = sanitizeUserData(sanitized.marketplace.seller.userid, {
+          includeEmail: false,
+          includeAvatar: true,
+          includeId: true
+        });
+      }
+    }
+
+    return sanitized;
+  }
+
+  async getSanitizedConversationForUser(conversationId, userId, { lastCheck = null } = {}) {
+    try {
+      const conv = await Conversation.findById(conversationId)
+        .populate('participants', 'name avatar profileImage')
+        .populate('client.userid', 'name avatar profileImage')
+        .populate('booster.userid', 'name avatar profileImage')
+        .populate('marketplace.buyer.userid', 'name avatar profileImage')
+        .populate('marketplace.seller.userid', 'name avatar profileImage')
+        .populate({
+          path: 'lastMessage',
+          populate: {
+            path: 'sender',
+            select: 'name avatar profileImage'
+          }
+        })
+        .select('-__v')
+        .lean();
+
+      if (!conv) return null;
+
+      const participantIds = (conv.participants || []).map((p) => {
+        if (!p) return null;
+        if (p._id) return p._id.toString();
+        return p.toString ? p.toString() : String(p);
+      }).filter(Boolean);
+
+      if (!participantIds.includes(userId.toString())) {
+        return null;
+      }
+
+      return await this.processConversation(conv, userId, lastCheck);
+    } catch (error) {
+      logger.error('Error building sanitized conversation snapshot:', error);
+      return null;
+    }
+  }
+
   /**
    * Enriquecimento para conversas de Marketplace:
    * - Detecta context por metadata.purchaseId ou metadata.context === 'marketplace_purchase'
@@ -349,82 +461,11 @@ class ConversationHandler {
 
 
       const conversationsWithUnread = await Promise.all(
-        conversations.map(async (conv) => {
-          // Use stored unreadCount map on Conversation instead of heavy COUNTs
-          const uc = conv.unreadCount;
-          const unreadCount = (() => {
-            try {
-              if (!uc) return 0;
-              if (typeof uc.get === 'function') return uc.get(userId.toString()) || 0;
-              if (typeof uc === 'object') return uc[userId?.toString?.()] || 0;
-              if (typeof uc === 'number') return uc;
-              return 0;
-            } catch (_) { return 0; }
-          })();
-
-          // ✅ Decrypt lastMessage preview if available
-          try {
-            if (conv.lastMessage && conv.lastMessage.content) {
-              conv.lastMessage.content = decryptMessage(conv.lastMessage.content);
-            }
-          } catch (_) {}
-
-          // ✅ Enriquecimento específico para Marketplace (não afeta boosting)
-          await this.enrichMarketplaceConversation(conv);
-
-          // ✅ SEGURANÇA: Usar sanitizeConversation para remover dados sensíveis
-          let sanitized = sanitizeConversation(conv, userId);
-          
-          // ✅ Adicionar unreadCount e hasUpdate após sanitização
-          sanitized.unreadCount = unreadCount;
-          
-          if (lastCheck) {
-            const lastCheckDate = new Date(parseInt(lastCheck));
-            sanitized.hasUpdate = conv.updatedAt > lastCheckDate;
-          } else {
-            sanitized.hasUpdate = true;
-          }
-
-          // ✅ Sanitizar client/booster/marketplace userids aninhados
-          if (sanitized.client && sanitized.client.userid) {
-            sanitized.client.userid = sanitizeUserData(sanitized.client.userid, {
-              includeEmail: false,
-              includeAvatar: true,
-              includeId: true
-            });
-          }
-          
-          if (sanitized.booster && sanitized.booster.userid) {
-            sanitized.booster.userid = sanitizeUserData(sanitized.booster.userid, {
-              includeEmail: false,
-              includeAvatar: true,
-              includeId: true
-            });
-          }
-          
-          if (sanitized.marketplace) {
-            if (sanitized.marketplace.buyer && sanitized.marketplace.buyer.userid) {
-              sanitized.marketplace.buyer.userid = sanitizeUserData(sanitized.marketplace.buyer.userid, {
-                includeEmail: false,
-                includeAvatar: true,
-                includeId: true
-              });
-            }
-            if (sanitized.marketplace.seller && sanitized.marketplace.seller.userid) {
-              sanitized.marketplace.seller.userid = sanitizeUserData(sanitized.marketplace.seller.userid, {
-                includeEmail: false,
-                includeAvatar: true,
-                includeId: true
-              });
-            }
-          }
-
-          return sanitized;
-        })
+        conversations.map((conv) => this.processConversation(conv, userId, lastCheck))
       );
 
 
-      const hasUpdates = conversationsWithUnread.some(c => c.hasUpdate);
+      const hasUpdates = conversationsWithUnread.some(c => c?.hasUpdate);
 
       return {
         conversations: conversationsWithUnread,

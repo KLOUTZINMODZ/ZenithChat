@@ -798,6 +798,24 @@ router.post('/initiate', auth, async (req, res) => {
           await ws.conversationHandler.sendConversationsUpdate(uid);
         }
       }
+      if (ws) {
+        const conversationPayload = await ws.conversationHandler?.getSanitizedConversationForUser(conv._id, buyerId, {});
+        if (conversationPayload) {
+          const enrichedParticipants = participants.length ? participants : [buyerId?.toString(), sellerUserIdFromItem?.toString()].filter(Boolean);
+          for (const uid of enrichedParticipants) {
+            if (uid) {
+              ws.sendToUser(uid, {
+                type: 'conversation:new',
+                data: { conversation: conversationPayload }
+              });
+            }
+          }
+        }
+        const messageHandler = ws.messageHandler;
+        if (messageHandler?.conversationHandler?.sendCompactUpdateToParticipants && messageHandler?.sendCompactUpdateToParticipants) {
+          await messageHandler.conversationHandler.sendCompactUpdateToParticipants(conv, { content: 'Nova compra iniciada.' }, null);
+        }
+      }
       participants.forEach(pid => cache.invalidateUserCache(pid));
     } catch (_) {}
 
