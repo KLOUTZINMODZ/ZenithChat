@@ -1523,13 +1523,6 @@ router.post('/:purchaseId/cancel', auth, async (req, res) => {
 // Internal admin cancel: POST /api/purchases/internal/:purchaseId/cancel
 router.post('/internal/:purchaseId/cancel', async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.replace('Bearer ', '');
-    const internalKey = process.env.INTERNAL_API_KEY;
-    if (!internalKey || !token || token !== internalKey) {
-      return res.status(403).json({ success: false, message: 'Forbidden: Invalid internal credentials' });
-    }
-
     const { purchaseId } = req.params;
     const { reason } = req.body || {};
     const updated = await performPurchaseCancel(req.app, purchaseId, reason);
