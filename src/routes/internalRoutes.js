@@ -382,34 +382,36 @@ async function sendBalanceUpdate(app, userId) {
 const internalAuth = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace('Bearer ', '');
-  
+  const panelSecretHeader = req.headers['x-panel-proxy-secret'] || req.headers['x-panel-secret'];
+
   const internalKey = process.env.INTERNAL_API_KEY;
-  
-  if (!internalKey) {
-    logger.error('[Internal Auth] INTERNAL_API_KEY not configured in .env');
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Internal API key not configured' 
+  const panelSecret = process.env.PANEL_PROXY_SECRET;
+
+  if (!internalKey && !panelSecret) {
+    logger.error('[Internal Auth] INTERNAL_API_KEY/PANEL_PROXY_SECRET not configured in .env');
+    return res.status(500).json({
+      success: false,
+      message: 'Internal authentication not configured'
     });
   }
-  
-  if (!token) {
-    logger.warn('[Internal Auth] No token provided');
-    return res.status(401).json({ 
-      success: false, 
-      message: 'Unauthorized: No token provided' 
+
+  const tokenAuthorized = internalKey && token === internalKey;
+  const panelAuthorized = panelSecret && panelSecretHeader === panelSecret;
+
+  if (!tokenAuthorized && !panelAuthorized) {
+    logger.warn('[Internal Auth] Unauthorized access attempt');
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized: Invalid or missing credentials'
     });
   }
-  
-  if (token !== internalKey) {
-    logger.warn('[Internal Auth] Invalid token provided');
-    return res.status(403).json({ 
-      success: false, 
-      message: 'Forbidden: Invalid credentials' 
-    });
+
+  if (tokenAuthorized) {
+    logger.info('[Internal Auth] Authentication via INTERNAL_API_KEY');
+  } else if (panelAuthorized) {
+    logger.info('[Internal Auth] Authentication via PANEL_PROXY_SECRET');
   }
-  
-  logger.info('[Internal Auth] Authentication successful');
+
   next();
 };
 
