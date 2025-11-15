@@ -1408,7 +1408,100 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
   }
 });
 
-// POST /api/purchases/:purchaseId/cancel
+// Helper core cancel logic to be reused by public and internal admin routes
+async function performPurchaseCancel(app, purchaseId, reason) {
+  const purchase = await Purchase.findById(purchaseId);
+  if (!purchase) {
+    const err = new Error('Compra não encontrada');
+    err.statusCode = 404;
+    throw err;
+  }
+  if (!['initiated', 'escrow_reserved'].includes(purchase.status)) {
+    const err = new Error('Compra não pode ser cancelada neste status');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await runTx(async (session) => {
+    const buyer = await User.findById(purchase.buyerId).session(session);
+    if (!buyer) throw new Error('BUYER_NOT_FOUND');
+
+    const before = round2(buyer.walletBalance || 0);
+    const after = round2(before + Number(purchase.price || 0));
+
+    buyer.walletBalance = after;
+    await buyer.save({ session });
+
+    await WalletLedger.create([{
+      userId: purchase.buyerId,
+      txId: null,
+      direction: 'credit',
+      reason: 'purchase_cancel_refund',
+      amount: Number(purchase.price || 0),
+      operationId: `purchase_cancel_refund:${purchase._id.toString()}`,
+      balanceBefore: before,
+      balanceAfter: after,
+      metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, adminReason: reason || null }
+    }], { session });
+
+    purchase.status = 'cancelled';
+    purchase.cancelledAt = new Date();
+    purchase.logs.push({ level: 'warn', message: reason ? `Purchase cancelled and refunded (reason: ${reason})` : 'Purchase cancelled and refunded' });
+    await purchase.save({ session });
+
+    await updateConversationMarketplaceStatus(session, purchase, 'cancelled');
+
+    // Restore item availability/stock when cancelling
+    try {
+      const item = await MarketItem.findById(purchase.itemId).session(session);
+      if (item) {
+        const isAccount = String(item.category || '').toLowerCase() === 'account' || item.stock == null;
+        if (isAccount) {
+          // Unique item: free it back to active if it was reserved
+          if (String(item.status || '') === 'reserved') {
+            item.status = 'active';
+            item.reservedAt = null;
+          }
+        } else {
+          // Multi-stock item: increment stockLeft and adjust status if needed
+          const maxCap = 9999;
+          const declaredStock = Math.max(0, Math.min(Number(item.stock || 0), maxCap));
+          if (Number.isFinite(declaredStock) && declaredStock > 0) {
+            if (item.stockLeft == null || !Number.isFinite(Number(item.stockLeft))) {
+              item.stockLeft = 1;
+            } else {
+              item.stockLeft = Math.min(maxCap, Number(item.stockLeft) + 1);
+            }
+            // If we were reserved because stockLeft was 0, restore to active
+            if (item.stockLeft > 0 && String(item.status || '') === 'reserved') {
+              item.status = 'active';
+            }
+          }
+          item.reservedAt = null;
+        }
+
+        await item.save({ session });
+      }
+    } catch (e) {
+      try { logger?.warn?.('[PURCHASES] Failed to restore MarketItem on cancel', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
+    }
+  });
+
+  await emitMarketplaceStatusChanged(app, purchase, 'cancelled');
+  await sendBalanceUpdate(app, purchase.buyerId);
+
+  try {
+    const ns = app?.locals?.notificationService;
+    if (ns) {
+      ns.sendNotification(String(purchase.buyerId), { type: 'purchase:cancelled', title: 'Compra cancelada', message: 'Seu pagamento foi estornado.', data: { purchaseId } });
+      ns.sendNotification(String(purchase.sellerId), { type: 'purchase:cancelled', title: 'Compra cancelada', message: 'O pedido foi cancelado.', data: { purchaseId } });
+    }
+  } catch (_) {}
+
+  return purchase;
+}
+
+// POST /api/purchases/:purchaseId/cancel (user-authenticated)
 router.post('/:purchaseId/cancel', auth, async (req, res) => {
   try {
     const { purchaseId } = req.params;
@@ -1418,81 +1511,33 @@ router.post('/:purchaseId/cancel', auth, async (req, res) => {
     const isBuyer = purchase.buyerId.toString() === userId.toString();
     const isSeller = purchase.sellerId.toString() === userId.toString();
     if (!isBuyer && !isSeller) return res.status(403).json({ success: false, message: 'Acesso negado' });
-    if (!['initiated', 'escrow_reserved'].includes(purchase.status)) return res.status(400).json({ success: false, message: 'Compra não pode ser cancelada neste status' });
 
-    await runTx(async (session) => {
-      const buyer = await User.findById(purchase.buyerId).session(session);
-      const before = round2(buyer.walletBalance || 0);
-      const after = round2(before + Number(purchase.price));
-      buyer.walletBalance = after;
-      await buyer.save({ session });
-      await WalletLedger.create([{
-        userId: purchase.buyerId,
-        txId: null,
-        direction: 'credit',
-        reason: 'purchase_refund',
-        amount: Number(purchase.price),
-        operationId: `purchase_refund:${purchase._id.toString()}`,
-        balanceBefore: before,
-        balanceAfter: after,
-        metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId }
-      }], { session });
-      purchase.status = 'cancelled';
-      purchase.cancelledAt = new Date();
-      purchase.logs.push({ level: 'warn', message: 'Purchase cancelled and refunded' });
-      await purchase.save({ session });
+    const updated = await performPurchaseCancel(req.app, purchaseId, null);
+    return res.json({ success: true, message: 'Compra cancelada e valor estornado', data: { purchase: updated } });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    return res.status(status).json({ success: false, message: 'Erro ao cancelar compra', error: error.message });
+  }
+});
 
-      await updateConversationMarketplaceStatus(session, purchase, 'cancelled');
-
-      // Restore item availability/stock when cancelling
-      try {
-        const item = await MarketItem.findById(purchase.itemId).session(session);
-        if (item) {
-          const isAccount = String(item.category || '').toLowerCase() === 'account' || item.stock == null;
-          if (isAccount) {
-            // unique item returns to active
-            item.status = 'active';
-            item.reservedAt = null;
-            item.soldAt = null;
-          } else {
-            // increment stock back and ensure active
-            const maxCap = 9999;
-            const declaredStock = Math.max(0, Math.min(Number(item.stock || 0), maxCap));
-            if (item.stockLeft == null || !Number.isFinite(Number(item.stockLeft))) {
-              item.stockLeft = declaredStock;
-            } else {
-              item.stockLeft = Math.max(0, Number(item.stockLeft) + 1);
-              if (item.stockLeft > declaredStock) item.stockLeft = declaredStock;
-            }
-            item.status = 'active';
-          }
-          await item.save({ session });
-        }
-      } catch (e) {
-        try { logger?.warn?.('[PURCHASES] Failed to restore MarketItem on cancel', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
-      }
-    });
-    await emitMarketplaceStatusChanged(req.app, purchase, 'cancelled');
-
-    await sendBalanceUpdate(req.app, purchase.buyerId);
-    
-    // Atualizar o Saldo Bloqueado para o vendedor
-    try {
-      await calculateAndSendEscrowUpdate(req.app, purchase.sellerId);
-    } catch (escrowUpdateError) {
-      console.error('Erro ao atualizar saldo bloqueado do vendedor:', escrowUpdateError);
+// Internal admin cancel: POST /api/purchases/internal/:purchaseId/cancel
+router.post('/internal/:purchaseId/cancel', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    const internalKey = process.env.INTERNAL_API_KEY;
+    if (!internalKey || !token || token !== internalKey) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Invalid internal credentials' });
     }
 
-    try {
-      const ns = req.app?.locals?.notificationService;
-      if (ns) {
-        ns.sendNotification(String(purchase.buyerId), { type: 'purchase:cancelled', title: 'Compra cancelada', message: 'Seu pagamento foi estornado.', data: { purchaseId } });
-        ns.sendNotification(String(purchase.sellerId), { type: 'purchase:cancelled', title: 'Compra cancelada', message: 'O pedido foi cancelado pelo comprador/vendedor.', data: { purchaseId } });
-      }
-    } catch (_) {}
-
-    return res.json({ success: true, message: 'Compra cancelada e valor estornado' });
-  } catch (error) { return res.status(500).json({ success: false, message: 'Erro ao cancelar compra', error: error.message }); }
+    const { purchaseId } = req.params;
+    const { reason } = req.body || {};
+    const updated = await performPurchaseCancel(req.app, purchaseId, reason);
+    return res.json({ success: true, message: 'Compra cancelada e valor estornado', data: { purchase: updated } });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    return res.status(status).json({ success: false, message: 'Erro interno ao cancelar compra', error: error.message });
+  }
 });
 
 // Internal auto-release job trigger (can be called by cron)
