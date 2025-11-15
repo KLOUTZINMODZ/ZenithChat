@@ -6,8 +6,6 @@ const logger = require('../utils/logger');
 const Report = require('../models/Report');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
-const Purchase = require('../models/Purchase');
-const cache = require('../services/GlobalCache');
 const { decryptMessage } = require('../utils/encryption');
 
 const router = express.Router();
@@ -24,63 +22,6 @@ function safeId(v) {
     }
   } catch (_) {}
   return null;
-}
-
-// Helpers específicos para broadcast de status de compras marketplace via WebSocket
-async function updateConversationMarketplaceStatusDirect(purchase, status) {
-  try {
-    if (!purchase?.conversationId) return;
-    await Conversation.findByIdAndUpdate(
-      purchase.conversationId,
-      { $set: { 'marketplace.statusCompra': status, updatedAt: new Date() } }
-    );
-  } catch (e) {
-    try {
-      logger?.warn?.('[ADMIN][PURCHASES] Failed to update conversation marketplace status', {
-        purchaseId: String(purchase?._id),
-        status,
-        error: e?.message,
-      });
-    } catch (_) {}
-  }
-}
-
-async function emitMarketplaceStatusChangedDirect(app, purchase, status) {
-  try {
-    const ws = app.get('webSocketServer');
-    const participants = [purchase?.buyerId?.toString?.(), purchase?.sellerId?.toString?.()].filter(Boolean);
-    if (ws) {
-      const now = new Date();
-      const wsData = {
-        conversationId: purchase?.conversationId?.toString?.() || purchase?.conversationId,
-        purchaseId: purchase?._id?.toString?.() || purchase?._id,
-        buyerId: purchase?.buyerId?.toString?.() || purchase?.buyerId,
-        sellerId: purchase?.sellerId?.toString?.() || purchase?.sellerId,
-        status,
-        shippedAt: purchase?.shippedAt || null,
-        deliveredAt: purchase?.deliveredAt || null,
-        autoReleaseAt: purchase?.autoReleaseAt || null,
-        timestamp: now.toISOString(),
-        updatedAt: now.toISOString(),
-        source: 'realtime',
-      };
-
-      for (const uid of participants) {
-        ws.sendToUser(uid, {
-          type: 'marketplace:status_changed',
-          data: wsData,
-        });
-      }
-
-      if (ws.conversationHandler) {
-        for (const uid of participants) {
-          await ws.conversationHandler.sendConversationsUpdate(uid);
-        }
-      }
-    }
-
-    participants.forEach((pid) => cache.invalidateUserCache(pid));
-  } catch (_) {}
 }
 
 function requireAdminKey(req, res, next) {
@@ -137,49 +78,6 @@ router.patch('/market-items/:itemId/seller', requireAdminKey, async (req, res) =
     return res.json({ success: true, message: 'Vendedor definido para o item', data: { itemId, sellerUserId } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Erro ao definir vendedor do item', error: error.message });
-  }
-});
-
-// ========== ADMIN: MARKETPLACE PURCHASE STATUS BROADCAST ==========
-
-// POST /api/admin/purchases/:id/broadcast-status
-// Body opcional: { status?: string }
-// Uso: chamado pelo painel administrativo após um cancelamento manual
-router.post('/purchases/:id/broadcast-status', requireAdminKey, async (req, res) => {
-  try {
-    const id = safeId(req.params.id);
-    if (!id) {
-      return res.status(400).json({ success: false, message: 'ID de compra inválido' });
-    }
-
-    const bodyStatus = req.body && typeof req.body.status === 'string' ? String(req.body.status) : null;
-    let purchase = await Purchase.findById(id);
-    if (!purchase) {
-      return res.status(404).json({ success: false, message: 'Compra não encontrada' });
-    }
-
-    // Se foi enviado um status explícito, atualiza o documento para garantir consistência
-    if (bodyStatus && bodyStatus !== purchase.status) {
-      purchase.status = bodyStatus;
-      purchase = await purchase.save();
-    }
-
-    const statusToBroadcast = purchase.status || bodyStatus || 'cancelled';
-
-    await updateConversationMarketplaceStatusDirect(purchase, statusToBroadcast);
-    await emitMarketplaceStatusChangedDirect(req.app, purchase, statusToBroadcast);
-
-    try {
-      logger?.info?.('[ADMIN][PURCHASES] Broadcasted marketplace status', {
-        purchaseId: String(purchase._id),
-        status: statusToBroadcast,
-      });
-    } catch (_) {}
-
-    return res.json({ success: true, message: 'Status de compra broadcasted com sucesso', data: { purchaseId: purchase._id, status: statusToBroadcast } });
-  } catch (error) {
-    try { logger?.error?.('[ADMIN][PURCHASES] Error broadcasting marketplace status', error); } catch (_) {}
-    return res.status(500).json({ success: false, message: 'Erro ao broadcastar status da compra', error: error?.message });
   }
 });
 
