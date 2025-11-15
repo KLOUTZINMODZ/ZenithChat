@@ -245,7 +245,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     ticket.status = 'resolved';
     ticket.resolution = {
       ...ticket.resolution,
-      outcome: 'cancelled',
+      outcome: 'mutual_resolution',
       resolutionNotes: reason || 'Cancelar pedido via painel',
       resolvedAt: new Date(),
       adminName: adminId,
