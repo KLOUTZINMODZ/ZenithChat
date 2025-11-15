@@ -37,20 +37,6 @@ function safeId(v) {
   return null;
 }
 
-// Simple admin-key middleware for internal integrations (e.g. admin panel)
-function requireAdminKey(req, res, next) {
-  try {
-    const header = String(req.headers['x-admin-key'] || '').trim();
-    const adminKey = String(process.env.CHAT_ADMIN_API_KEY || process.env.ADMIN_API_KEY || '').trim();
-    if (adminKey && header && header === adminKey) {
-      return next();
-    }
-    return res.status(403).json({ success: false, message: 'Acesso negado' });
-  } catch (e) {
-    return res.status(500).json({ success: false, message: 'Erro na verificação de chave de admin', error: e?.message });
-  }
-}
-
 function round2(v) { return Math.round(Number(v) * 100) / 100; }
 function onlyDigits(v) { return String(v || '').replace(/\D/g, ''); }
 function isValidEmail(email) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').toLowerCase()); }
@@ -94,34 +80,6 @@ async function sendBalanceUpdate(app, userId) {
     }
   } catch (_) {}
 }
-
-// Admin helper: broadcast an updated status for an existing marketplace purchase
-// This does NOT perform refunds or business logic; it only emits WebSocket events
-// and updates the conversation marketplace.statusCompra for already-updated purchases.
-router.post('/admin/:purchaseId/broadcast-cancelled', requireAdminKey, async (req, res) => {
-  try {
-    const { purchaseId } = req.params;
-    const status = String(req.body?.status || 'cancelled');
-
-    const id = safeId(purchaseId);
-    if (!id) {
-      return res.status(400).json({ success: false, message: 'purchaseId inválido' });
-    }
-
-    const purchase = await Purchase.findById(id);
-    if (!purchase) {
-      return res.status(404).json({ success: false, message: 'Compra não encontrada' });
-    }
-
-    // Emite evento em tempo real e atualiza a conversa vinculada
-    await emitMarketplaceStatusChanged(req.app, purchase, status);
-    await updateConversationMarketplaceStatus(null, purchase, status);
-
-    return res.json({ success: true, message: 'Status broadcasted', data: { purchaseId: id, status } });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: 'Erro ao emitir broadcast de compra', error: error.message });
-  }
-});
 
 // Helper: ensure conversation marketplace.statusCompra is updated within the same DB session/transaction
 async function updateConversationMarketplaceStatus(session, purchase, status) {
