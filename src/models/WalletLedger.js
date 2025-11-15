@@ -18,6 +18,7 @@ const walletLedgerSchema = new mongoose.Schema({
     'adjustment',
     'purchase_reserve',
     'purchase_refund',
+    'purchase_cancel_refund',
     'purchase_release',
     'purchase_fee',
     'purchase_settle',
