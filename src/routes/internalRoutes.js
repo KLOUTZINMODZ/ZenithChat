@@ -9,6 +9,7 @@ const logger = require('../utils/logger');
 
 const mongoose = require('mongoose');
 const BoostingRequest = require('../models/BoostingRequest');
+const BoostingOrder = require('../models/BoostingOrder');
 const Agreement = require('../models/Agreement');
 const AcceptedProposal = require('../models/AcceptedProposal');
 const WalletLedger = require('../models/WalletLedger');
@@ -29,6 +30,50 @@ function normalizeObjectId(value) {
     return value.toString();
   } catch (_) {
     return value;
+  }
+}
+
+async function emitBoostingStatusChanged(app, boostingOrderData, status) {
+  try {
+    const ws = app?.get('webSocketServer');
+    if (!ws) return;
+
+    const now = new Date();
+    const payload = {
+      conversationId: normalizeObjectId(boostingOrderData.conversationId),
+      boostingOrderId: normalizeObjectId(boostingOrderData._id || boostingOrderData.orderId),
+      boostingRequestId: normalizeObjectId(boostingOrderData.boostingRequestId),
+      agreementId: normalizeObjectId(boostingOrderData.agreementId),
+      boosterId: normalizeObjectId(boostingOrderData.boosterId),
+      clientId: normalizeObjectId(boostingOrderData.clientId),
+      status,
+      price: boostingOrderData.price || null,
+      orderNumber: boostingOrderData.orderNumber || null,
+      timestamp: now.toISOString(),
+      updatedAt: now.toISOString(),
+      source: 'realtime'
+    };
+
+    const participantIds = [payload.clientId, payload.boosterId].filter(Boolean);
+
+    participantIds.forEach((uid) => {
+      ws.sendToUser(uid, {
+        type: 'marketplace:status_changed',
+        data: payload
+      });
+    });
+
+    if (ws.conversationHandler?.sendConversationsUpdate) {
+      await Promise.all(
+        participantIds.map((uid) =>
+          ws.conversationHandler.sendConversationsUpdate(uid).catch((err) => {
+            logger.warn('[Boosting Status Update] Failed to refresh conversations via WS', { uid, error: err?.message });
+          })
+        )
+      );
+    }
+  } catch (err) {
+    logger.warn('[Boosting Status Update] Failed to emit marketplace-style status update', { error: err?.message });
   }
 }
 
@@ -111,6 +156,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   const agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
 
   let refundedClientId = null;
+  let boostingOrderSnapshot = null;
 
   if (agreement) {
     const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
@@ -177,6 +223,19 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         },
         { session }
       );
+
+      const boostingOrderDoc = await BoostingOrder.findOne({ conversationId }).session(session);
+      if (boostingOrderDoc) {
+        boostingOrderDoc.status = 'cancelled';
+        boostingOrderDoc.cancelledAt = new Date();
+        boostingOrderDoc.cancellationDetails = {
+          cancelledBy: normalizeObjectId(adminId),
+          cancelReason: reason || 'Serviço cancelado',
+          refundAmount: Number(escrow?.amount || 0)
+        };
+        await boostingOrderDoc.save({ session });
+        boostingOrderSnapshot = boostingOrderDoc.toObject();
+      }
     });
   }
 
@@ -236,6 +295,19 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       participantIds.forEach((pid) => cache.invalidateUserCache(pid));
     } catch (cacheErr) {
       logger.warn('[Internal Boosting Cancel] Cache invalidation failed', { error: cacheErr?.message });
+    }
+
+    if (boostingOrderSnapshot) {
+      await emitBoostingStatusChanged(app, boostingOrderSnapshot, 'cancelled');
+    } else {
+      await emitBoostingStatusChanged(app, {
+        conversationId: normalizeObjectId(conversationId),
+        clientId: normalizeObjectId(conversation.participants?.[0]),
+        boosterId: normalizeObjectId(conversation.participants?.[1]),
+        price: null,
+        orderNumber: null,
+        boostingRequestId: normalizeObjectId(boostingId)
+      }, 'cancelled');
     }
   }
 
