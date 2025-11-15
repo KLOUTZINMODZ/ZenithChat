@@ -7,6 +7,208 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 
+const BoostingRequest = require('../models/BoostingRequest');
+const Agreement = require('../models/Agreement');
+const AcceptedProposal = require('../models/AcceptedProposal');
+const WalletLedger = require('../models/WalletLedger');
+const WalletService = require('../services/WalletService');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
+const Report = require('../models/Report');
+
+const proposalHandlerModule = require('../websocket/handlers/ProposalHandler');
+const { runTx } = require('../utils/mongoose');
+
+function normalizeObjectId(value) {
+  if (!value) return null;
+  try {
+    return value.toString();
+  } catch (_) {
+    return value;
+  }
+}
+
+async function performInternalBoostingCancel({ app, conversationId, reason, adminId = 'internal-admin' }) {
+  if (!conversationId) {
+    throw new Error('conversationId is required for boosting cancel');
+  }
+
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) {
+    throw new Error('Conversation not found');
+  }
+
+  let boostingId = conversation.metadata?.get?.('boostingId') || conversation.proposal || conversation.marketplaceItem;
+
+  if (!boostingId) {
+    const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
+    if (acceptedProposal) {
+      boostingId = acceptedProposal.boostingId;
+    } else {
+      const agreement = await Agreement.findOne({ conversationId });
+      if (agreement) {
+        boostingId = agreement.boostingId;
+      }
+    }
+  }
+
+  const proposalHandler = app?.get('proposalHandler') || proposalHandlerModule;
+
+  const systemMessage = new Message({
+    conversation: conversationId,
+    sender: adminId,
+    content: `❌ Atendimento cancelado pelo administrador\n📝 Motivo: ${reason || 'Não informado'}`,
+    type: 'system',
+    metadata: {
+      type: 'cancellation',
+      reason,
+      cancelledBy: adminId,
+      source: 'internal-api'
+    }
+  });
+
+  await systemMessage.save();
+
+  conversation.isActive = false;
+  conversation.boostingStatus = 'cancelled';
+  conversation.lastMessage = systemMessage._id;
+  conversation.lastMessageAt = new Date();
+  conversation.metadata = conversation.metadata || new Map();
+  conversation.metadata.set('status', 'cancelled');
+  conversation.metadata.set('cancelledAt', new Date());
+  conversation.metadata.set('cancelledBy', adminId);
+
+  await conversation.save();
+
+  if (boostingId && proposalHandler?.broadcastBoostingCancelled) {
+    proposalHandler.broadcastBoostingCancelled(boostingId.toString());
+  }
+
+  const agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
+
+  if (agreement) {
+    const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
+
+    await runTx(async (session) => {
+      const clientId = agreement.parties?.client?.userid;
+      const escrow = await WalletLedger.findOne({
+        userId: clientId,
+        reason: 'boosting_escrow',
+        'metadata.agreementId': agreement._id.toString()
+      }).session(session);
+
+      if (escrow && escrow.amount > 0) {
+        const walletService = new WalletService({ app });
+        await walletService.creditUser(clientId, escrow.amount, {
+          session,
+          reason: 'boosting_escrow_refund',
+          metadata: {
+            agreementId: agreement._id.toString(),
+            conversationId: normalizeObjectId(conversationId),
+            cancelledBy: adminId,
+            cancelReason: reason || 'Serviço cancelado',
+            originalEscrowId: escrow._id.toString(),
+          }
+        });
+      }
+
+      await agreement.cancel(adminId, reason || '', idemKey);
+
+      await WalletLedger.updateMany(
+        {
+          reason: 'boosting_escrow',
+          'metadata.agreementId': agreement._id.toString(),
+        },
+        {
+          $set: {
+            'metadata.status': 'refunded',
+            'metadata.refundedAt': new Date(),
+            'metadata.refundReason': reason || 'Serviço cancelado'
+          }
+        },
+        { session }
+      );
+    });
+  }
+
+  const webSocketServer = app?.get('webSocketServer');
+
+  if (conversation.participants?.length && webSocketServer?.sendToUser) {
+    const cancellationEvent = {
+      type: 'service:cancelled',
+      data: {
+        conversationId: normalizeObjectId(conversationId),
+        reason,
+        cancelledBy: adminId,
+        boostingStatus: 'cancelled',
+        isActive: false,
+        timestamp: new Date().toISOString(),
+        source: 'internal-api'
+      }
+    };
+    const conversationUpdated = {
+      type: 'conversation:updated',
+      data: {
+        conversationId: normalizeObjectId(conversationId),
+        status: 'cancelled',
+        boostingStatus: 'cancelled',
+        isActive: false,
+        updatedAt: new Date().toISOString(),
+        source: 'internal-api'
+      }
+    };
+
+    conversation.participants.forEach((participantId) => {
+      webSocketServer.sendToUser(participantId, cancellationEvent);
+      webSocketServer.sendToUser(participantId, conversationUpdated);
+      webSocketServer.sendToUser(participantId, {
+        type: 'message:new',
+        data: { message: systemMessage.toObject(), conversationId: normalizeObjectId(conversationId) },
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
+
+  if (boostingId) {
+    await BoostingRequest.updateOne(
+      { _id: boostingId },
+      {
+        $set: {
+          status: 'cancelled',
+          updatedAt: new Date(),
+          cancelReason: reason || 'Cancelado pelo administrador',
+          cancelledBy: adminId,
+          cancelledAt: new Date()
+        }
+      }
+    );
+  }
+
+  await AcceptedProposal.deleteMany({ conversationId });
+
+  // Ticket resolution
+  const ticket = await Report.findOne({ conversationId });
+  if (ticket) {
+    ticket.status = 'resolved';
+    ticket.resolution = {
+      ...ticket.resolution,
+      outcome: 'cancelled',
+      resolutionNotes: reason || 'Cancelar pedido via painel',
+      resolvedAt: new Date(),
+      adminName: adminId,
+    };
+    ticket.updatedAt = new Date();
+    await ticket.save();
+  }
+
+  return {
+    success: true,
+    conversationId: normalizeObjectId(conversationId),
+    boostingId: normalizeObjectId(boostingId),
+    message: 'Boosting cancelado com sucesso'
+  };
+}
+
 /**
  * Middleware de autenticação interna
  * Valida chave secreta compartilhada entre APIs
@@ -44,6 +246,25 @@ const internalAuth = (req, res, next) => {
   logger.info('[Internal Auth] Authentication successful');
   next();
 };
+
+router.post('/boosting/:conversationId/cancel', internalAuth, async (req, res) => {
+  const { conversationId } = req.params;
+  const { reason } = req.body || {};
+
+  try {
+    const result = await performInternalBoostingCancel({
+      app: req.app,
+      conversationId,
+      reason,
+      adminId: req.admin?._id || 'internal-admin'
+    });
+
+    return res.json({ success: true, message: 'Boosting cancelado com sucesso', data: result });
+  } catch (error) {
+    logger.error('[Internal Boosting Cancel] Error:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno ao cancelar boosting', error: error.message });
+  }
+});
 
 /**
  * POST /api/internal/proposal/broadcast
