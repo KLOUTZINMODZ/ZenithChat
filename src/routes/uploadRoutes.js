@@ -4,6 +4,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const { auth } = require('../middleware/auth');
 const UploadedImage = require('../models/UploadedImage');
+const User = require('../models/User');
 
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/avif']);
@@ -20,6 +21,22 @@ const upload = multer({
     cb(null, true);
   }
 });
+
+function resolvePublicBaseUrl(req) {
+  const configured = (process.env.CHAT_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || '').trim();
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+  const forwardedProto = req.get('x-forwarded-proto');
+  const proto = forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol;
+  const forwardedHost = req.get('x-forwarded-host');
+  const host = forwardedHost ? forwardedHost.split(',')[0].trim() : req.get('host');
+  return `${proto}://${host}`.replace(/\/$/, '');
+}
+
+function padMonth(monthZeroBased) {
+  return String(monthZeroBased + 1).padStart(2, '0');
+}
 
 router.post('/image', auth, upload.single('file'), async (req, res) => {
   try {
@@ -134,6 +151,135 @@ router.post('/image', auth, upload.single('file'), async (req, res) => {
   }
 });
 
+router.post('/profile', auth, upload.single('file'), async (req, res) => {
+  try {
+    const userId = req.userId || req.user?._id?.toString?.();
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'Unable to identify user' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const originalMime = req.file.mimetype;
+    const now = new Date();
+    const subPath = `profile/${now.getUTCFullYear()}/${padMonth(now.getUTCMonth())}`;
+    const baseName = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+    const image = sharp(req.file.buffer, { failOnError: false });
+    const metadata = await image.metadata();
+
+    const fullBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+      .avif({ quality: 50 })
+      .toBuffer();
+
+    const fullJpegBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+      .toBuffer();
+
+    const thumbBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 128, height: 128, fit: 'inside', withoutEnlargement: true })
+      .avif({ quality: 45 })
+      .toBuffer();
+
+    const thumbJpegBuffer = await image.clone()
+      .rotate()
+      .resize({ width: 128, height: 128, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80, progressive: true, mozjpeg: true })
+      .toBuffer();
+
+    if (!fullBuffer || !fullBuffer.length) {
+      return res.status(500).json({ success: false, message: 'Invalid image buffer' });
+    }
+    if (!thumbBuffer || !thumbBuffer.length) {
+      return res.status(500).json({ success: false, message: 'Invalid thumbnail buffer' });
+    }
+    if (!fullJpegBuffer || !fullJpegBuffer.length) {
+      return res.status(500).json({ success: false, message: 'Invalid JPEG buffer' });
+    }
+    if (!thumbJpegBuffer || !thumbJpegBuffer.length) {
+      return res.status(500).json({ success: false, message: 'Invalid JPEG thumbnail buffer' });
+    }
+
+    const fullPath = `/uploads/${subPath}/${baseName}.avif`;
+    const thumbPath = `/uploads/${subPath}/${baseName}_thumb.avif`;
+    const fullJpegPath = `/uploads/${subPath}/${baseName}.jpg`;
+    const thumbJpegPath = `/uploads/${subPath}/${baseName}_thumb.jpg`;
+
+    const savedImage = await UploadedImage.createFromBuffers({
+      imageId: baseName,
+      conversationId: null,
+      userId,
+      imageType: 'profile',
+      fullImage: fullBuffer,
+      thumbImage: thumbBuffer,
+      fullImageJpeg: fullJpegBuffer,
+      thumbImageJpeg: thumbJpegBuffer,
+      metadata: {
+        originalName: req.file.originalname,
+        originalSize: req.file.size,
+        originalMimeType: originalMime,
+        width: metadata.width,
+        height: metadata.height,
+        userId
+      },
+      urls: {
+        full: fullPath,
+        thumb: thumbPath,
+        fullJpeg: fullJpegPath,
+        thumbJpeg: thumbJpegPath
+      },
+      uploadedBy: userId,
+      permanent: true
+    });
+
+    if (!savedImage || !savedImage.imageId) {
+      return res.status(500).json({ success: false, message: 'Failed to save image' });
+    }
+
+    const baseUrl = resolvePublicBaseUrl(req);
+    const fullUrl = `${baseUrl}${fullPath}`;
+    const thumbUrl = `${baseUrl}${thumbPath}`;
+    const fullJpegUrl = `${baseUrl}${fullJpegPath}`;
+    const thumbJpegUrl = `${baseUrl}${thumbJpegPath}`;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        avatar: fullUrl,
+        profileImage: fullUrl,
+        updatedAt: new Date()
+      },
+      { new: true }
+    ).select('name email avatar profileImage');
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        url: fullUrl,
+        path: fullPath,
+        thumbUrl,
+        urlJpeg: fullJpegUrl,
+        thumbUrlJpeg: thumbJpegUrl,
+        name: req.file.originalname,
+        size: req.file.size,
+        mimeType: 'image/avif',
+        originalMimeType: originalMime,
+        width: metadata.width,
+        height: metadata.height,
+        uploadedAt: new Date().toISOString(),
+        user: updatedUser
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || 'Upload failed' });
+  }
+});
 
 function decodeBase64Image(input, explicitMime) {
   if (!input || typeof input !== 'string') return { error: 'No base64 data provided' };

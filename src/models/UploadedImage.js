@@ -16,11 +16,19 @@ const uploadedImageSchema = new mongoose.Schema({
     index: true,
     sparse: true
   },
+
+  // Usuário associado (para imagens de perfil)
+  userId: {
+    type: String,
+    required: false,
+    index: true,
+    sparse: true
+  },
   
   // Tipo de imagem: 'conversation' ou 'marketplace'
   imageType: {
     type: String,
-    enum: ['conversation', 'marketplace'],
+    enum: ['conversation', 'marketplace', 'profile'],
     default: 'conversation',
     index: true
   },
@@ -53,7 +61,8 @@ const uploadedImageSchema = new mongoose.Schema({
     originalMimeType: String,
     width: Number,
     height: Number,
-    conversationId: String
+    conversationId: String,
+    userId: String
   },
   
   // URLs públicas (para compatibilidade)
