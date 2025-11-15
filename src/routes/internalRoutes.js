@@ -11,13 +11,16 @@ const BoostingRequest = require('../models/BoostingRequest');
 const Agreement = require('../models/Agreement');
 const AcceptedProposal = require('../models/AcceptedProposal');
 const WalletLedger = require('../models/WalletLedger');
-const WalletService = require('../services/WalletService');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const Report = require('../models/Report');
+const User = require('../models/User');
 
 const proposalHandlerModule = require('../websocket/handlers/ProposalHandler');
 const { runTx } = require('../utils/mongoose');
+const { calculateAndSendEscrowUpdate } = require('./walletRoutes');
+
+const round2 = (value) => Math.round(Number(value || 0) * 100) / 100;
 
 function normalizeObjectId(value) {
   if (!value) return null;
@@ -98,18 +101,39 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       }).session(session);
 
       if (escrow && escrow.amount > 0) {
-        const walletService = new WalletService({ app });
-        await walletService.creditUser(clientId, escrow.amount, {
-          session,
-          reason: 'boosting_escrow_refund',
-          metadata: {
-            agreementId: agreement._id.toString(),
-            conversationId: normalizeObjectId(conversationId),
-            cancelledBy: adminId,
-            cancelReason: reason || 'Serviço cancelado',
-            originalEscrowId: escrow._id.toString(),
-          }
-        });
+        const formattedClientId = normalizeObjectId(clientId);
+        const user = await User.findById(formattedClientId).session(session);
+
+        if (user) {
+          const before = round2(user.walletBalance || 0);
+          const after = round2(before + Number(escrow.amount));
+          user.walletBalance = after;
+          await user.save({ session });
+
+          await WalletLedger.create([
+            {
+              userId: formattedClientId,
+              txId: null,
+              direction: 'credit',
+              reason: 'boosting_escrow_refund',
+              amount: Number(escrow.amount),
+              operationId: `boosting_escrow_refund:${agreement._id}`,
+              balanceBefore: before,
+              balanceAfter: after,
+              metadata: {
+                source: 'boosting',
+                agreementId: agreement._id.toString(),
+                conversationId: normalizeObjectId(conversationId),
+                cancelledBy: adminId,
+                cancelReason: reason || 'Serviço cancelado',
+                originalEscrowId: escrow._id.toString(),
+                type: 'escrow_refund'
+              }
+            }
+          ], { session });
+        } else {
+          logger.warn('[Internal Boosting Cancel] Cliente não encontrado para devolver escrow', { clientId: formattedClientId });
+        }
       }
 
       await agreement.cancel(adminId, reason || '', idemKey);
@@ -207,6 +231,25 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     boostingId: normalizeObjectId(boostingId),
     message: 'Boosting cancelado com sucesso'
   };
+}
+
+async function sendBalanceUpdate(app, userId) {
+  try {
+    const user = await User.findById(userId);
+    const notificationService = app?.locals?.notificationService;
+    if (user && notificationService) {
+      notificationService.sendToUser(String(userId), {
+        type: 'wallet:balance_updated',
+        data: {
+          userId: String(userId),
+          balance: round2(user.walletBalance || 0),
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+  } catch (err) {
+    logger.warn('[Internal Boosting Cancel] sendBalanceUpdate falhou', { userId, error: err?.message });
+  }
 }
 
 /**
