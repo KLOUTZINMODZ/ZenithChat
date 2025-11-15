@@ -19,6 +19,7 @@ const User = require('../models/User');
 
 const proposalHandlerModule = require('../websocket/handlers/ProposalHandler');
 const { calculateAndSendEscrowUpdate } = require('./walletRoutes');
+const cache = require('../services/GlobalCache');
 
 const round2 = (value) => Math.round(Number(value || 0) * 100) / 100;
 
@@ -182,6 +183,10 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   const webSocketServer = app?.get('webSocketServer');
 
   if (conversation.participants?.length && webSocketServer?.sendToUser) {
+    const participantIds = conversation.participants.map((participant) =>
+      normalizeObjectId(participant?._id || participant)
+    ).filter(Boolean);
+
     const cancellationEvent = {
       type: 'service:cancelled',
       data: {
@@ -206,7 +211,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       }
     };
 
-    conversation.participants.forEach((participantId) => {
+    participantIds.forEach((participantId) => {
       webSocketServer.sendToUser(participantId, cancellationEvent);
       webSocketServer.sendToUser(participantId, conversationUpdated);
       webSocketServer.sendToUser(participantId, {
@@ -215,6 +220,23 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         timestamp: new Date().toISOString()
       });
     });
+
+    if (webSocketServer.conversationHandler?.sendConversationsUpdate) {
+      await Promise.all(
+        participantIds.map((pid) =>
+          webSocketServer.conversationHandler.sendConversationsUpdate(pid).catch((err) => {
+            logger.warn('[Internal Boosting Cancel] Failed to push conversation update via WS', { pid, error: err?.message });
+          })
+        )
+      );
+    }
+
+    try {
+      cache.invalidateConversationCache(normalizeObjectId(conversationId), participantIds);
+      participantIds.forEach((pid) => cache.invalidateUserCache(pid));
+    } catch (cacheErr) {
+      logger.warn('[Internal Boosting Cancel] Cache invalidation failed', { error: cacheErr?.message });
+    }
   }
 
   if (boostingId) {
