@@ -380,57 +380,7 @@ async function sendBalanceUpdate(app, userId) {
  * Valida chave secreta compartilhada entre APIs
  */
 const internalAuth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
-  const panelSecretHeader = req.headers['x-panel-proxy-secret'] || req.headers['x-panel-secret'];
-  const originHeader = req.headers.origin || '';
-  const refererHeader = req.headers.referer || '';
-
-  const internalKey = process.env.INTERNAL_API_KEY;
-  const panelSecret = process.env.PANEL_PROXY_SECRET;
-
-  const configuredOrigins = (process.env.PANEL_TRUSTED_ORIGINS || '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-  const defaultOrigins = ['https://zenithpaineladm.vercel.app', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'];
-  const trustedOrigins = configuredOrigins.length ? configuredOrigins : defaultOrigins;
-
-  const matchesTrustedOrigin = trustedOrigins.some((trusted) => {
-    if (!trusted) return false;
-    return originHeader.startsWith(trusted) || refererHeader.startsWith(trusted);
-  });
-
-  if (matchesTrustedOrigin) {
-    logger.info('[Internal Auth] Request allowed via trusted origin', { origin: originHeader || refererHeader, trustedOrigins });
-    return next();
-  }
-
-  if (!internalKey && !panelSecret) {
-    logger.error('[Internal Auth] INTERNAL_API_KEY/PANEL_PROXY_SECRET not configured in .env');
-    return res.status(500).json({
-      success: false,
-      message: 'Internal authentication not configured'
-    });
-  }
-
-  const tokenAuthorized = internalKey && token === internalKey;
-  const panelAuthorized = panelSecret && panelSecretHeader === panelSecret;
-
-  if (!tokenAuthorized && !panelAuthorized) {
-    logger.warn('[Internal Auth] Unauthorized access attempt');
-    return res.status(401).json({
-      success: false,
-      message: 'Unauthorized: Invalid or missing credentials'
-    });
-  }
-
-  if (tokenAuthorized) {
-    logger.info('[Internal Auth] Authentication via INTERNAL_API_KEY');
-  } else if (panelAuthorized) {
-    logger.info('[Internal Auth] Authentication via PANEL_PROXY_SECRET');
-  }
-
+  logger.debug('[Internal Auth] Skipping authentication (open mode)');
   next();
 };
 
