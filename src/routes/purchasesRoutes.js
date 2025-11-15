@@ -33,6 +33,9 @@ function safeId(v) {
       // Some drivers expose toHexString
       if (typeof v.toHexString === 'function') return v.toHexString();
     }
+  } catch (_) {}
+  return null;
+}
 
 // Simple admin-key middleware for internal integrations (e.g. admin panel)
 function requireAdminKey(req, res, next) {
@@ -46,9 +49,6 @@ function requireAdminKey(req, res, next) {
   } catch (e) {
     return res.status(500).json({ success: false, message: 'Erro na verificação de chave de admin', error: e?.message });
   }
-}
-  } catch (_) {}
-  return null;
 }
 
 function round2(v) { return Math.round(Number(v) * 100) / 100; }
