@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
 
+const mongoose = require('mongoose');
 const BoostingRequest = require('../models/BoostingRequest');
 const Agreement = require('../models/Agreement');
 const AcceptedProposal = require('../models/AcceptedProposal');
@@ -17,7 +18,6 @@ const Report = require('../models/Report');
 const User = require('../models/User');
 
 const proposalHandlerModule = require('../websocket/handlers/ProposalHandler');
-const { runTx } = require('../utils/mongoose');
 const { calculateAndSendEscrowUpdate } = require('./walletRoutes');
 
 const round2 = (value) => Math.round(Number(value || 0) * 100) / 100;
@@ -28,6 +28,26 @@ function normalizeObjectId(value) {
     return value.toString();
   } catch (_) {
     return value;
+  }
+}
+
+async function runTx(callback) {
+  let session;
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+    const result = await callback(session);
+    await session.commitTransaction();
+    session.endSession();
+    return result;
+  } catch (error) {
+    if (session) {
+      try {
+        await session.abortTransaction();
+      } catch (_) {}
+      session.endSession();
+    }
+    throw error;
   }
 }
 
@@ -89,6 +109,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
   const agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
 
+  let refundedClientId = null;
+
   if (agreement) {
     const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
 
@@ -131,6 +153,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
               }
             }
           ], { session });
+
+          refundedClientId = formattedClientId;
         } else {
           logger.warn('[Internal Boosting Cancel] Cliente não encontrado para devolver escrow', { clientId: formattedClientId });
         }
@@ -209,6 +233,11 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   }
 
   await AcceptedProposal.deleteMany({ conversationId });
+
+  if (refundedClientId) {
+    await sendBalanceUpdate(app, refundedClientId);
+    await calculateAndSendEscrowUpdate(app, refundedClientId);
+  }
 
   // Ticket resolution
   const ticket = await Report.findOne({ conversationId });
