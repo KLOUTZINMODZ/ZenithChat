@@ -1,0 +1,27 @@
+[
+  {
+    "title": "Como abrir uma disputa",
+    "content": "Se você é comprador e o pedido não foi entregue, abra um ticket de suporte informando o ID da compra. Nossa equipe irá avaliar e intermediar a disputa.",
+    "tags": ["buyer", "orders", "dispute", "support"]
+  },
+  {
+    "title": "Política de reembolso e devolução",
+    "content": "Reembolsos são avaliados caso a entrega não ocorra ou haja descumprimento dos termos. Consulte prazos, requisitos de evidências e etapas do processo nesta política.",
+    "tags": ["buyer", "refund", "policy", "common"]
+  },
+  {
+    "title": "Proteção de compra (TradeShield)",
+    "content": "A proteção de compra retém o pagamento até a confirmação de entrega. Entenda como funciona, prazos e como reportar problemas.",
+    "tags": ["buyer", "orders", "common"]
+  },
+  {
+    "title": "Como realizar saques",
+    "content": "Para sacar, vincule uma chave PIX (CPF/CNPJ) e solicite o valor desejado. Restrições de segurança podem se aplicar.",
+    "tags": ["seller", "wallet", "withdraw", "common"]
+  },
+  {
+    "title": "Vincular chave PIX",
+    "content": "Vá até a Carteira e vincule uma chave PIX válida (CPF ou CNPJ). Chaves bloqueadas não podem receber transferências.",
+    "tags": ["seller", "wallet", "pix", "common"]
+  }
+]
