@@ -375,8 +375,12 @@ class ProposalHandler {
 
   /**
    * Broadcast: Proposta aceita
+   * @param {string} boostingId - ID do boosting
+   * @param {string} proposalId - ID da proposta
+   * @param {string} conversationId - ID da conversa
+   * @param {object} modalData - Dados completos para atualizar o modal (opcional)
    */
-  broadcastProposalAccepted(boostingId, proposalId, conversationId) {
+  broadcastProposalAccepted(boostingId, proposalId, conversationId, modalData = null) {
     try {
       const subscribers = this.boostingSubscriptions.get(boostingId);
       if (!subscribers || subscribers.size === 0) {
@@ -384,7 +388,7 @@ class ProposalHandler {
         return;
       }
 
-      // ✅ Evento 1: Notificar que proposta foi aceita
+      // ✅ Evento 1: Notificar que proposta foi aceita (com dados do modal se disponível)
       const proposalAcceptedMessage = JSON.stringify({
         type: 'proposal:accepted',
         boostingId,
@@ -392,7 +396,21 @@ class ProposalHandler {
           proposalId,
           conversationId,
           status: 'accepted',
-          boostingId // ✅ Incluir boostingId nos dados para validação no frontend
+          boostingId,
+          // ✅ Incluir dados completos do modal para atualização em tempo real
+          ...(modalData && {
+            price: modalData.price,
+            estimatedTime: modalData.estimatedTime,
+            message: modalData.message,
+            isTemporary: false,
+            clientName: modalData.clientName,
+            boosterName: modalData.boosterName,
+            clientAvatar: modalData.clientAvatar,
+            boosterAvatar: modalData.boosterAvatar,
+            game: modalData.game,
+            category: modalData.category,
+            acceptedAt: modalData.acceptedAt
+          })
         },
         timestamp: new Date().toISOString()
       });
