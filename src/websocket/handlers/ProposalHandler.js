@@ -48,6 +48,7 @@ class ProposalHandler {
     try {
       const { proposalId, conversationId, boostingId } = payload;
 
+      logger.info(`[ProposalHandler] Processando proposta aceita: ${proposalId}`);
 
       const conversation = await Conversation.findOne({
         proposalId: proposalId
@@ -58,17 +59,21 @@ class ProposalHandler {
         return;
       }
 
+      logger.info(`[ProposalHandler] Conversa encontrada: ${conversation._id}`);
 
+      // ✅ Atualizar conversa
       conversation.isTemporary = false;
       conversation.status = 'accepted';
-      conversation.boostingStatus = 'active';
+      conversation.boostingStatus = 'in_progress'; // Alterado de 'active' para 'in_progress'
       conversation.expiresAt = null;
       
       await conversation.save();
 
+      logger.info(`[ProposalHandler] Conversa atualizada: status=${conversation.status}, isTemporary=${conversation.isTemporary}`);
 
       const participants = conversation.participants;
       
+      // ✅ Evento 1: Notificar ambos os participantes que proposta foi aceita
       participants.forEach(participantId => {
         const connections = this.connectionManager.getUserConnections(participantId.toString());
         
@@ -82,7 +87,7 @@ class ProposalHandler {
                 boostingId,
                 isTemporary: false,
                 status: 'accepted',
-                boostingStatus: 'active',
+                boostingStatus: 'in_progress',
                 message: 'Proposta aceita! Chat convertido para permanente.'
               }
             }));
@@ -90,24 +95,35 @@ class ProposalHandler {
         });
       });
 
+      logger.info(`[ProposalHandler] Evento proposal:accepted enviado para ${participants.length} participantes`);
 
+      // ✅ Evento 2: Atualizar conversa em tempo real
       participants.forEach(participantId => {
         const connections = this.connectionManager.getUserConnections(participantId.toString());
         
         connections.forEach(connection => {
           if (connection.readyState === 1) {
             connection.send(JSON.stringify({
-              type: 'conversations:update',
+              type: 'conversation:updated',
               data: {
                 conversationId: conversation._id,
-                action: 'status_updated'
+                status: 'accepted',
+                isTemporary: false,
+                boostingStatus: 'in_progress',
+                action: 'status_updated',
+                conversation: {
+                  _id: conversation._id,
+                  status: conversation.status,
+                  isTemporary: conversation.isTemporary,
+                  boostingStatus: conversation.boostingStatus
+                }
               }
             }));
           }
         });
       });
 
-      // Proposta processada
+      logger.info(`[ProposalHandler] Evento conversation:updated enviado para ${participants.length} participantes`);
 
     } catch (error) {
       logger.error('Erro ao processar proposta aceita:', error);
@@ -368,7 +384,8 @@ class ProposalHandler {
         return;
       }
 
-      const message = JSON.stringify({
+      // ✅ Evento 1: Notificar que proposta foi aceita
+      const proposalAcceptedMessage = JSON.stringify({
         type: 'proposal:accepted',
         boostingId,
         data: { 
@@ -380,13 +397,27 @@ class ProposalHandler {
         timestamp: new Date().toISOString()
       });
 
+      // ✅ Evento 2: Remover proposta da lista (para ambos os usuários)
+      const proposalRemovedMessage = JSON.stringify({
+        type: 'proposal:removed',
+        boostingId,
+        data: { 
+          proposalId,
+          reason: 'accepted',
+          boostingId
+        },
+        timestamp: new Date().toISOString()
+      });
+
       let broadcastCount = 0;
       subscribers.forEach(userId => {
         const connections = this.connectionManager.getUserConnections(userId);
         connections.forEach(conn => {
           if (conn.readyState === 1) {
             try {
-              conn.send(message);
+              // Enviar ambos os eventos
+              conn.send(proposalAcceptedMessage);
+              conn.send(proposalRemovedMessage);
               broadcastCount++;
             } catch (error) {
               logger.error(`Error broadcasting acceptance to user ${userId}:`, error);
