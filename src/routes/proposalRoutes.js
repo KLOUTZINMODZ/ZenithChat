@@ -83,37 +83,18 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       clientId = String(clientId);
     }
     
-    // 🔧 FALLBACK: Se conversationId não veio no body, tenta extrair do metadata ou buscar conversa
+    // conversationId agora é obrigatório: se não veio nem no body nem no metadata, falha imediatamente
     if (!conversationId && metadata?.conversationId) {
       conversationId = metadata.conversationId;
       console.log(`⚠️ conversationId extraído do metadata:`, conversationId);
     }
-    
-    // 🔧 FALLBACK 2: Se ainda não tem conversationId, busca conversa pelo proposalId
+
     if (!conversationId) {
-      console.log(`⚠️ conversationId ausente, buscando conversa pelo proposalId...`);
-      try {
-        const Conversation = require('../models/Conversation');
-        const foundConv = await Conversation.findOne({
-          isTemporary: true,
-          status: 'temporary',
-          $or: [
-            { 'metadata.proposalId': actualProposalId },
-            { 'metadata.proposalId': proposalId },
-            { proposal: actualProposalId },
-            { proposal: proposalId }
-          ]
-        });
-        
-        if (foundConv) {
-          conversationId = foundConv._id.toString();
-          console.log(`✅ conversationId encontrado pela conversa:`, conversationId);
-        } else {
-          console.error(`❌ Nenhuma conversa encontrada para proposalId: ${proposalId}/${actualProposalId}`);
-        }
-      } catch (convError) {
-        console.error(`❌ Erro ao buscar conversa:`, convError.message);
-      }
+      return res.status(400).json({
+        success: false,
+        message: 'conversationId é obrigatório para aceitar proposta',
+        error: 'MISSING_CONVERSATION_ID'
+      });
     }
 
     // Request received - removed info log for performance
@@ -248,21 +229,8 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     let agreementCreated = null;
     
     try {
-      // 1. Buscar conversa
-      if (conversationId) {
-        acceptedConv = await Conversation.findById(conversationId);
-      }
-      if (!acceptedConv) {
-        acceptedConv = await Conversation.findOne({
-          isTemporary: true,
-          $or: [
-            { 'metadata.proposalId': proposalId },
-            { 'metadata.proposalId': actualProposalId },
-            { proposal: proposalId },
-            { proposal: actualProposalId }
-          ]
-        });
-      }
+      // 1. Buscar conversa EXCLUSIVAMENTE pelo conversationId informado
+      acceptedConv = await Conversation.findById(conversationId);
 
       if (!acceptedConv) {
         throw new Error('Conversa não encontrada para aceitar proposta');
