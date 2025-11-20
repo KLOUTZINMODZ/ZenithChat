@@ -166,13 +166,18 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     logger.info(`[Internal Boosting Cancel] Agreement encontrado: ${agreement._id}, status=${agreement.status}`);
 
     await runTx(async (session) => {
-      const clientId = agreement.parties?.client?.userid;
+      const agreementInTx = await Agreement.findById(agreement._id).session(session);
+      if (!agreementInTx) {
+        throw new Error(`Agreement ${agreement._id} not found during cancellation`);
+      }
+
+      const clientId = agreementInTx.parties?.client?.userid;
       logger.info(`[Internal Boosting Cancel] Buscando escrow para clientId=${clientId}`);
       
       const escrow = await WalletLedger.findOne({
         userId: clientId,
         reason: 'boosting_escrow',
-        'metadata.agreementId': agreement._id.toString()
+        'metadata.agreementId': agreementInTx._id.toString()
       }).session(session);
 
       if (escrow && escrow.amount > 0) {
@@ -196,12 +201,12 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
               direction: 'credit',
               reason: 'boosting_escrow_refund',
               amount: Number(escrow.amount),
-              operationId: `boosting_escrow_refund:${agreement._id}`,
+              operationId: `boosting_escrow_refund:${agreementInTx._id}`,
               balanceBefore: before,
               balanceAfter: after,
               metadata: {
                 source: 'boosting',
-                agreementId: agreement._id.toString(),
+                agreementId: agreementInTx._id.toString(),
                 conversationId: normalizeObjectId(conversationId),
                 cancelledBy: adminId,
                 cancelReason: reason || 'Serviço cancelado',
@@ -220,25 +225,21 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       }
 
       // ✅ CORRIGIDO: Cancelar agreement dentro da transação (sem chamar .save() interno)
-      if (!['pending', 'active'].includes(agreement.status)) {
-        throw new Error(`Cannot cancel agreement in status: ${agreement.status}`);
+      if (!['pending', 'active'].includes(agreementInTx.status)) {
+        throw new Error(`Cannot cancel agreement in status: ${agreementInTx.status}`);
       }
       
       logger.info(`[Internal Boosting Cancel] Atualizando Agreement.status para 'cancelled'`);
-      logger.info(`[Internal Boosting Cancel] Agreement ANTES: status=${agreement.status}, _id=${agreement._id}`);
-      
-      agreement.status = 'cancelled';
-      agreement.cancelledAt = new Date();
-      agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
-      
-      const savedAgreement = await agreement.save({ session });
-      logger.info(`[Internal Boosting Cancel] Agreement DEPOIS: status=${savedAgreement.status}, _id=${savedAgreement._id}`);
+      agreementInTx.status = 'cancelled';
+      agreementInTx.cancelledAt = new Date();
+      agreementInTx.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
+      await agreementInTx.save({ session });
       logger.info(`[Internal Boosting Cancel] Agreement salvo com sucesso`);
 
       await WalletLedger.updateMany(
         {
           reason: 'boosting_escrow',
-          'metadata.agreementId': agreement._id.toString(),
+          'metadata.agreementId': agreementInTx._id.toString(),
         },
         {
           $set: {
@@ -263,13 +264,6 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         boostingOrderSnapshot = boostingOrderDoc.toObject();
       }
     });
-
-    // ✅ NOVO: Verificar se o Agreement foi realmente atualizado no banco APÓS a transação
-    const agreementAfterTx = await Agreement.findById(agreement._id);
-    logger.info(`[Internal Boosting Cancel] ✅ VERIFICAÇÃO PÓS-TRANSAÇÃO: Agreement._id=${agreement._id}, status=${agreementAfterTx?.status}`);
-    if (agreementAfterTx?.status !== 'cancelled') {
-      logger.error(`[Internal Boosting Cancel] ❌ ERRO: Agreement não foi atualizado! Status ainda é: ${agreementAfterTx?.status}`);
-    }
   }
 
   const webSocketServer = app?.get('webSocketServer');
@@ -599,60 +593,6 @@ router.get('/proposal/stats', internalAuth, (req, res) => {
 });
 
 /**
- * ✅ NOVO: GET /api/admin/orders
- * Endpoint para painel administrativo listar todos os boosting orders
- */
-router.get('/admin/orders', internalAuth, async (req, res) => {
-  try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-    const search = req.query.search || '';
-
-    // Buscar BoostingOrders
-    const boostingOrderFilter = {};
-    if (search) {
-      boostingOrderFilter.$or = [
-        { orderNumber: { $regex: search, $options: 'i' } },
-        { 'clientData.name': { $regex: search, $options: 'i' } },
-        { 'boosterData.name': { $regex: search, $options: 'i' } }
-      ];
-    }
-
-    const boostingOrders = await BoostingOrder.find(boostingOrderFilter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
-
-    const total = await BoostingOrder.countDocuments(boostingOrderFilter);
-    const pages = Math.ceil(total / limit);
-
-    logger.info(`[Admin Orders] Retornando ${boostingOrders.length} boosting orders (total: ${total})`);
-
-    res.json({
-      success: true,
-      data: {
-        orders: boostingOrders,
-        pagination: {
-          total,
-          page,
-          limit,
-          pages
-        }
-      }
-    });
-  } catch (error) {
-    logger.error('[Admin Orders] Erro ao listar orders:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao listar orders',
-      error: error.message
-    });
-  }
-});
-
-/**
  * GET /api/internal/health
  * Health check para monitoramento
  */
@@ -664,8 +604,7 @@ router.get('/health', (req, res) => {
     endpoints: {
       broadcast: 'POST /api/internal/proposal/broadcast',
       stats: 'GET /api/internal/proposal/stats',
-      health: 'GET /api/internal/health',
-      adminOrders: 'GET /api/admin/orders'
+      health: 'GET /api/internal/health'
     }
   });
 });
