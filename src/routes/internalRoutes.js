@@ -154,6 +154,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   const cancellationReason = reason || 'Serviço cancelado';
   const proposalIdFromConversation = conversation.metadata?.get?.('proposalId') || conversation.proposal || conversation.metadata?.proposalId;
   const normalizedProposalId = proposalIdFromConversation ? normalizeObjectId(proposalIdFromConversation) : null;
+  let escrowAmount = 0;
 
   try {
     await runTx(async (session) => {
@@ -204,6 +205,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         }).session(session);
 
         if (escrow && escrow.amount > 0) {
+          escrowAmount = Number(escrow.amount);
           const formattedClientId = normalizeObjectId(clientId);
           const user = await User.findById(formattedClientId).session(session);
 
@@ -294,7 +296,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         boostingOrderDoc.cancellationDetails = {
           cancelledBy: normalizeObjectId(adminId),
           cancelReason: cancellationReason,
-          refundAmount: Number(refundedClientId ? (escrow?.amount || 0) : (escrow?.amount || 0))
+          refundAmount: escrowAmount
         };
         await boostingOrderDoc.save({ session });
         boostingOrderSnapshot = boostingOrderDoc.toObject();
