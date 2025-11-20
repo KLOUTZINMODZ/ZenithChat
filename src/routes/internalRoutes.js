@@ -207,7 +207,15 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         }
       }
 
-      await agreement.cancel(adminId, reason || '', idemKey);
+      // ✅ CORRIGIDO: Cancelar agreement dentro da transação (sem chamar .save() interno)
+      if (!['pending', 'active'].includes(agreement.status)) {
+        throw new Error(`Cannot cancel agreement in status: ${agreement.status}`);
+      }
+      
+      agreement.status = 'cancelled';
+      agreement.cancelledAt = new Date();
+      agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
+      await agreement.save({ session });
 
       await WalletLedger.updateMany(
         {
