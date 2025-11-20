@@ -224,7 +224,9 @@ router.get('/list', auth, async (req, res) => {
     // ========== FALLBACK: BUSCAR AGREEMENTS (para boostings não migrados) ==========
     const agreementFilter = {};
     
-    // Filtrar por status se especificado (mapear para status de Agreement)
+    // ✅ CORRIGIDO: Sempre excluir agreements cancelados por padrão
+    // Se statusParam for fornecido, usar o filtro específico
+    // Se não, excluir apenas cancelados (mostrar active, pending, completed, etc)
     if (statusParam) {
       const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
       if (statuses.length > 0) {
@@ -236,6 +238,10 @@ router.get('/list', auth, async (req, res) => {
         });
         agreementFilter.status = { $in: mappedStatuses };
       }
+    } else {
+      // ✅ NOVO: Se nenhum status foi especificado, excluir cancelados por padrão
+      // Isso garante que agreements cancelados não apareçam em listas gerais
+      agreementFilter.status = { $ne: 'cancelled' };
     }
     
     if (type === 'sales') {
@@ -259,7 +265,14 @@ router.get('/list', auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log('[PURCHASES LIST] Filtro de Agreement:', JSON.stringify(agreementFilter));
     console.log('[PURCHASES LIST] BoostingOrders:', boostingOrders.length, 'Agreements não migrados:', agreementsNotMigrated.length);
+    
+    // ✅ NOVO: Log para verificar se há agreements cancelados sendo retornados
+    const cancelledAgreements = agreementsNotMigrated.filter(ag => ag.status === 'cancelled');
+    if (cancelledAgreements.length > 0) {
+      console.warn(`[PURCHASES LIST] ⚠️ AVISO: ${cancelledAgreements.length} agreements cancelados foram retornados (deveriam estar filtrados)`);
+    }
 
     // ========== BUSCAR DADOS ADICIONAIS ==========
     const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
