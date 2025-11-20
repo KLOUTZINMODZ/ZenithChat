@@ -248,7 +248,9 @@ conversationSchema.methods.finalize = function(userId) {
 
 
 conversationSchema.methods.canReceiveMessages = function() {
-  return this.isActive && !this.isFinalized && this.status !== 'expired' && this.isDeleted !== true;
+  // ✅ Bloquear se: inativo, finalizado, expirado, deletado, ou boosting cancelado
+  const isCancelledBoosting = this.boostingStatus === 'cancelled';
+  return this.isActive && !this.isFinalized && this.status !== 'expired' && this.isDeleted !== true && !isCancelledBoosting;
 };
 
 
