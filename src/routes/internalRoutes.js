@@ -141,8 +141,11 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
   await systemMessage.save();
 
+  // ✅ ATUALIZAR TODOS OS CAMPOS DE STATUS DA CONVERSATION
   conversation.isActive = false;
   conversation.boostingStatus = 'cancelled';
+  conversation.status = 'cancelled';
+  conversation.isFinalized = true;
   conversation.lastMessage = systemMessage._id;
   conversation.lastMessageAt = new Date();
   conversation.metadata = conversation.metadata || new Map();
@@ -263,6 +266,20 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         await boostingOrderDoc.save({ session });
         boostingOrderSnapshot = boostingOrderDoc.toObject();
       }
+
+      // ✅ Atualizar AcceptedProposal dentro da transação (em vez de deletar)
+      await AcceptedProposal.updateMany(
+        { conversationId },
+        {
+          $set: {
+            status: 'cancelled',
+            cancelledAt: new Date(),
+            cancelReason: reason || 'Serviço cancelado',
+            cancelledBy: adminId
+          }
+        },
+        { session }
+      );
     });
   }
 
@@ -292,8 +309,12 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         status: 'cancelled',
         boostingStatus: 'cancelled',
         isActive: false,
+        isFinalized: true,
         updatedAt: new Date().toISOString(),
-        source: 'internal-api'
+        source: 'internal-api',
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: adminId,
+        reason: reason || 'Serviço cancelado'
       }
     };
 
@@ -352,8 +373,6 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       }
     );
   }
-
-  await AcceptedProposal.deleteMany({ conversationId });
 
   if (refundedClientId) {
     logger.info(`[Internal Boosting Cancel] Enviando atualização de saldo para clientId=${refundedClientId}`);
