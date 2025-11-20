@@ -767,6 +767,34 @@ class BoostingChatController {
         });
       }
 
+      // Sincronizar status da proposta com HackLoteAPI
+      try {
+        const axios = require('axios');
+        const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app';
+        const internalApiKey = process.env.INTERNAL_API_KEY;
+
+        if (internalApiKey && agreement?.boostingRequestId && agreement?.proposalId) {
+          const syncUrl = `${hackLoteApiUrl.replace(/\/$/, '')}/api/internal/update-proposal-status`;
+
+          await axios.post(syncUrl, {
+            boostingId: agreement.boostingRequestId.toString(),
+            proposalId: agreement.proposalId.toString(),
+            status: 'cancelled',
+            reason: reason || 'Serviço cancelado'
+          }, {
+            headers: {
+              'Authorization': `Bearer ${internalApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 5000
+          }).catch(() => {
+            // Falha silenciosa - não bloqueia o cancelamento
+          });
+        }
+      } catch (_) {
+        // Sincronização falhou, mas não bloqueia o cancelamento
+      }
+
       res.json({
         success: true,
         message: 'Atendimento cancelado com sucesso',
@@ -1844,6 +1872,33 @@ class BoostingChatController {
         boostingRequestId: normalizeId(agreement.boostingRequestId),
         proposalId: normalizeId(agreement.proposalId)
       });
+
+      // Sincronizar status da proposta com HackLoteAPI
+      try {
+        const axios = require('axios');
+        const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app';
+        const internalApiKey = process.env.INTERNAL_API_KEY;
+
+        if (internalApiKey && agreement.boostingRequestId && agreement.proposalId) {
+          const syncUrl = `${hackLoteApiUrl.replace(/\/$/, '')}/api/internal/update-proposal-status`;
+
+          await axios.post(syncUrl, {
+            boostingId: agreement.boostingRequestId.toString(),
+            proposalId: agreement.proposalId.toString(),
+            status: 'accepted'
+          }, {
+            headers: {
+              'Authorization': `Bearer ${internalApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            timeout: 5000
+          }).catch(() => {
+            // Falha silenciosa - não bloqueia a resposta
+          });
+        }
+      } catch (_) {
+        // Sincronização falhou, mas não bloqueia a resposta
+      }
 
       res.json({
         success: true,

@@ -324,6 +324,34 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         }
       }
     );
+
+    // Sincronizar status das propostas com HackLoteAPI
+    try {
+      const axios = require('axios');
+      const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app';
+      const internalApiKey = process.env.INTERNAL_API_KEY;
+
+      if (internalApiKey && agreement?.proposalId) {
+        const syncUrl = `${hackLoteApiUrl.replace(/\/$/, '')}/api/internal/update-proposal-status`;
+
+        await axios.post(syncUrl, {
+          boostingId: boostingId.toString(),
+          proposalId: agreement.proposalId.toString(),
+          status: 'cancelled',
+          reason: reason || 'Serviço cancelado'
+        }, {
+          headers: {
+            'Authorization': `Bearer ${internalApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 5000
+        }).catch(() => {
+          // Falha silenciosa - não bloqueia o cancelamento
+        });
+      }
+    } catch (_) {
+      // Sincronização falhou, mas não bloqueia o cancelamento
+    }
   }
 
   await AcceptedProposal.deleteMany({ conversationId });
@@ -561,6 +589,68 @@ router.get('/proposal/stats', internalAuth, (req, res) => {
 });
 
 /**
+ * POST /api/internal/sync-proposal-status
+ * Sincroniza status de proposta com HackLoteAPI
+ */
+router.post('/sync-proposal-status', async (req, res) => {
+  try {
+    const { boostingId, proposalId, status, reason } = req.body;
+
+    if (!boostingId || !proposalId || !status) {
+      return res.status(400).json({
+        success: false,
+        message: 'boostingId, proposalId e status são obrigatórios'
+      });
+    }
+
+    try {
+      const axios = require('axios');
+      const hackLoteApiUrl = process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app';
+      const internalApiKey = process.env.INTERNAL_API_KEY;
+
+      if (!internalApiKey) {
+        return res.status(500).json({
+          success: false,
+          message: 'INTERNAL_API_KEY não configurada'
+        });
+      }
+
+      const syncUrl = `${hackLoteApiUrl.replace(/\/$/, '')}/api/internal/update-proposal-status`;
+
+      const response = await axios.post(syncUrl, {
+        boostingId,
+        proposalId,
+        status,
+        reason
+      }, {
+        headers: {
+          'Authorization': `Bearer ${internalApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000
+      });
+
+      res.json({
+        success: true,
+        message: 'Status de proposta sincronizado',
+        data: response.data
+      });
+    } catch (syncError) {
+      res.status(500).json({
+        success: false,
+        message: 'Erro ao sincronizar com HackLoteAPI',
+        error: syncError.message
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/internal/health
  * Health check para monitoramento
  */
@@ -572,6 +662,7 @@ router.get('/health', (req, res) => {
     endpoints: {
       broadcast: 'POST /api/internal/proposal/broadcast',
       stats: 'GET /api/internal/proposal/stats',
+      'sync-proposal-status': 'POST /api/internal/sync-proposal-status',
       health: 'GET /api/internal/health'
     }
   });
