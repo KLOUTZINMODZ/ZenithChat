@@ -219,6 +219,7 @@ router.post('/:boostingId/cancel/conversations', async (req, res) => {
 /**
  * POST /api/boosting-cancel/:boostingId/cancel/broadcast
  * Fazer broadcast via WebSocket para notificar clientes em tempo real
+ * Usa ProposalHandler para manter consistência com aceitação de propostas
  */
 router.post('/:boostingId/cancel/broadcast', async (req, res) => {
   try {
@@ -233,12 +234,14 @@ router.post('/:boostingId/cancel/broadcast', async (req, res) => {
     }
 
     const Conversation = require('../models/Conversation');
+    const BoostingRequest = require('../models/BoostingRequest');
     
     logger.info(`[CANCEL-BROADCAST] Procurando Conversation para broadcast: ${boostingId}`);
 
-    const conversation = await Conversation.findOne({
-      'metadata.boostingId': boostingId
-    });
+    const [conversation, boostingRequest] = await Promise.all([
+      Conversation.findOne({ 'metadata.boostingId': boostingId }),
+      BoostingRequest.findById(boostingId)
+    ]);
 
     if (!conversation) {
       logger.warn(`[CANCEL-BROADCAST] Nenhuma Conversation encontrada para broadcast: ${boostingId}`);
@@ -250,25 +253,70 @@ router.post('/:boostingId/cancel/broadcast', async (req, res) => {
 
     logger.info(`[CANCEL-BROADCAST] Conversation encontrada: ${conversation._id}`);
 
-    // ✅ Fazer broadcast via WebSocket
-    const ws = req.app?.get('webSocketServer');
-    if (ws && conversation) {
+    // ✅ Usar ProposalHandler para broadcast (igual a aceitação)
+    const proposalHandler = req.app?.get('proposalHandler');
+    const webSocketServer = req.app?.get('webSocketServer');
+    
+    if (proposalHandler) {
+      logger.info(`[CANCEL-BROADCAST] Usando ProposalHandler para broadcast`);
+      
+      // Chamar método de broadcast de cancelamento de boosting
+      proposalHandler.broadcastBoostingCancelled(boostingId);
+      
+      logger.info(`[CANCEL-BROADCAST] ProposalHandler broadcast enviado`);
+    }
+
+    // ✅ Enviar eventos estruturados via WebSocket (igual a aceitação)
+    if (webSocketServer && conversation) {
       const participants = conversation.participants || [];
       
-      logger.info(`[CANCEL-BROADCAST] Enviando notificação para ${participants.length} participantes`);
+      logger.info(`[CANCEL-BROADCAST] Enviando eventos estruturados para ${participants.length} participantes`);
       
+      // Evento 1: boosting:cancelled com dados completos
+      const boostingCancelledEvent = {
+        type: 'boosting:cancelled',
+        data: {
+          boostingId: boostingId,
+          conversationId: conversation._id.toString(),
+          message: 'Atendimento cancelado pelo administrador',
+          reason: reason || 'Cancelado pelo administrador',
+          cancelledBy: cancelledBy || 'admin',
+          timestamp: new Date().toISOString(),
+          // Dados adicionais para reidratar UI
+          clientId: boostingRequest?.clientId?.toString(),
+          boosterId: boostingRequest?.boosterId?.toString(),
+          game: boostingRequest?.game,
+          category: boostingRequest?.category,
+          price: boostingRequest?.price
+        }
+      };
+
+      // Evento 2: conversation:updated para refletir cancelamento
+      const conversationUpdateEvent = {
+        type: 'conversation:updated',
+        data: {
+          conversationId: conversation._id.toString(),
+          status: 'cancelled',
+          isActive: false,
+          boostingStatus: 'cancelled',
+          action: 'cancelled',
+          updatedAt: new Date().toISOString(),
+          conversation: {
+            _id: conversation._id,
+            status: 'cancelled',
+            isActive: false,
+            boostingStatus: 'cancelled'
+          }
+        }
+      };
+
+      // Enviar para todos os participantes
       participants.forEach(participantId => {
         try {
-          ws.notificationService?.notifyUser(participantId.toString(), {
-            type: 'boosting:cancelled',
-            conversationId: conversation._id.toString(),
-            boostingId: boostingId,
-            message: 'Atendimento cancelado pelo administrador',
-            reason: reason || 'Cancelado pelo administrador',
-            timestamp: new Date()
-          });
+          webSocketServer.sendToUser(participantId.toString(), boostingCancelledEvent);
+          webSocketServer.sendToUser(participantId.toString(), conversationUpdateEvent);
           
-          logger.debug(`[CANCEL-BROADCAST] Notificação enviada para participante: ${participantId}`);
+          logger.debug(`[CANCEL-BROADCAST] Eventos enviados para participante: ${participantId}`);
         } catch (notifyErr) {
           logger.error(`[CANCEL-BROADCAST] Erro ao notificar participante ${participantId}:`, notifyErr);
         }
