@@ -599,6 +599,60 @@ router.get('/proposal/stats', internalAuth, (req, res) => {
 });
 
 /**
+ * ✅ NOVO: GET /api/admin/orders
+ * Endpoint para painel administrativo listar todos os boosting orders
+ */
+router.get('/admin/orders', internalAuth, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const search = req.query.search || '';
+
+    // Buscar BoostingOrders
+    const boostingOrderFilter = {};
+    if (search) {
+      boostingOrderFilter.$or = [
+        { orderNumber: { $regex: search, $options: 'i' } },
+        { 'clientData.name': { $regex: search, $options: 'i' } },
+        { 'boosterData.name': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const boostingOrders = await BoostingOrder.find(boostingOrderFilter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await BoostingOrder.countDocuments(boostingOrderFilter);
+    const pages = Math.ceil(total / limit);
+
+    logger.info(`[Admin Orders] Retornando ${boostingOrders.length} boosting orders (total: ${total})`);
+
+    res.json({
+      success: true,
+      data: {
+        orders: boostingOrders,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('[Admin Orders] Erro ao listar orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao listar orders',
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/internal/health
  * Health check para monitoramento
  */
@@ -610,7 +664,8 @@ router.get('/health', (req, res) => {
     endpoints: {
       broadcast: 'POST /api/internal/proposal/broadcast',
       stats: 'GET /api/internal/proposal/stats',
-      health: 'GET /api/internal/health'
+      health: 'GET /api/internal/health',
+      adminOrders: 'GET /api/admin/orders'
     }
   });
 });
