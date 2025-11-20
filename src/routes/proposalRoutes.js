@@ -638,8 +638,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
       
       await acceptedConv.save();
       
-      // IMPORTANTE: Verificar se já existe outra conversa para o mesmo acordo para evitar duplicação
+      // IMPORTANTE: Verificar se já existe outra conversa para o mesmo acordo/boosting para evitar duplicação
       try {
+        // 1) Duplicata baseada em latestAgreementId (fluxos antigos que já usavam agreement)
         const duplicateCheck = await Conversation.findOne({
           _id: { $ne: acceptedConv._id },
           'metadata.latestAgreementId': agreementCreated?.agreementId,
@@ -653,6 +654,31 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           duplicateCheck.metadata.deactivationReason = 'Conversa duplicada durante aceitação de proposta';
           duplicateCheck.metadata.primaryConversationId = acceptedConv._id;
           await duplicateCheck.save();
+        }
+
+        // 2) Duplicatas legadas para o mesmo boosting (primeiro boosting aceito)
+        if (boostingId && acceptedConv.participants && acceptedConv.participants.length >= 2) {
+          const participantIds = acceptedConv.participants.map(p => p.toString());
+
+          const legacyDuplicates = await Conversation.find({
+            _id: { $ne: acceptedConv._id },
+            participants: { $all: participantIds },
+            isGroupChat: false,
+            isActive: true,
+            $or: [
+              { 'metadata.relatedBoostingId': boostingId.toString() },
+              { 'metadata.boostingId': boostingId.toString() }
+            ]
+          });
+
+          for (const dup of legacyDuplicates) {
+            console.warn(`⚠️ Detectada conversa legada duplicada para o mesmo boosting (${boostingId}): ${dup._id}. Marcando como inativa.`);
+            dup.isActive = false;
+            dup.metadata = dup.metadata || {};
+            dup.metadata.deactivationReason = 'Conversa duplicada (legacy) para o mesmo boosting durante aceitação de proposta';
+            dup.metadata.primaryConversationId = acceptedConv._id;
+            await dup.save();
+          }
         }
       } catch (dupErr) {
         console.error('Erro ao verificar conversas duplicadas:', dupErr);
