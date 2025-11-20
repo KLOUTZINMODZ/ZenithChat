@@ -651,6 +651,64 @@ router.post('/sync-proposal-status', async (req, res) => {
 });
 
 /**
+ * POST /api/internal/create-temporary-chat
+ * Cria um chat temporário para uma proposta
+ * Chamado pela HackLoteAPI quando uma proposta é criada
+ */
+router.post('/create-temporary-chat', async (req, res) => {
+  try {
+    const {
+      clientId,
+      boosterId,
+      proposalId,
+      boostingId,
+      proposalData,
+      clientData,
+      boosterData
+    } = req.body;
+
+    if (!clientId || !boosterId || !proposalId || !proposalData) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dados obrigatórios não fornecidos'
+      });
+    }
+
+    const temporaryChatController = require('../controllers/temporaryChatController');
+
+    // Chamar o controller diretamente, passando um objeto req simulado
+    const mockReq = {
+      body: {
+        clientId,
+        boosterId,
+        proposalId,
+        boostingId,
+        proposalData,
+        clientData,
+        boosterData
+      },
+      app: req.app,
+      user: { id: clientId } // Simular usuário autenticado
+    };
+
+    const mockRes = {
+      json: (data) => res.json(data),
+      status: (code) => ({
+        json: (data) => res.status(code).json(data)
+      })
+    };
+
+    await temporaryChatController.createTemporaryChat(mockReq, mockRes);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao criar chat temporário',
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/internal/health
  * Health check para monitoramento
  */
@@ -663,6 +721,7 @@ router.get('/health', (req, res) => {
       broadcast: 'POST /api/internal/proposal/broadcast',
       stats: 'GET /api/internal/proposal/stats',
       'sync-proposal-status': 'POST /api/internal/sync-proposal-status',
+      'create-temporary-chat': 'POST /api/internal/create-temporary-chat',
       health: 'GET /api/internal/health'
     }
   });
