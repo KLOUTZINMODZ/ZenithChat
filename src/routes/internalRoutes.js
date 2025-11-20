@@ -67,13 +67,13 @@ async function emitBoostingStatusChanged(app, boostingOrderData, status) {
       await Promise.all(
         participantIds.map((uid) =>
           ws.conversationHandler.sendConversationsUpdate(uid).catch((err) => {
-            console.log('[Boosting Status Update] Failed to refresh conversations via WS', { uid, error: err?.message });
+            logger.warn('[Boosting Status Update] Failed to refresh conversations via WS', { uid, error: err?.message });
           })
         )
       );
     }
   } catch (err) {
-    console.log('[Boosting Status Update] Failed to emit marketplace-style status update', { error: err?.message });
+    logger.warn('[Boosting Status Update] Failed to emit marketplace-style status update', { error: err?.message });
   }
 }
 
@@ -102,15 +102,12 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     throw new Error('conversationId is required for boosting cancel');
   }
 
-  console.log(`[Internal Boosting Cancel] Iniciando cancelamento: conversationId=${conversationId}, reason=${reason}, adminId=${adminId}`);
-
   const conversation = await Conversation.findById(conversationId);
   if (!conversation) {
     throw new Error('Conversation not found');
   }
 
   let boostingId = conversation.metadata?.get?.('boostingId') || conversation.proposal || conversation.marketplaceItem;
-  console.log(`[Internal Boosting Cancel] Conversation encontrada, boostingId=${boostingId}`);
 
   if (!boostingId) {
     const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
@@ -141,196 +138,119 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
   await systemMessage.save();
 
+  conversation.isActive = false;
+  conversation.boostingStatus = 'cancelled';
+  conversation.lastMessage = systemMessage._id;
+  conversation.lastMessageAt = new Date();
+  conversation.metadata = conversation.metadata || new Map();
+  conversation.metadata.set('status', 'cancelled');
+  conversation.metadata.set('cancelledAt', new Date());
+  conversation.metadata.set('cancelledBy', adminId);
+
+  await conversation.save();
+
   if (boostingId && proposalHandler?.broadcastBoostingCancelled) {
     proposalHandler.broadcastBoostingCancelled(boostingId.toString());
   }
 
-  // ✅ TRANSAÇÃO ÚNICA PARA ATUALIZAR TODAS AS 4 COLLECTIONS
+  const agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
+
   let refundedClientId = null;
   let boostingOrderSnapshot = null;
-  const cancellationDate = new Date();
-  const normalizedConversationId = normalizeObjectId(conversationId);
-  const normalizedBoostingId = boostingId ? normalizeObjectId(boostingId) : null;
-  const cancellationReason = reason || 'Serviço cancelado';
-  const proposalIdFromConversation = conversation.metadata?.get?.('proposalId') || conversation.proposal || conversation.metadata?.proposalId;
-  const normalizedProposalId = proposalIdFromConversation ? normalizeObjectId(proposalIdFromConversation) : null;
-  let escrowAmount = 0;
 
-  try {
+  if (agreement) {
+    const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
+
     await runTx(async (session) => {
-      // 1️⃣ ATUALIZAR CONVERSATION (sem depender de validação de enum antiga)
-      const conversationUpdate = await Conversation.updateOne(
-        { _id: conversationId },
-        {
-          $set: {
-            isActive: false,
-            boostingStatus: 'cancelled',
-            status: 'cancelled',
-            isFinalized: true,
-            lastMessage: systemMessage._id,
-            lastMessageAt: cancellationDate,
-            'metadata.status': 'cancelled',
-            'metadata.cancelledAt': cancellationDate,
-            'metadata.cancelledBy': adminId,
-            'metadata.cancelReason': cancellationReason
-          }
-        },
-        { session }
-      );
+      const clientId = agreement.parties?.client?.userid;
+      const escrow = await WalletLedger.findOne({
+        userId: clientId,
+        reason: 'boosting_escrow',
+        'metadata.agreementId': agreement._id.toString()
+      }).session(session);
 
-      if (!conversationUpdate.matchedCount) {
-        throw new Error(`Conversation ${conversationId} not found during transaction`);
-      }
+      if (escrow && escrow.amount > 0) {
+        const formattedClientId = normalizeObjectId(clientId);
+        const user = await User.findById(formattedClientId).session(session);
 
-      // 2️⃣ ATUALIZAR AGREEMENT
-      const agreement = await Agreement.findOne({ conversationId }).session(session).sort({ createdAt: -1 });
-      if (agreement) {
-        const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
-        
-        if (!['pending', 'active'].includes(agreement.status)) {
-          throw new Error(`Cannot cancel agreement in status: ${agreement.status}`);
-        }
-        
-        agreement.status = 'cancelled';
-        agreement.cancelledAt = new Date();
-        agreement.addAction('cancelled', adminId, { reason: cancellationReason }, idemKey);
-        await agreement.save({ session });
+        if (user) {
+          const before = round2(user.walletBalance || 0);
+          const after = round2(before + Number(escrow.amount));
+          user.walletBalance = after;
+          await user.save({ session });
 
-        // Processar escrow
-        const clientId = agreement.parties?.client?.userid;
-        const escrow = await WalletLedger.findOne({
-          userId: clientId,
-          reason: 'boosting_escrow',
-          'metadata.agreementId': agreement._id.toString()
-        }).session(session);
-
-        if (escrow && escrow.amount > 0) {
-          escrowAmount = Number(escrow.amount);
-          const formattedClientId = normalizeObjectId(clientId);
-          const user = await User.findById(formattedClientId).session(session);
-
-          if (user) {
-            const before = round2(user.walletBalance || 0);
-            const after = round2(before + Number(escrow.amount));
-            user.walletBalance = after;
-            await user.save({ session });
-
-            await WalletLedger.create([
-              {
-                userId: formattedClientId,
-                txId: null,
-                direction: 'credit',
-                reason: 'boosting_escrow_refund',
-                amount: Number(escrow.amount),
-                operationId: `boosting_escrow_refund:${agreement._id}`,
-                balanceBefore: before,
-                balanceAfter: after,
-                metadata: {
-                  source: 'boosting',
-                  agreementId: agreement._id.toString(),
-                  conversationId: normalizeObjectId(conversationId),
-                  cancelledBy: adminId,
-                  cancelReason: cancellationReason,
-                  originalEscrowId: escrow._id.toString(),
-                  type: 'escrow_refund'
-                }
+          await WalletLedger.create([
+            {
+              userId: formattedClientId,
+              txId: null,
+              direction: 'credit',
+              reason: 'boosting_escrow_refund',
+              amount: Number(escrow.amount),
+              operationId: `boosting_escrow_refund:${agreement._id}`,
+              balanceBefore: before,
+              balanceAfter: after,
+              metadata: {
+                source: 'boosting',
+                agreementId: agreement._id.toString(),
+                conversationId: normalizeObjectId(conversationId),
+                cancelledBy: adminId,
+                cancelReason: reason || 'Serviço cancelado',
+                originalEscrowId: escrow._id.toString(),
+                type: 'escrow_refund'
               }
-            ], { session });
-
-            refundedClientId = formattedClientId;
-          }
-        }
-
-        await WalletLedger.updateMany(
-          {
-            reason: 'boosting_escrow',
-            'metadata.agreementId': agreement._id.toString(),
-          },
-          {
-            $set: {
-              'metadata.status': 'refunded',
-              'metadata.refundedAt': new Date(),
-              'metadata.refundReason': cancellationReason
             }
-          },
-          { session }
-        );
+          ], { session });
+
+          refundedClientId = formattedClientId;
+        } else {
+          logger.warn('[Internal Boosting Cancel] Cliente não encontrado para devolver escrow', { clientId: formattedClientId });
+        }
       }
 
-      // 3️⃣ ATUALIZAR ACCEPTEDPROPOSAL
-      await AcceptedProposal.updateMany(
-        { conversationId },
+      await agreement.cancel(adminId, reason || '', idemKey);
+
+      await WalletLedger.updateMany(
+        {
+          reason: 'boosting_escrow',
+          'metadata.agreementId': agreement._id.toString(),
+        },
         {
           $set: {
-            status: 'cancelled',
-            cancelledAt: new Date(),
-            cancelReason: cancellationReason,
-            cancelledBy: adminId
+            'metadata.status': 'refunded',
+            'metadata.refundedAt': new Date(),
+            'metadata.refundReason': reason || 'Serviço cancelado'
           }
         },
         { session }
       );
 
-      // 4️⃣ ATUALIZAR BOOSTINGREQUESTS
-      if (boostingId) {
-        await BoostingRequest.updateOne(
-          { _id: boostingId },
-          {
-            $set: {
-              status: 'cancelled',
-              updatedAt: cancellationDate,
-              cancelReason: cancellationReason,
-              cancelledBy: adminId,
-              cancelledAt: cancellationDate
-            }
-          },
-          { session }
-        );
-      }
-
-      // 5️⃣ ATUALIZAR BOOSTINGORDER
       const boostingOrderDoc = await BoostingOrder.findOne({ conversationId }).session(session);
       if (boostingOrderDoc) {
         boostingOrderDoc.status = 'cancelled';
-        boostingOrderDoc.cancelledAt = cancellationDate;
+        boostingOrderDoc.cancelledAt = new Date();
         boostingOrderDoc.cancellationDetails = {
           cancelledBy: normalizeObjectId(adminId),
-          cancelReason: cancellationReason,
-          refundAmount: escrowAmount
+          cancelReason: reason || 'Serviço cancelado',
+          refundAmount: Number(escrow?.amount || 0)
         };
         await boostingOrderDoc.save({ session });
         boostingOrderSnapshot = boostingOrderDoc.toObject();
       }
     });
-  } catch (txError) {
-    console.log('[Internal Boosting Cancel] Transaction failed:', txError.message);
-    throw txError;
   }
 
   const webSocketServer = app?.get('webSocketServer');
 
-  // ✅ Recarregar conversation para ter os dados atualizados
-  const conversationUpdated = await Conversation.findById(conversationId);
-  const conversationPayload = conversationUpdated ? {
-    _id: conversationUpdated._id,
-    status: conversationUpdated.status,
-    boostingStatus: conversationUpdated.boostingStatus,
-    isActive: conversationUpdated.isActive,
-    isFinalized: conversationUpdated.isFinalized,
-    isTemporary: conversationUpdated.isTemporary,
-    metadata: conversationUpdated.metadata
-  } : null;
-
-  if (conversationUpdated?.participants?.length && webSocketServer?.sendToUser) {
-    const participantIds = conversationUpdated.participants.map((participant) =>
+  if (conversation.participants?.length && webSocketServer?.sendToUser) {
+    const participantIds = conversation.participants.map((participant) =>
       normalizeObjectId(participant?._id || participant)
     ).filter(Boolean);
 
     const cancellationEvent = {
       type: 'service:cancelled',
       data: {
-        conversationId: normalizedConversationId,
-        reason: cancellationReason,
+        conversationId: normalizeObjectId(conversationId),
+        reason,
         cancelledBy: adminId,
         boostingStatus: 'cancelled',
         isActive: false,
@@ -338,43 +258,24 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         source: 'internal-api'
       }
     };
-    const conversationUpdatedEvent = {
+    const conversationUpdated = {
       type: 'conversation:updated',
       data: {
-        conversationId: normalizedConversationId,
+        conversationId: normalizeObjectId(conversationId),
         status: 'cancelled',
         boostingStatus: 'cancelled',
         isActive: false,
-        isFinalized: true,
         updatedAt: new Date().toISOString(),
-        source: 'internal-api',
-        cancelledAt: new Date().toISOString(),
-        cancelledBy: adminId,
-        reason: cancellationReason,
-        action: 'status_updated',
-        conversation: conversationPayload
+        source: 'internal-api'
       }
     };
-    const proposalStatusEvent = normalizedProposalId ? {
-      type: 'proposal:status_updated',
-      data: {
-        proposalId: normalizedProposalId,
-        conversationId: normalizedConversationId,
-        status: 'cancelled',
-        boostingId: normalizedBoostingId,
-        timestamp: new Date().toISOString()
-      }
-    } : null;
 
     participantIds.forEach((participantId) => {
       webSocketServer.sendToUser(participantId, cancellationEvent);
-      webSocketServer.sendToUser(participantId, conversationUpdatedEvent);
-      if (proposalStatusEvent) {
-        webSocketServer.sendToUser(participantId, proposalStatusEvent);
-      }
+      webSocketServer.sendToUser(participantId, conversationUpdated);
       webSocketServer.sendToUser(participantId, {
         type: 'message:new',
-        data: { message: systemMessage.toObject(), conversationId: normalizedConversationId },
+        data: { message: systemMessage.toObject(), conversationId: normalizeObjectId(conversationId) },
         timestamp: new Date().toISOString()
       });
     });
@@ -383,7 +284,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       await Promise.all(
         participantIds.map((pid) =>
           webSocketServer.conversationHandler.sendConversationsUpdate(pid).catch((err) => {
-            console.log('[Internal Boosting Cancel] Failed to push conversation update via WS', { pid, error: err?.message });
+            logger.warn('[Internal Boosting Cancel] Failed to push conversation update via WS', { pid, error: err?.message });
           })
         )
       );
@@ -393,34 +294,48 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       cache.invalidateConversationCache(normalizeObjectId(conversationId), participantIds);
       participantIds.forEach((pid) => cache.invalidateUserCache(pid));
     } catch (cacheErr) {
-      console.log('[Internal Boosting Cancel] Cache invalidation failed', { error: cacheErr?.message });
+      logger.warn('[Internal Boosting Cancel] Cache invalidation failed', { error: cacheErr?.message });
     }
 
     if (boostingOrderSnapshot) {
       await emitBoostingStatusChanged(app, boostingOrderSnapshot, 'cancelled');
-    } else if (conversationPayload) {
+    } else {
       await emitBoostingStatusChanged(app, {
-        conversationId: normalizedConversationId,
-        clientId: normalizeObjectId(conversationUpdated.participants?.[0]),
-        boosterId: normalizeObjectId(conversationUpdated.participants?.[1]),
+        conversationId: normalizeObjectId(conversationId),
+        clientId: normalizeObjectId(conversation.participants?.[0]),
+        boosterId: normalizeObjectId(conversation.participants?.[1]),
         price: null,
         orderNumber: null,
-        boostingRequestId: normalizedBoostingId
+        boostingRequestId: normalizeObjectId(boostingId)
       }, 'cancelled');
     }
   }
 
+  if (boostingId) {
+    await BoostingRequest.updateOne(
+      { _id: boostingId },
+      {
+        $set: {
+          status: 'cancelled',
+          updatedAt: new Date(),
+          cancelReason: reason || 'Cancelado pelo administrador',
+          cancelledBy: adminId,
+          cancelledAt: new Date()
+        }
+      }
+    );
+  }
+
+  await AcceptedProposal.deleteMany({ conversationId });
+
   if (refundedClientId) {
-    console.log(`[Internal Boosting Cancel] Enviando atualização de saldo para clientId=${refundedClientId}`);
     await sendBalanceUpdate(app, refundedClientId);
     await calculateAndSendEscrowUpdate(app, refundedClientId);
-    console.log(`[Internal Boosting Cancel] Atualização de saldo enviada com sucesso`);
   }
 
   // Ticket resolution
   const ticket = await Report.findOne({ conversationId });
   if (ticket) {
-    console.log(`[Internal Boosting Cancel] Resolvendo ticket: ${ticket._id}`);
     ticket.status = 'resolved';
     ticket.resolution = {
       ...ticket.resolution,
@@ -432,8 +347,6 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     ticket.updatedAt = new Date();
     await ticket.save();
   }
-
-  logger.info(`[Internal Boosting Cancel] ✅ Cancelamento concluído com sucesso: conversationId=${conversationId}`);
 
   return {
     success: true,
@@ -458,7 +371,7 @@ async function sendBalanceUpdate(app, userId) {
       });
     }
   } catch (err) {
-    console.log('[Internal Boosting Cancel] sendBalanceUpdate falhou', { userId, error: err?.message });
+    logger.warn('[Internal Boosting Cancel] sendBalanceUpdate falhou', { userId, error: err?.message });
   }
 }
 
@@ -467,7 +380,7 @@ async function sendBalanceUpdate(app, userId) {
  * Valida chave secreta compartilhada entre APIs
  */
 const internalAuth = (req, res, next) => {
-  console.log('[Internal Auth] Skipping authentication (open mode)');
+  logger.debug('[Internal Auth] Skipping authentication (open mode)');
   next();
 };
 
@@ -485,7 +398,7 @@ router.post('/boosting/:conversationId/cancel', internalAuth, async (req, res) =
 
     return res.json({ success: true, message: 'Boosting cancelado com sucesso', data: result });
   } catch (error) {
-    console.log('[Internal Boosting Cancel] Error:', error);
+    logger.error('[Internal Boosting Cancel] Error:', error);
     return res.status(500).json({ success: false, message: 'Erro interno ao cancelar boosting', error: error.message });
   }
 });
