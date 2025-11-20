@@ -15,6 +15,53 @@ async function getBoostingOrder(req, res) {
         return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
       }
 
+async function getBoostingOrderByConversation(req, res) {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
+    }
+
+    if (!conversationId) {
+      return res.status(400).json({ success: false, message: 'conversationId é obrigatório' });
+    }
+
+    let boostingOrder = await BoostingOrder.findOne({ conversationId });
+
+    if (!boostingOrder) {
+      const agreement = await Agreement.findOne({ conversationId });
+      if (!agreement) {
+        return res.status(404).json({ success: false, message: 'Pedido de boosting não encontrado para esta conversa' });
+      }
+
+      const isParticipant =
+        agreement.parties.client.userid.toString() === userId.toString() ||
+        agreement.parties.booster.userid.toString() === userId.toString();
+
+      if (!isParticipant) {
+        return res.status(403).json({ success: false, message: 'Acesso negado ao pedido' });
+      }
+
+      boostingOrder = await BoostingOrder.createFromAgreement(agreement);
+    } else {
+      const isParticipant =
+        boostingOrder.clientId.toString() === userId.toString() ||
+        boostingOrder.boosterId.toString() === userId.toString();
+
+      if (!isParticipant) {
+        return res.status(403).json({ success: false, message: 'Acesso negado ao pedido' });
+      }
+    }
+
+    return res.json({ success: true, data: boostingOrder });
+  } catch (error) {
+    console.error('Erro ao buscar boosting order por conversa:', error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+  }
+}
+
       // Tentar buscar BoostingOrder primeiro
       let boostingOrder = await BoostingOrder.findById(orderId);
       
@@ -178,5 +225,6 @@ async function listBoostingOrders(req, res) {
 
 module.exports = {
   getBoostingOrder,
-  listBoostingOrders
+  listBoostingOrders,
+  getBoostingOrderByConversation
 };

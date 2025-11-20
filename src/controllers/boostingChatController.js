@@ -2,12 +2,14 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const AcceptedProposal = require('../models/AcceptedProposal');
 const Agreement = require('../models/Agreement');
+const BoostingOrder = require('../models/BoostingOrder');
 const Report = require('../models/Report');
 const User = require('../models/User');
 const WalletLedger = require('../models/WalletLedger');
 const Mediator = require('../models/Mediator');
 const mongoose = require('mongoose');
 const axios = require('axios');
+const logger = require('../utils/logger');
 
 const { sendSupportTicketNotification } = require('../services/TelegramService');
 const { calculateAndSendEscrowUpdate } = require('../routes/walletRoutes');
@@ -15,6 +17,77 @@ const { calculateAndSendEscrowUpdate } = require('../routes/walletRoutes');
 // Helper functions
 function round2(v) { 
   return Math.round(Number(v) * 100) / 100; 
+}
+
+function normalizeId(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value.toString) {
+    try {
+      return value.toString();
+    } catch (_) {
+      return value;
+    }
+  }
+  return String(value);
+}
+
+async function emitBoostingMarketplaceUpdate(app, boostingOrderDoc, status, extra = {}) {
+  try {
+    if (!boostingOrderDoc) return;
+    const ws = app?.get('webSocketServer');
+    if (!ws) return;
+
+    const now = new Date();
+    const payload = {
+      conversationId: normalizeId(boostingOrderDoc.conversationId),
+      purchaseId: boostingOrderDoc.orderNumber || normalizeId(boostingOrderDoc._id),
+      orderNumber: boostingOrderDoc.orderNumber || normalizeId(boostingOrderDoc._id),
+      boostingOrderId: normalizeId(boostingOrderDoc._id),
+      buyerId: normalizeId(boostingOrderDoc.clientId),
+      sellerId: normalizeId(boostingOrderDoc.boosterId),
+      status,
+      price: boostingOrderDoc.price,
+      currency: boostingOrderDoc.currency || 'BRL',
+      shippedAt: boostingOrderDoc.shippedAt || null,
+      deliveredAt: boostingOrderDoc.completedAt || null,
+      autoReleaseAt: boostingOrderDoc?.metadata?.get?.('autoReleaseAt') || null,
+      source: 'realtime',
+      type: 'boosting',
+      timestamp: now.toISOString(),
+      updatedAt: now.toISOString(),
+      ...extra
+    };
+
+    const participantIds = [payload.buyerId, payload.sellerId].filter(Boolean);
+    participantIds.forEach((uid) => {
+      ws.sendToUser(uid, {
+        type: 'marketplace:status_changed',
+        data: payload
+      });
+    });
+
+    if (ws.conversationHandler?.sendConversationsUpdate) {
+      await Promise.all(
+        participantIds.map((uid) =>
+          ws.conversationHandler.sendConversationsUpdate(uid).catch((err) => {
+            logger?.warn?.('[Boosting WS] Failed to refresh conversations via WS', { uid, error: err?.message });
+          })
+        )
+      );
+    }
+  } catch (error) {
+    logger?.warn?.('[Boosting WS] Failed to emit boosting marketplace update', { error: error?.message });
+  }
+}
+
+async function getOrCreateBoostingOrderFromAgreement(agreement) {
+  if (!agreement) return null;
+  let boostingOrder = await BoostingOrder.findOne({ agreementId: agreement._id });
+  if (!boostingOrder) {
+    boostingOrder = await BoostingOrder.createFromAgreement(agreement);
+  }
+  return boostingOrder;
 }
 
 /**
@@ -671,6 +744,22 @@ class BoostingChatController {
         console.error('❌ Erro ao emitir eventos de cancelamento:', wsErr);
       }
 
+      const boostingOrder = await getOrCreateBoostingOrderFromAgreement(agreement);
+      if (boostingOrder) {
+        boostingOrder.status = 'cancelled';
+        boostingOrder.cancelledAt = new Date();
+        boostingOrder.cancellationDetails = {
+          cancelledBy: normalizeId(userId),
+          cancelReason: reason || 'Serviço cancelado',
+          refundAmount: null
+        };
+        await boostingOrder.save();
+        await emitBoostingMarketplaceUpdate(req.app, boostingOrder, 'cancelled', {
+          cancelledBy: normalizeId(userId),
+          reason: reason || 'Serviço cancelado'
+        });
+      }
+
       res.json({
         success: true,
         message: 'Atendimento cancelado com sucesso',
@@ -1110,6 +1199,21 @@ class BoostingChatController {
         conversation.blockedBy = userId;
         await conversation.save({ session });
       });
+
+      const agreementSnapshot = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
+      const boostingOrder = await getOrCreateBoostingOrderFromAgreement(agreementSnapshot || agreement);
+      if (boostingOrder) {
+        boostingOrder.status = 'completed';
+        boostingOrder.completedAt = new Date();
+        boostingOrder.completionDetails = {
+          completedBy: normalizeId(userId),
+          completionNotes: 'Entrega confirmada pelo cliente'
+        };
+        await boostingOrder.save();
+        await emitBoostingMarketplaceUpdate(req.app, boostingOrder, 'completed', {
+          confirmedBy: normalizeId(userId)
+        });
+      }
 
       // CRIAR APENAS UMA MENSAGEM DO SISTEMA (evita duplicação)
       const systemMessage = new Message({
@@ -1594,7 +1698,7 @@ class BoostingChatController {
       }
 
 
-      const acceptedProposal = new AcceptedProposal({
+      let acceptedProposal = new AcceptedProposal({
         conversationId,
         proposalId,
         game: proposalData.game,
@@ -1634,7 +1738,6 @@ class BoostingChatController {
       if (!existingProposal) {
         await acceptedProposal.save();
       } else {
-
         acceptedProposal = null;
       }
 
@@ -1729,16 +1832,26 @@ class BoostingChatController {
         console.log(`Mensagens reativadas para nova proposta do booster na conversa ${conversationId}`);
       }
 
+      const boostingOrder = await getOrCreateBoostingOrderFromAgreement(agreement);
+      await emitBoostingMarketplaceUpdate(req.app, boostingOrder, 'escrow_reserved', {
+        boostingRequestId: normalizeId(agreement.boostingRequestId),
+        proposalId: normalizeId(agreement.proposalId)
+      });
+
       res.json({
         success: true,
         message: existingProposal 
           ? 'Nova proposta aceita criada com sucesso (múltiplas propostas permitidas)'
           : 'Proposta aceita salva com sucesso',
-
         proposalId: acceptedProposal?._id || agreement._id,
-
         agreementId: agreement.agreementId,
         agreementStatus: agreement.status,
+        boostingOrder: boostingOrder ? {
+          orderNumber: boostingOrder.orderNumber,
+          status: boostingOrder.status,
+          price: boostingOrder.price,
+          conversationId: normalizeId(boostingOrder.conversationId)
+        } : null,
         isMultiple: !!existingProposal
       });
     } catch (error) {

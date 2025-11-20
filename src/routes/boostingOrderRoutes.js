@@ -17,4 +17,7 @@ router.get('/', boostingOrderController.listBoostingOrders);
 // Buscar boosting order por ID
 router.get('/:orderId', boostingOrderController.getBoostingOrder);
 
+// Buscar boosting order por conversationId
+router.get('/conversation/:conversationId', boostingOrderController.getBoostingOrderByConversation);
+
 module.exports = router;
