@@ -141,51 +141,54 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
   await systemMessage.save();
 
-  // ✅ ATUALIZAR TODOS OS CAMPOS DE STATUS DA CONVERSATION
-  conversation.isActive = false;
-  conversation.boostingStatus = 'cancelled';
-  conversation.status = 'cancelled';
-  conversation.isFinalized = true;
-  conversation.lastMessage = systemMessage._id;
-  conversation.lastMessageAt = new Date();
-  conversation.metadata = conversation.metadata || new Map();
-  conversation.metadata.set('status', 'cancelled');
-  conversation.metadata.set('cancelledAt', new Date());
-  conversation.metadata.set('cancelledBy', adminId);
-
-  await conversation.save();
-
   if (boostingId && proposalHandler?.broadcastBoostingCancelled) {
     proposalHandler.broadcastBoostingCancelled(boostingId.toString());
   }
 
-  const agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
-
+  // ✅ TRANSAÇÃO ÚNICA PARA ATUALIZAR TODAS AS 4 COLLECTIONS
   let refundedClientId = null;
   let boostingOrderSnapshot = null;
 
-  if (agreement) {
-    const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
-    logger.info(`[Internal Boosting Cancel] Agreement encontrado: ${agreement._id}, status=${agreement.status}`);
+  await runTx(async (session) => {
+    // 1️⃣ ATUALIZAR CONVERSATION
+    const conversationInTx = await Conversation.findById(conversationId).session(session);
+    if (conversationInTx) {
+      conversationInTx.isActive = false;
+      conversationInTx.boostingStatus = 'cancelled';
+      conversationInTx.status = 'cancelled';
+      conversationInTx.isFinalized = true;
+      conversationInTx.lastMessage = systemMessage._id;
+      conversationInTx.lastMessageAt = new Date();
+      conversationInTx.metadata = conversationInTx.metadata || new Map();
+      conversationInTx.metadata.set('status', 'cancelled');
+      conversationInTx.metadata.set('cancelledAt', new Date());
+      conversationInTx.metadata.set('cancelledBy', adminId);
+      await conversationInTx.save({ session });
+    }
 
-    await runTx(async (session) => {
-      const agreementInTx = await Agreement.findById(agreement._id).session(session);
-      if (!agreementInTx) {
-        throw new Error(`Agreement ${agreement._id} not found during cancellation`);
-      }
-
-      const clientId = agreementInTx.parties?.client?.userid;
-      logger.info(`[Internal Boosting Cancel] Buscando escrow para clientId=${clientId}`);
+    // 2️⃣ ATUALIZAR AGREEMENT
+    const agreement = await Agreement.findOne({ conversationId }).session(session).sort({ createdAt: -1 });
+    if (agreement) {
+      const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
       
+      if (!['pending', 'active'].includes(agreement.status)) {
+        throw new Error(`Cannot cancel agreement in status: ${agreement.status}`);
+      }
+      
+      agreement.status = 'cancelled';
+      agreement.cancelledAt = new Date();
+      agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
+      await agreement.save({ session });
+
+      // Processar escrow
+      const clientId = agreement.parties?.client?.userid;
       const escrow = await WalletLedger.findOne({
         userId: clientId,
         reason: 'boosting_escrow',
-        'metadata.agreementId': agreementInTx._id.toString()
+        'metadata.agreementId': agreement._id.toString()
       }).session(session);
 
       if (escrow && escrow.amount > 0) {
-        logger.info(`[Internal Boosting Cancel] Escrow encontrado: R$ ${escrow.amount}`);
-        
         const formattedClientId = normalizeObjectId(clientId);
         const user = await User.findById(formattedClientId).session(session);
 
@@ -195,8 +198,6 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
           user.walletBalance = after;
           await user.save({ session });
 
-          logger.info(`[Internal Boosting Cancel] Saldo devolvido ao cliente: R$ ${before} → R$ ${after}`);
-
           await WalletLedger.create([
             {
               userId: formattedClientId,
@@ -204,12 +205,12 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
               direction: 'credit',
               reason: 'boosting_escrow_refund',
               amount: Number(escrow.amount),
-              operationId: `boosting_escrow_refund:${agreementInTx._id}`,
+              operationId: `boosting_escrow_refund:${agreement._id}`,
               balanceBefore: before,
               balanceAfter: after,
               metadata: {
                 source: 'boosting',
-                agreementId: agreementInTx._id.toString(),
+                agreementId: agreement._id.toString(),
                 conversationId: normalizeObjectId(conversationId),
                 cancelledBy: adminId,
                 cancelReason: reason || 'Serviço cancelado',
@@ -220,29 +221,13 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
           ], { session });
 
           refundedClientId = formattedClientId;
-        } else {
-          logger.warn('[Internal Boosting Cancel] Cliente não encontrado para devolver escrow', { clientId: formattedClientId });
         }
-      } else {
-        logger.info(`[Internal Boosting Cancel] Nenhum escrow encontrado para devolver`);
       }
-
-      // ✅ CORRIGIDO: Cancelar agreement dentro da transação (sem chamar .save() interno)
-      if (!['pending', 'active'].includes(agreementInTx.status)) {
-        throw new Error(`Cannot cancel agreement in status: ${agreementInTx.status}`);
-      }
-      
-      logger.info(`[Internal Boosting Cancel] Atualizando Agreement.status para 'cancelled'`);
-      agreementInTx.status = 'cancelled';
-      agreementInTx.cancelledAt = new Date();
-      agreementInTx.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
-      await agreementInTx.save({ session });
-      logger.info(`[Internal Boosting Cancel] Agreement salvo com sucesso`);
 
       await WalletLedger.updateMany(
         {
           reason: 'boosting_escrow',
-          'metadata.agreementId': agreementInTx._id.toString(),
+          'metadata.agreementId': agreement._id.toString(),
         },
         {
           $set: {
@@ -253,40 +238,61 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         },
         { session }
       );
+    }
 
-      const boostingOrderDoc = await BoostingOrder.findOne({ conversationId }).session(session);
-      if (boostingOrderDoc) {
-        boostingOrderDoc.status = 'cancelled';
-        boostingOrderDoc.cancelledAt = new Date();
-        boostingOrderDoc.cancellationDetails = {
-          cancelledBy: normalizeObjectId(adminId),
+    // 3️⃣ ATUALIZAR ACCEPTEDPROPOSAL
+    await AcceptedProposal.updateMany(
+      { conversationId },
+      {
+        $set: {
+          status: 'cancelled',
+          cancelledAt: new Date(),
           cancelReason: reason || 'Serviço cancelado',
-          refundAmount: Number(escrow?.amount || 0)
-        };
-        await boostingOrderDoc.save({ session });
-        boostingOrderSnapshot = boostingOrderDoc.toObject();
-      }
+          cancelledBy: adminId
+        }
+      },
+      { session }
+    );
 
-      // ✅ Atualizar AcceptedProposal dentro da transação (em vez de deletar)
-      await AcceptedProposal.updateMany(
-        { conversationId },
+    // 4️⃣ ATUALIZAR BOOSTINGREQUESTS
+    if (boostingId) {
+      await BoostingRequest.updateOne(
+        { _id: boostingId },
         {
           $set: {
             status: 'cancelled',
-            cancelledAt: new Date(),
-            cancelReason: reason || 'Serviço cancelado',
-            cancelledBy: adminId
+            updatedAt: new Date(),
+            cancelReason: reason || 'Cancelado pelo administrador',
+            cancelledBy: adminId,
+            cancelledAt: new Date()
           }
         },
         { session }
       );
-    });
-  }
+    }
+
+    // 5️⃣ ATUALIZAR BOOSTINGORDER
+    const boostingOrderDoc = await BoostingOrder.findOne({ conversationId }).session(session);
+    if (boostingOrderDoc) {
+      boostingOrderDoc.status = 'cancelled';
+      boostingOrderDoc.cancelledAt = new Date();
+      boostingOrderDoc.cancellationDetails = {
+        cancelledBy: normalizeObjectId(adminId),
+        cancelReason: reason || 'Serviço cancelado',
+        refundAmount: 0
+      };
+      await boostingOrderDoc.save({ session });
+      boostingOrderSnapshot = boostingOrderDoc.toObject();
+    }
+  });
 
   const webSocketServer = app?.get('webSocketServer');
 
-  if (conversation.participants?.length && webSocketServer?.sendToUser) {
-    const participantIds = conversation.participants.map((participant) =>
+  // ✅ Recarregar conversation para ter os dados atualizados
+  const conversationUpdated = await Conversation.findById(conversationId);
+
+  if (conversationUpdated?.participants?.length && webSocketServer?.sendToUser) {
+    const participantIds = conversationUpdated.participants.map((participant) =>
       normalizeObjectId(participant?._id || participant)
     ).filter(Boolean);
 
@@ -302,7 +308,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         source: 'internal-api'
       }
     };
-    const conversationUpdated = {
+    const conversationUpdatedEvent = {
       type: 'conversation:updated',
       data: {
         conversationId: normalizeObjectId(conversationId),
@@ -320,7 +326,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
     participantIds.forEach((participantId) => {
       webSocketServer.sendToUser(participantId, cancellationEvent);
-      webSocketServer.sendToUser(participantId, conversationUpdated);
+      webSocketServer.sendToUser(participantId, conversationUpdatedEvent);
       webSocketServer.sendToUser(participantId, {
         type: 'message:new',
         data: { message: systemMessage.toObject(), conversationId: normalizeObjectId(conversationId) },
@@ -350,28 +356,13 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     } else {
       await emitBoostingStatusChanged(app, {
         conversationId: normalizeObjectId(conversationId),
-        clientId: normalizeObjectId(conversation.participants?.[0]),
-        boosterId: normalizeObjectId(conversation.participants?.[1]),
+        clientId: normalizeObjectId(conversationUpdated.participants?.[0]),
+        boosterId: normalizeObjectId(conversationUpdated.participants?.[1]),
         price: null,
         orderNumber: null,
         boostingRequestId: normalizeObjectId(boostingId)
       }, 'cancelled');
     }
-  }
-
-  if (boostingId) {
-    await BoostingRequest.updateOne(
-      { _id: boostingId },
-      {
-        $set: {
-          status: 'cancelled',
-          updatedAt: new Date(),
-          cancelReason: reason || 'Cancelado pelo administrador',
-          cancelledBy: adminId,
-          cancelledAt: new Date()
-        }
-      }
-    );
   }
 
   if (refundedClientId) {
