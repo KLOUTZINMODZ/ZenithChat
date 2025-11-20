@@ -680,9 +680,8 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     try {
       const forwardUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/boosting-requests/${boostingId}/proposals/${finalProposalId}/accept`;
-      
-      // Syncing with main API
-      
+
+      // Syncing with main API (non-blocking for local acceptance)
       apiResponse = await axios.post(forwardUrl, {
         conversationId,
         boosterId,
@@ -695,114 +694,86 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
         },
         timeout: 10000 // 10s timeout
       });
-      
+
       // Main API sync successful
       apiSyncSuccess = true;
-      
+
     } catch (apiError) {
-      // Main API sync failed (continuing)
-      // Continua mesmo com erro na API principal
+      // Main API sync failed (continuing with local acceptance only)
+      console.warn('⚠️ Failed to sync accepted proposal with main API:', apiError.message);
     }
-    // Emite eventos WebSocket para atualização em tempo real
+
+    // Emite eventos WebSocket para atualização em tempo real via Chat WS
     try {
       const webSocketServer = req.app.get('webSocketServer');
-      if (webSocketServer) {
-        // Emitting WebSocket events
-        
-        // Dados da proposta aceita
-        const acceptedProposalData = apiSyncSuccess && apiResponse?.data?.acceptedProposal 
-          ? apiResponse.data.acceptedProposal 
-          : {
+      if (webSocketServer && acceptedConv) {
+        const participantIds = (acceptedConv.participants || [])
+          .map((p) => {
+            if (!p) return null;
+            if (p._id && p._id.toString) return p._id.toString();
+            if (p.toString) return p.toString();
+            return String(p);
+          })
+          .filter(Boolean);
+
+        if (participantIds.length > 0) {
+          const acceptedProposalData = apiSyncSuccess && apiResponse?.data?.acceptedProposal
+            ? apiResponse.data.acceptedProposal
+            : {
+                proposalId: actualProposalId,
+                boostingId: boostingId,
+                boosterId: boosterId,
+                clientId: clientId,
+                status: 'accepted',
+                acceptedAt: new Date().toISOString()
+              };
+
+          const proposalAcceptedEvent = {
+            type: 'proposal:accepted',
+            data: {
+              conversationId,
               proposalId: actualProposalId,
-              boostingId: boostingId,
-              boosterId: boosterId,
-              clientId: clientId,
-              status: 'accepted',
-              acceptedAt: new Date().toISOString()
-            };
-        
-        // Evento 1: proposal:accepted
-        const proposalAcceptedEvent = {
-          type: 'proposal:accepted',
-          data: {
-            conversationId,
-            proposalId: actualProposalId,
-            boostingId,
-            acceptedProposal: acceptedProposalData,
-            status: 'accepted',
-            acceptedAt: new Date().toISOString(),
-            acceptedBy: 'client',
-            clientId,
-            boosterId
-          }
-        };
-        
-        if (clientId) {
-          webSocketServer.sendToUser(clientId, proposalAcceptedEvent);
-        }
-        
-        if (boosterId) {
-          webSocketServer.sendToUser(boosterId, proposalAcceptedEvent);
-        }
-        
-        // Evento 2: conversation:updated (atualiza UI)
-        const conversationUpdateEvent = {
-          type: 'conversation:updated',
-          data: {
-            conversationId,
-            status: 'accepted',
-            isTemporary: false,
-            boostingStatus: 'in_progress', // Alterado de 'active' para 'in_progress' para manter consistência
-            updatedAt: new Date().toISOString(),
-            conversation: acceptedConv ? {
-              _id: acceptedConv._id,
-              status: acceptedConv.status,
-              isTemporary: acceptedConv.isTemporary,
-              boostingStatus: acceptedConv.boostingStatus,
-              participants: acceptedConv.participants,
-              // Incluir informações do agreement para facilitar rastreamento
-              metadata: {
-                agreementId: agreementCreated?.agreementId,
-                proposalId: actualProposalId
-              }
-            } : null
-          }
-        };
-        
-        if (clientId) {
-          webSocketServer.sendToUser(clientId, conversationUpdateEvent);
-        }
-        
-        if (boosterId) {
-          webSocketServer.sendToUser(boosterId, conversationUpdateEvent);
-        }
-        
-        // WebSocket events emitted successfully
-        
-        // ✅ BROADCAST VIA PROPOSAL HANDLER - Notifica todos os subscribers
-        try {
-          const proposalHandler = req.app.get('proposalHandler');
-          if (proposalHandler && boostingId) {
-            proposalHandler.broadcastProposalAccepted(
               boostingId,
-              actualProposalId,
-              conversationId
-            );
-            console.log(`✅ [ProposalRoutes] Broadcast de proposta aceita enviado para boostingId: ${boostingId}`);
-          }
-        } catch (broadcastError) {
-          console.error(`❌ [ProposalRoutes] Erro ao fazer broadcast:`, broadcastError.message);
+              acceptedProposal: acceptedProposalData,
+              status: 'accepted',
+              acceptedAt: new Date().toISOString(),
+              acceptedBy: 'client',
+              clientId,
+              boosterId
+            }
+          };
+
+          const conversationUpdateEvent = {
+            type: 'conversation:updated',
+            data: {
+              conversationId,
+              status: 'accepted',
+              isTemporary: false,
+              boostingStatus: 'in_progress',
+              updatedAt: new Date().toISOString(),
+              conversation: {
+                _id: acceptedConv._id,
+                status: acceptedConv.status,
+                isTemporary: acceptedConv.isTemporary,
+                boostingStatus: acceptedConv.boostingStatus,
+                participants: acceptedConv.participants,
+                metadata: {
+                  agreementId: agreementCreated?.agreementId,
+                  proposalId: actualProposalId
+                }
+              }
+            }
+          };
+
+          participantIds.forEach((uid) => {
+            webSocketServer.sendToUser(uid, proposalAcceptedEvent);
+            webSocketServer.sendToUser(uid, conversationUpdateEvent);
+          });
         }
-        
-      } else {
-        console.warn(`⚠️ [ProposalRoutes] WebSocket server não disponível`);
       }
     } catch (wsError) {
-      console.error(`❌ [ProposalRoutes] Erro ao emitir eventos WebSocket:`, wsError.message);
+      console.error('❌ Error emitting WebSocket events for accepted proposal:', wsError.message);
     }
-    
-    // ✅ Pequeno delay para garantir que o broadcast foi processado
-    await new Promise(resolve => setTimeout(resolve, 100));
 
     // Retorna resposta apropriada
     if (apiSyncSuccess && apiResponse) {
