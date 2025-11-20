@@ -9,30 +9,8 @@ const router = express.Router();
 const logger = require('../utils/logger');
 const mongoose = require('mongoose');
 
-// Middleware para validar INTERNAL_API_KEY
-const validateInternalKey = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const internalKey = process.env.INTERNAL_API_KEY;
-  
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authorization header missing or invalid'
-    });
-  }
-  
-  const token = authHeader.substring(7);
-  if (token !== internalKey) {
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid API key'
-    });
-  }
-  
-  next();
-};
-
-router.use(validateInternalKey);
+// ✅ Rotas públicas - sem autenticação necessária
+// Chamadas diretamente do painel administrativo
 
 /**
  * POST /api/boosting-cancel/:boostingId/cancel
