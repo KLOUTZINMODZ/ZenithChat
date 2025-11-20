@@ -93,10 +93,33 @@ router.post('/:boostingId/cancel/agreements', async (req, res) => {
     }
 
     const Agreement = require('../models/Agreement');
+    const Conversation = require('../models/Conversation');
     
     logger.info(`[CANCEL-AGREEMENT] Procurando Agreement para boostingRequestId: ${boostingId}`);
 
-    const agreement = await Agreement.findOne({ boostingRequestId: boostingId });
+    // ✅ Estratégia 1: Procurar por boostingRequestId
+    let agreement = await Agreement.findOne({ boostingRequestId: boostingId });
+    
+    // ✅ Estratégia 2: Se não encontrar, procurar a Conversation e depois o Agreement por conversationId
+    if (!agreement) {
+      logger.warn(`[CANCEL-AGREEMENT] Agreement não encontrado por boostingRequestId, tentando via Conversation...`);
+      const conversation = await Conversation.findOne({ 'metadata.boostingId': boostingId });
+      
+      if (conversation) {
+        logger.info(`[CANCEL-AGREEMENT] Conversation encontrada: ${conversation._id}`);
+        agreement = await Agreement.findOne({ conversationId: conversation._id });
+        
+        if (agreement) {
+          logger.info(`[CANCEL-AGREEMENT] Agreement encontrado via Conversation: ${agreement._id}`);
+        }
+      }
+    }
+    
+    // ✅ Estratégia 3: Tentar por _id direto
+    if (!agreement) {
+      logger.warn(`[CANCEL-AGREEMENT] Agreement não encontrado por conversationId, tentando por _id direto...`);
+      agreement = await Agreement.findById(boostingId);
+    }
 
     if (!agreement) {
       logger.warn(`[CANCEL-AGREEMENT] Nenhum Agreement encontrado para boostingId: ${boostingId}`);
