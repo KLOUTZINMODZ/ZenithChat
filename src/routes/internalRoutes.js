@@ -67,13 +67,13 @@ async function emitBoostingStatusChanged(app, boostingOrderData, status) {
       await Promise.all(
         participantIds.map((uid) =>
           ws.conversationHandler.sendConversationsUpdate(uid).catch((err) => {
-            logger.warn('[Boosting Status Update] Failed to refresh conversations via WS', { uid, error: err?.message });
+            console.log('[Boosting Status Update] Failed to refresh conversations via WS', { uid, error: err?.message });
           })
         )
       );
     }
   } catch (err) {
-    logger.warn('[Boosting Status Update] Failed to emit marketplace-style status update', { error: err?.message });
+    console.log('[Boosting Status Update] Failed to emit marketplace-style status update', { error: err?.message });
   }
 }
 
@@ -102,7 +102,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     throw new Error('conversationId is required for boosting cancel');
   }
 
-  logger.info(`[Internal Boosting Cancel] Iniciando cancelamento: conversationId=${conversationId}, reason=${reason}, adminId=${adminId}`);
+  console.log(`[Internal Boosting Cancel] Iniciando cancelamento: conversationId=${conversationId}, reason=${reason}, adminId=${adminId}`);
 
   const conversation = await Conversation.findById(conversationId);
   if (!conversation) {
@@ -110,7 +110,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   }
 
   let boostingId = conversation.metadata?.get?.('boostingId') || conversation.proposal || conversation.marketplaceItem;
-  logger.info(`[Internal Boosting Cancel] Conversation encontrada, boostingId=${boostingId}`);
+  console.log(`[Internal Boosting Cancel] Conversation encontrada, boostingId=${boostingId}`);
 
   if (!boostingId) {
     const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
@@ -303,7 +303,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       }
     });
   } catch (txError) {
-    logger.error('[Internal Boosting Cancel] Transaction failed:', txError.message);
+    console.log('[Internal Boosting Cancel] Transaction failed:', txError.message);
     throw txError;
   }
 
@@ -383,7 +383,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       await Promise.all(
         participantIds.map((pid) =>
           webSocketServer.conversationHandler.sendConversationsUpdate(pid).catch((err) => {
-            logger.warn('[Internal Boosting Cancel] Failed to push conversation update via WS', { pid, error: err?.message });
+            console.log('[Internal Boosting Cancel] Failed to push conversation update via WS', { pid, error: err?.message });
           })
         )
       );
@@ -393,7 +393,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       cache.invalidateConversationCache(normalizeObjectId(conversationId), participantIds);
       participantIds.forEach((pid) => cache.invalidateUserCache(pid));
     } catch (cacheErr) {
-      logger.warn('[Internal Boosting Cancel] Cache invalidation failed', { error: cacheErr?.message });
+      console.log('[Internal Boosting Cancel] Cache invalidation failed', { error: cacheErr?.message });
     }
 
     if (boostingOrderSnapshot) {
@@ -411,16 +411,16 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   }
 
   if (refundedClientId) {
-    logger.info(`[Internal Boosting Cancel] Enviando atualização de saldo para clientId=${refundedClientId}`);
+    console.log(`[Internal Boosting Cancel] Enviando atualização de saldo para clientId=${refundedClientId}`);
     await sendBalanceUpdate(app, refundedClientId);
     await calculateAndSendEscrowUpdate(app, refundedClientId);
-    logger.info(`[Internal Boosting Cancel] Atualização de saldo enviada com sucesso`);
+    console.log(`[Internal Boosting Cancel] Atualização de saldo enviada com sucesso`);
   }
 
   // Ticket resolution
   const ticket = await Report.findOne({ conversationId });
   if (ticket) {
-    logger.info(`[Internal Boosting Cancel] Resolvendo ticket: ${ticket._id}`);
+    console.log(`[Internal Boosting Cancel] Resolvendo ticket: ${ticket._id}`);
     ticket.status = 'resolved';
     ticket.resolution = {
       ...ticket.resolution,
@@ -458,7 +458,7 @@ async function sendBalanceUpdate(app, userId) {
       });
     }
   } catch (err) {
-    logger.warn('[Internal Boosting Cancel] sendBalanceUpdate falhou', { userId, error: err?.message });
+    console.log('[Internal Boosting Cancel] sendBalanceUpdate falhou', { userId, error: err?.message });
   }
 }
 
@@ -467,7 +467,7 @@ async function sendBalanceUpdate(app, userId) {
  * Valida chave secreta compartilhada entre APIs
  */
 const internalAuth = (req, res, next) => {
-  logger.debug('[Internal Auth] Skipping authentication (open mode)');
+  console.log('[Internal Auth] Skipping authentication (open mode)');
   next();
 };
 
@@ -485,7 +485,7 @@ router.post('/boosting/:conversationId/cancel', internalAuth, async (req, res) =
 
     return res.json({ success: true, message: 'Boosting cancelado com sucesso', data: result });
   } catch (error) {
-    logger.error('[Internal Boosting Cancel] Error:', error);
+    console.log('[Internal Boosting Cancel] Error:', error);
     return res.status(500).json({ success: false, message: 'Erro interno ao cancelar boosting', error: error.message });
   }
 });
