@@ -440,8 +440,13 @@ class ConversationHandler {
 
       // Corrige query/populate para o schema real (participants é ObjectId de User)
       // ✅ SEGURANÇA: Nunca incluir email nos populates
+      // ✅ IMPORTANTE: Não retornar conversas temporárias legadas na lista principal
       const conversations = await Conversation.find({
-        participants: userId
+        participants: userId,
+        $or: [
+          { isTemporary: { $ne: true } },
+          { status: { $ne: 'temporary' } }
+        ]
       })
       .populate('participants', 'name avatar profileImage')
       .populate('client.userid', 'name avatar profileImage')
