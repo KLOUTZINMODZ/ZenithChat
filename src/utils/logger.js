@@ -1,8 +1,14 @@
 const winston = require('winston');
 const path = require('path');
 
-// Apenas erros para evitar consumo excessivo de memória e logs desnecessárias
-const logLevel = process.env.LOG_LEVEL || 'error';
+const fs = require('fs');
+
+const logLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
+const logsDir = path.join(process.cwd(), 'logs');
+
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
 
 const logger = winston.createLogger({
   level: logLevel,
@@ -16,18 +22,21 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'chat-api' },
   transports: [
-    // Apenas logs de erro
-    new winston.transports.File({ 
-      filename: path.join('logs', 'error.log'), 
-      level: 'error' 
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
+      level: 'error'
     }),
+    new winston.transports.File({
+      filename: path.join(logsDir, 'combined.log'),
+      level: logLevel
+    })
   ],
 });
 
-// Console apenas para erros críticos em desenvolvimento
+// Console para facilitar debugging em ambientes não produtivos
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
-    level: 'error',
+    level: logLevel,
     format: winston.format.combine(
       winston.format.colorize(),
       winston.format.simple()
