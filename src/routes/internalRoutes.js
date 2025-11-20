@@ -102,12 +102,15 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     throw new Error('conversationId is required for boosting cancel');
   }
 
+  logger.info(`[Internal Boosting Cancel] Iniciando cancelamento: conversationId=${conversationId}, reason=${reason}, adminId=${adminId}`);
+
   const conversation = await Conversation.findById(conversationId);
   if (!conversation) {
     throw new Error('Conversation not found');
   }
 
   let boostingId = conversation.metadata?.get?.('boostingId') || conversation.proposal || conversation.marketplaceItem;
+  logger.info(`[Internal Boosting Cancel] Conversation encontrada, boostingId=${boostingId}`);
 
   if (!boostingId) {
     const acceptedProposal = await AcceptedProposal.findOne({ conversationId });
@@ -160,9 +163,12 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
   if (agreement) {
     const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
+    logger.info(`[Internal Boosting Cancel] Agreement encontrado: ${agreement._id}, status=${agreement.status}`);
 
     await runTx(async (session) => {
       const clientId = agreement.parties?.client?.userid;
+      logger.info(`[Internal Boosting Cancel] Buscando escrow para clientId=${clientId}`);
+      
       const escrow = await WalletLedger.findOne({
         userId: clientId,
         reason: 'boosting_escrow',
@@ -170,6 +176,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       }).session(session);
 
       if (escrow && escrow.amount > 0) {
+        logger.info(`[Internal Boosting Cancel] Escrow encontrado: R$ ${escrow.amount}`);
+        
         const formattedClientId = normalizeObjectId(clientId);
         const user = await User.findById(formattedClientId).session(session);
 
@@ -178,6 +186,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
           const after = round2(before + Number(escrow.amount));
           user.walletBalance = after;
           await user.save({ session });
+
+          logger.info(`[Internal Boosting Cancel] Saldo devolvido ao cliente: R$ ${before} → R$ ${after}`);
 
           await WalletLedger.create([
             {
@@ -205,6 +215,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         } else {
           logger.warn('[Internal Boosting Cancel] Cliente não encontrado para devolver escrow', { clientId: formattedClientId });
         }
+      } else {
+        logger.info(`[Internal Boosting Cancel] Nenhum escrow encontrado para devolver`);
       }
 
       // ✅ CORRIGIDO: Cancelar agreement dentro da transação (sem chamar .save() interno)
@@ -212,10 +224,12 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         throw new Error(`Cannot cancel agreement in status: ${agreement.status}`);
       }
       
+      logger.info(`[Internal Boosting Cancel] Atualizando Agreement.status para 'cancelled'`);
       agreement.status = 'cancelled';
       agreement.cancelledAt = new Date();
       agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
       await agreement.save({ session });
+      logger.info(`[Internal Boosting Cancel] Agreement salvo com sucesso`);
 
       await WalletLedger.updateMany(
         {
@@ -337,13 +351,16 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   await AcceptedProposal.deleteMany({ conversationId });
 
   if (refundedClientId) {
+    logger.info(`[Internal Boosting Cancel] Enviando atualização de saldo para clientId=${refundedClientId}`);
     await sendBalanceUpdate(app, refundedClientId);
     await calculateAndSendEscrowUpdate(app, refundedClientId);
+    logger.info(`[Internal Boosting Cancel] Atualização de saldo enviada com sucesso`);
   }
 
   // Ticket resolution
   const ticket = await Report.findOne({ conversationId });
   if (ticket) {
+    logger.info(`[Internal Boosting Cancel] Resolvendo ticket: ${ticket._id}`);
     ticket.status = 'resolved';
     ticket.resolution = {
       ...ticket.resolution,
@@ -355,6 +372,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     ticket.updatedAt = new Date();
     await ticket.save();
   }
+
+  logger.info(`[Internal Boosting Cancel] ✅ Cancelamento concluído com sucesso: conversationId=${conversationId}`);
 
   return {
     success: true,

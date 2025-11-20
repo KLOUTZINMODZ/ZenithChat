@@ -154,11 +154,28 @@ boostingOrderSchema.statics.createFromAgreement = async function(agreement) {
 
   const orderNumber = `BO_${Date.now()}_${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-  // Normalizar IDs para ObjectId válidos
+  // ✅ CORRIGIDO: Normalizar IDs - aceita tanto ObjectId quanto userid numérico
   const normalizeObjectId = (value) => {
     if (!value) return null;
     const str = value.toString();
-    return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : null;
+    
+    // Se for um ObjectId válido, converter para ObjectId
+    if (mongoose.Types.ObjectId.isValid(str) && str.length === 24) {
+      return new mongoose.Types.ObjectId(str);
+    }
+    
+    // Se for um userid numérico (string de números), criar um ObjectId a partir dele
+    // Isso permite compatibilidade com userids numéricos da API principal
+    if (/^\d+$/.test(str)) {
+      // Converter userid numérico para ObjectId usando hash
+      // Formato: "000000000000" + últimos 12 dígitos do userid
+      const paddedId = str.padStart(24, '0').slice(-24);
+      if (mongoose.Types.ObjectId.isValid(paddedId)) {
+        return new mongoose.Types.ObjectId(paddedId);
+      }
+    }
+    
+    return null;
   };
 
   const normalizedClientId = normalizeObjectId(agreement.parties?.client?.userid);
@@ -167,6 +184,8 @@ boostingOrderSchema.statics.createFromAgreement = async function(agreement) {
   if (!normalizedClientId || !normalizedBoosterId) {
     throw new Error(`Invalid clientId/boosterId for BoostingOrder: client=${agreement.parties?.client?.userid}, booster=${agreement.parties?.booster?.userid}`);
   }
+
+  console.log(`[BoostingOrder.createFromAgreement] ✅ IDs normalizados: client=${agreement.parties?.client?.userid} → ${normalizedClientId}, booster=${agreement.parties?.booster?.userid} → ${normalizedBoosterId}`);
 
   const boostingOrder = new this({
     orderNumber,
