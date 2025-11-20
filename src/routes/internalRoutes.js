@@ -651,6 +651,98 @@ router.post('/sync-proposal-status', async (req, res) => {
 });
 
 /**
+ * POST /api/internal/boosting-cancelled
+ * Notificação de cancelamento de boosting
+ * Chamado pela APIAdministrativa quando um boosting é cancelado
+ */
+router.post('/boosting-cancelled', async (req, res) => {
+  try {
+    const {
+      boostingId,
+      agreementId,
+      conversationId,
+      reason,
+      cancelledBy,
+      cancelledAt
+    } = req.body;
+
+    if (!boostingId || !conversationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'boostingId e conversationId são obrigatórios'
+      });
+    }
+
+    const Conversation = require('../models/Conversation');
+    const Agreement = require('../models/Agreement');
+    const WebSocketServer = require('../websocket/WebSocketServer');
+
+    // Atualizar Conversation
+    const updatedConversation = await Conversation.findByIdAndUpdate(
+      conversationId,
+      {
+        $set: {
+          isActive: false,
+          boostingStatus: 'cancelled',
+          status: 'cancelled',
+          cancelledAt: new Date(cancelledAt),
+          updatedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    // Atualizar Agreement se fornecido
+    if (agreementId) {
+      await Agreement.findByIdAndUpdate(
+        agreementId,
+        {
+          $set: {
+            status: 'cancelled',
+            cancelledAt: new Date(cancelledAt),
+            cancelledBy,
+            updatedAt: new Date()
+          }
+        }
+      );
+    }
+
+    // ✅ Broadcast via WebSocket para notificar clientes em tempo real
+    const ws = req.app?.get('webSocketServer');
+    if (ws && updatedConversation) {
+      const participants = updatedConversation.participants || [];
+      
+      participants.forEach(participantId => {
+        ws.notificationService?.notifyUser(participantId.toString(), {
+          type: 'boosting:cancelled',
+          conversationId: conversationId,
+          boostingId: boostingId,
+          message: 'Atendimento cancelado pelo administrador',
+          reason: reason || 'Cancelado pelo administrador',
+          timestamp: new Date()
+        });
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Boosting cancelado e notificação enviada',
+      data: {
+        conversationId,
+        boostingId,
+        status: 'cancelled'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao processar cancelamento de boosting',
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/internal/create-temporary-chat
  * Cria um chat temporário para uma proposta
  * Chamado pela HackLoteAPI quando uma proposta é criada
@@ -722,6 +814,7 @@ router.get('/health', (req, res) => {
       stats: 'GET /api/internal/proposal/stats',
       'sync-proposal-status': 'POST /api/internal/sync-proposal-status',
       'create-temporary-chat': 'POST /api/internal/create-temporary-chat',
+      'boosting-cancelled': 'POST /api/internal/boosting-cancelled',
       health: 'GET /api/internal/health'
     }
   });
