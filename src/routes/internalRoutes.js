@@ -225,10 +225,14 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       }
       
       logger.info(`[Internal Boosting Cancel] Atualizando Agreement.status para 'cancelled'`);
+      logger.info(`[Internal Boosting Cancel] Agreement ANTES: status=${agreement.status}, _id=${agreement._id}`);
+      
       agreement.status = 'cancelled';
       agreement.cancelledAt = new Date();
       agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
-      await agreement.save({ session });
+      
+      const savedAgreement = await agreement.save({ session });
+      logger.info(`[Internal Boosting Cancel] Agreement DEPOIS: status=${savedAgreement.status}, _id=${savedAgreement._id}`);
       logger.info(`[Internal Boosting Cancel] Agreement salvo com sucesso`);
 
       await WalletLedger.updateMany(
@@ -259,6 +263,13 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         boostingOrderSnapshot = boostingOrderDoc.toObject();
       }
     });
+
+    // ✅ NOVO: Verificar se o Agreement foi realmente atualizado no banco APÓS a transação
+    const agreementAfterTx = await Agreement.findById(agreement._id);
+    logger.info(`[Internal Boosting Cancel] ✅ VERIFICAÇÃO PÓS-TRANSAÇÃO: Agreement._id=${agreement._id}, status=${agreementAfterTx?.status}`);
+    if (agreementAfterTx?.status !== 'cancelled') {
+      logger.error(`[Internal Boosting Cancel] ❌ ERRO: Agreement não foi atualizado! Status ainda é: ${agreementAfterTx?.status}`);
+    }
   }
 
   const webSocketServer = app?.get('webSocketServer');
