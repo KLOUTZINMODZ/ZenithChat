@@ -257,6 +257,9 @@ router.post('/:boostingId/cancel/broadcast', async (req, res) => {
     const proposalHandler = req.app?.get('proposalHandler');
     const webSocketServer = req.app?.get('webSocketServer');
     
+    logger.info(`[CANCEL-BROADCAST] ProposalHandler disponível: ${!!proposalHandler}`);
+    logger.info(`[CANCEL-BROADCAST] WebSocketServer disponível: ${!!webSocketServer}`);
+    
     if (proposalHandler) {
       logger.info(`[CANCEL-BROADCAST] Usando ProposalHandler para broadcast`);
       
@@ -271,6 +274,7 @@ router.post('/:boostingId/cancel/broadcast', async (req, res) => {
       const participants = conversation.participants || [];
       
       logger.info(`[CANCEL-BROADCAST] Enviando eventos estruturados para ${participants.length} participantes`);
+      logger.info(`[CANCEL-BROADCAST] Participants: ${participants.map(p => p.toString()).join(', ')}`);
       
       // Evento 1: boosting:cancelled com dados completos
       const boostingCancelledEvent = {
@@ -311,19 +315,26 @@ router.post('/:boostingId/cancel/broadcast', async (req, res) => {
       };
 
       // Enviar para todos os participantes
+      let sentCount = 0;
       participants.forEach(participantId => {
         try {
+          logger.info(`[CANCEL-BROADCAST] Enviando eventos para participante: ${participantId}`);
           webSocketServer.sendToUser(participantId.toString(), boostingCancelledEvent);
           webSocketServer.sendToUser(participantId.toString(), conversationUpdateEvent);
+          sentCount++;
           
-          logger.debug(`[CANCEL-BROADCAST] Eventos enviados para participante: ${participantId}`);
+          logger.info(`[CANCEL-BROADCAST] ✅ Eventos enviados para participante: ${participantId}`);
         } catch (notifyErr) {
-          logger.error(`[CANCEL-BROADCAST] Erro ao notificar participante ${participantId}:`, notifyErr);
+          logger.error(`[CANCEL-BROADCAST] ❌ Erro ao notificar participante ${participantId}:`, notifyErr);
         }
       });
+      
+      logger.info(`[CANCEL-BROADCAST] Total de participantes notificados: ${sentCount}/${participants.length}`);
+    } else {
+      logger.warn(`[CANCEL-BROADCAST] WebSocketServer ou Conversation não disponíveis`);
     }
 
-    logger.info(`[CANCEL-BROADCAST] Broadcast concluído para boostingId: ${boostingId}`);
+    logger.info(`[CANCEL-BROADCAST] ✅ Broadcast concluído para boostingId: ${boostingId}`);
 
     res.json({
       success: true,
