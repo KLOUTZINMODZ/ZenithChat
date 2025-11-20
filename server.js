@@ -49,6 +49,7 @@ const emailVerificationRoutes = require('./src/routes/emailVerificationRoutes');
 const imageServeMiddleware = require('./src/middleware/imageServeMiddleware');
 const homeRoutes = require('./src/routes/homeRoutes');
 const heroBannerRoutes = require('./src/routes/heroBannerRoutes');
+const boostingCancelRoutes = require('./src/routes/boostingCancelRoutes');
 
 const app = express();
 
@@ -230,6 +231,9 @@ app.use('/api/achievements', achievementRoutes);
 app.use('/api/purchases', purchasesRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/hero-banners', heroBannerRoutes);
+
+// Boosting cancel routes (sem rate limiter - rotas administrativas)
+app.use('/api/boosting-cancel', boostingCancelRoutes);
 
 // Support routes (tickets, detalhes)
 app.use('/api/support', supportRoutes);
