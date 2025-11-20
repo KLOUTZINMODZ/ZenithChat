@@ -61,6 +61,13 @@ async function emitBoostingMarketplaceUpdate(app, boostingOrderDoc, status, extr
 
     const participantIds = [payload.buyerId, payload.sellerId].filter(Boolean);
     participantIds.forEach((uid) => {
+      // Alinhar com o hook useMarketplaceEvents (frontend escuta purchase:status_changed)
+      ws.sendToUser(uid, {
+        type: 'purchase:status_changed',
+        data: payload
+      });
+
+      // Opcional: manter evento antigo para compatibilidade, se ainda houver consumidores
       ws.sendToUser(uid, {
         type: 'marketplace:status_changed',
         data: payload
