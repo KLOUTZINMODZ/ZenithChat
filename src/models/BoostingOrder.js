@@ -154,13 +154,27 @@ boostingOrderSchema.statics.createFromAgreement = async function(agreement) {
 
   const orderNumber = `BO_${Date.now()}_${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
+  // Normalizar IDs para ObjectId válidos
+  const normalizeObjectId = (value) => {
+    if (!value) return null;
+    const str = value.toString();
+    return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : null;
+  };
+
+  const normalizedClientId = normalizeObjectId(agreement.parties?.client?.userid);
+  const normalizedBoosterId = normalizeObjectId(agreement.parties?.booster?.userid);
+
+  if (!normalizedClientId || !normalizedBoosterId) {
+    throw new Error(`Invalid clientId/boosterId for BoostingOrder: client=${agreement.parties?.client?.userid}, booster=${agreement.parties?.booster?.userid}`);
+  }
+
   const boostingOrder = new this({
     orderNumber,
     agreementId: agreement._id,
     boostingRequestId: agreement.boostingRequestId,
     conversationId: agreement.conversationId,
-    clientId: agreement.parties.client.userid,
-    boosterId: agreement.parties.booster.userid,
+    clientId: normalizedClientId,
+    boosterId: normalizedBoosterId,
     clientData: {
       name: agreement.parties.client.name,
       email: agreement.parties.client.email,

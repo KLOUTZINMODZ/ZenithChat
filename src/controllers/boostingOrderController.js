@@ -144,7 +144,49 @@ async function getBoostingOrderByConversation(req, res) {
         return res.status(403).json({ success: false, message: 'Acesso negado ao pedido' });
       }
 
-      boostingOrder = await BoostingOrder.createFromAgreement(agreement);
+      try {
+        boostingOrder = await BoostingOrder.createFromAgreement(agreement);
+      } catch (createError) {
+        console.error('Erro ao criar BoostingOrder a partir de Agreement (fallback para snapshot):', createError.message);
+
+        return res.json({
+          success: true,
+          data: {
+            _id: agreement._id,
+            orderNumber: agreement.agreementId,
+            agreementId: agreement.agreementId,
+            boostingRequestId: agreement.boostingRequestId,
+            conversationId: agreement.conversationId,
+            clientId: agreement.parties.client.userid,
+            boosterId: agreement.parties.booster.userid,
+            clientData: {
+              name: agreement.parties.client.name,
+              email: agreement.parties.client.email,
+              avatar: agreement.parties.client.avatar
+            },
+            boosterData: {
+              name: agreement.parties.booster.name,
+              email: agreement.parties.booster.email,
+              avatar: agreement.parties.booster.avatar,
+              rating: agreement.parties.booster.rating
+            },
+            status: agreement.status,
+            price: agreement.proposalSnapshot?.price || agreement.price || 0,
+            serviceSnapshot: {
+              game: agreement.proposalSnapshot.game,
+              category: agreement.proposalSnapshot.category,
+              currentRank: agreement.proposalSnapshot.currentRank,
+              desiredRank: agreement.proposalSnapshot.desiredRank,
+              description: agreement.proposalSnapshot.description,
+              estimatedTime: agreement.proposalSnapshot.estimatedTime
+            },
+            createdAt: agreement.createdAt,
+            activatedAt: agreement.activatedAt,
+            completedAt: agreement.completedAt,
+            cancelledAt: agreement.cancelledAt
+          }
+        });
+      }
     } else {
       const isParticipant =
         boostingOrder.clientId.toString() === userId.toString() ||
