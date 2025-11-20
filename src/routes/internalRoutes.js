@@ -149,6 +149,11 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   let refundedClientId = null;
   let boostingOrderSnapshot = null;
   const cancellationDate = new Date();
+  const normalizedConversationId = normalizeObjectId(conversationId);
+  const normalizedBoostingId = boostingId ? normalizeObjectId(boostingId) : null;
+  const cancellationReason = reason || 'Serviço cancelado';
+  const proposalIdFromConversation = conversation.metadata?.get?.('proposalId') || conversation.proposal || conversation.metadata?.proposalId;
+  const normalizedProposalId = proposalIdFromConversation ? normalizeObjectId(proposalIdFromConversation) : null;
 
   try {
     await runTx(async (session) => {
@@ -165,7 +170,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
             lastMessageAt: cancellationDate,
             'metadata.status': 'cancelled',
             'metadata.cancelledAt': cancellationDate,
-            'metadata.cancelledBy': adminId
+            'metadata.cancelledBy': adminId,
+            'metadata.cancelReason': cancellationReason
           }
         },
         { session }
@@ -186,7 +192,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         
         agreement.status = 'cancelled';
         agreement.cancelledAt = new Date();
-        agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
+        agreement.addAction('cancelled', adminId, { reason: cancellationReason }, idemKey);
         await agreement.save({ session });
 
         // Processar escrow
@@ -222,7 +228,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
                   agreementId: agreement._id.toString(),
                   conversationId: normalizeObjectId(conversationId),
                   cancelledBy: adminId,
-                  cancelReason: reason || 'Serviço cancelado',
+                  cancelReason: cancellationReason,
                   originalEscrowId: escrow._id.toString(),
                   type: 'escrow_refund'
                 }
@@ -242,7 +248,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
             $set: {
               'metadata.status': 'refunded',
               'metadata.refundedAt': new Date(),
-              'metadata.refundReason': reason || 'Serviço cancelado'
+              'metadata.refundReason': cancellationReason
             }
           },
           { session }
@@ -256,7 +262,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
           $set: {
             status: 'cancelled',
             cancelledAt: new Date(),
-            cancelReason: reason || 'Serviço cancelado',
+            cancelReason: cancellationReason,
             cancelledBy: adminId
           }
         },
@@ -270,10 +276,10 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
           {
             $set: {
               status: 'cancelled',
-              updatedAt: new Date(),
-              cancelReason: reason || 'Cancelado pelo administrador',
+              updatedAt: cancellationDate,
+              cancelReason: cancellationReason,
               cancelledBy: adminId,
-              cancelledAt: new Date()
+              cancelledAt: cancellationDate
             }
           },
           { session }
@@ -284,11 +290,11 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       const boostingOrderDoc = await BoostingOrder.findOne({ conversationId }).session(session);
       if (boostingOrderDoc) {
         boostingOrderDoc.status = 'cancelled';
-        boostingOrderDoc.cancelledAt = new Date();
+        boostingOrderDoc.cancelledAt = cancellationDate;
         boostingOrderDoc.cancellationDetails = {
           cancelledBy: normalizeObjectId(adminId),
-          cancelReason: reason || 'Serviço cancelado',
-          refundAmount: 0
+          cancelReason: cancellationReason,
+          refundAmount: Number(refundedClientId ? (escrow?.amount || 0) : (escrow?.amount || 0))
         };
         await boostingOrderDoc.save({ session });
         boostingOrderSnapshot = boostingOrderDoc.toObject();
@@ -303,6 +309,15 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
   // ✅ Recarregar conversation para ter os dados atualizados
   const conversationUpdated = await Conversation.findById(conversationId);
+  const conversationPayload = conversationUpdated ? {
+    _id: conversationUpdated._id,
+    status: conversationUpdated.status,
+    boostingStatus: conversationUpdated.boostingStatus,
+    isActive: conversationUpdated.isActive,
+    isFinalized: conversationUpdated.isFinalized,
+    isTemporary: conversationUpdated.isTemporary,
+    metadata: conversationUpdated.metadata
+  } : null;
 
   if (conversationUpdated?.participants?.length && webSocketServer?.sendToUser) {
     const participantIds = conversationUpdated.participants.map((participant) =>
@@ -312,8 +327,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     const cancellationEvent = {
       type: 'service:cancelled',
       data: {
-        conversationId: normalizeObjectId(conversationId),
-        reason,
+        conversationId: normalizedConversationId,
+        reason: cancellationReason,
         cancelledBy: adminId,
         boostingStatus: 'cancelled',
         isActive: false,
@@ -324,7 +339,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     const conversationUpdatedEvent = {
       type: 'conversation:updated',
       data: {
-        conversationId: normalizeObjectId(conversationId),
+        conversationId: normalizedConversationId,
         status: 'cancelled',
         boostingStatus: 'cancelled',
         isActive: false,
@@ -333,16 +348,31 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         source: 'internal-api',
         cancelledAt: new Date().toISOString(),
         cancelledBy: adminId,
-        reason: reason || 'Serviço cancelado'
+        reason: cancellationReason,
+        action: 'status_updated',
+        conversation: conversationPayload
       }
     };
+    const proposalStatusEvent = normalizedProposalId ? {
+      type: 'proposal:status_updated',
+      data: {
+        proposalId: normalizedProposalId,
+        conversationId: normalizedConversationId,
+        status: 'cancelled',
+        boostingId: normalizedBoostingId,
+        timestamp: new Date().toISOString()
+      }
+    } : null;
 
     participantIds.forEach((participantId) => {
       webSocketServer.sendToUser(participantId, cancellationEvent);
       webSocketServer.sendToUser(participantId, conversationUpdatedEvent);
+      if (proposalStatusEvent) {
+        webSocketServer.sendToUser(participantId, proposalStatusEvent);
+      }
       webSocketServer.sendToUser(participantId, {
         type: 'message:new',
-        data: { message: systemMessage.toObject(), conversationId: normalizeObjectId(conversationId) },
+        data: { message: systemMessage.toObject(), conversationId: normalizedConversationId },
         timestamp: new Date().toISOString()
       });
     });
@@ -366,14 +396,14 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
     if (boostingOrderSnapshot) {
       await emitBoostingStatusChanged(app, boostingOrderSnapshot, 'cancelled');
-    } else {
+    } else if (conversationPayload) {
       await emitBoostingStatusChanged(app, {
-        conversationId: normalizeObjectId(conversationId),
+        conversationId: normalizedConversationId,
         clientId: normalizeObjectId(conversationUpdated.participants?.[0]),
         boosterId: normalizeObjectId(conversationUpdated.participants?.[1]),
         price: null,
         orderNumber: null,
-        boostingRequestId: normalizeObjectId(boostingId)
+        boostingRequestId: normalizedBoostingId
       }, 'cancelled');
     }
   }
