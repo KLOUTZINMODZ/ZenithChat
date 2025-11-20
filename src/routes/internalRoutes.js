@@ -149,10 +149,14 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   let refundedClientId = null;
   let boostingOrderSnapshot = null;
 
-  await runTx(async (session) => {
-    // 1️⃣ ATUALIZAR CONVERSATION
-    const conversationInTx = await Conversation.findById(conversationId).session(session);
-    if (conversationInTx) {
+  try {
+    await runTx(async (session) => {
+      // 1️⃣ ATUALIZAR CONVERSATION
+      const conversationInTx = await Conversation.findById(conversationId).session(session);
+      if (!conversationInTx) {
+        throw new Error(`Conversation ${conversationId} not found during transaction`);
+      }
+      
       conversationInTx.isActive = false;
       conversationInTx.boostingStatus = 'cancelled';
       conversationInTx.status = 'cancelled';
@@ -164,127 +168,130 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       conversationInTx.metadata.set('cancelledAt', new Date());
       conversationInTx.metadata.set('cancelledBy', adminId);
       await conversationInTx.save({ session });
-    }
 
-    // 2️⃣ ATUALIZAR AGREEMENT
-    const agreement = await Agreement.findOne({ conversationId }).session(session).sort({ createdAt: -1 });
-    if (agreement) {
-      const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
-      
-      if (!['pending', 'active'].includes(agreement.status)) {
-        throw new Error(`Cannot cancel agreement in status: ${agreement.status}`);
-      }
-      
-      agreement.status = 'cancelled';
-      agreement.cancelledAt = new Date();
-      agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
-      await agreement.save({ session });
-
-      // Processar escrow
-      const clientId = agreement.parties?.client?.userid;
-      const escrow = await WalletLedger.findOne({
-        userId: clientId,
-        reason: 'boosting_escrow',
-        'metadata.agreementId': agreement._id.toString()
-      }).session(session);
-
-      if (escrow && escrow.amount > 0) {
-        const formattedClientId = normalizeObjectId(clientId);
-        const user = await User.findById(formattedClientId).session(session);
-
-        if (user) {
-          const before = round2(user.walletBalance || 0);
-          const after = round2(before + Number(escrow.amount));
-          user.walletBalance = after;
-          await user.save({ session });
-
-          await WalletLedger.create([
-            {
-              userId: formattedClientId,
-              txId: null,
-              direction: 'credit',
-              reason: 'boosting_escrow_refund',
-              amount: Number(escrow.amount),
-              operationId: `boosting_escrow_refund:${agreement._id}`,
-              balanceBefore: before,
-              balanceAfter: after,
-              metadata: {
-                source: 'boosting',
-                agreementId: agreement._id.toString(),
-                conversationId: normalizeObjectId(conversationId),
-                cancelledBy: adminId,
-                cancelReason: reason || 'Serviço cancelado',
-                originalEscrowId: escrow._id.toString(),
-                type: 'escrow_refund'
-              }
-            }
-          ], { session });
-
-          refundedClientId = formattedClientId;
+      // 2️⃣ ATUALIZAR AGREEMENT
+      const agreement = await Agreement.findOne({ conversationId }).session(session).sort({ createdAt: -1 });
+      if (agreement) {
+        const idemKey = `internal_cancel_${agreement._id}_${Date.now()}`;
+        
+        if (!['pending', 'active'].includes(agreement.status)) {
+          throw new Error(`Cannot cancel agreement in status: ${agreement.status}`);
         }
-      }
+        
+        agreement.status = 'cancelled';
+        agreement.cancelledAt = new Date();
+        agreement.addAction('cancelled', adminId, { reason: reason || '' }, idemKey);
+        await agreement.save({ session });
 
-      await WalletLedger.updateMany(
-        {
+        // Processar escrow
+        const clientId = agreement.parties?.client?.userid;
+        const escrow = await WalletLedger.findOne({
+          userId: clientId,
           reason: 'boosting_escrow',
-          'metadata.agreementId': agreement._id.toString(),
-        },
-        {
-          $set: {
-            'metadata.status': 'refunded',
-            'metadata.refundedAt': new Date(),
-            'metadata.refundReason': reason || 'Serviço cancelado'
+          'metadata.agreementId': agreement._id.toString()
+        }).session(session);
+
+        if (escrow && escrow.amount > 0) {
+          const formattedClientId = normalizeObjectId(clientId);
+          const user = await User.findById(formattedClientId).session(session);
+
+          if (user) {
+            const before = round2(user.walletBalance || 0);
+            const after = round2(before + Number(escrow.amount));
+            user.walletBalance = after;
+            await user.save({ session });
+
+            await WalletLedger.create([
+              {
+                userId: formattedClientId,
+                txId: null,
+                direction: 'credit',
+                reason: 'boosting_escrow_refund',
+                amount: Number(escrow.amount),
+                operationId: `boosting_escrow_refund:${agreement._id}`,
+                balanceBefore: before,
+                balanceAfter: after,
+                metadata: {
+                  source: 'boosting',
+                  agreementId: agreement._id.toString(),
+                  conversationId: normalizeObjectId(conversationId),
+                  cancelledBy: adminId,
+                  cancelReason: reason || 'Serviço cancelado',
+                  originalEscrowId: escrow._id.toString(),
+                  type: 'escrow_refund'
+                }
+              }
+            ], { session });
+
+            refundedClientId = formattedClientId;
           }
-        },
-        { session }
-      );
-    }
-
-    // 3️⃣ ATUALIZAR ACCEPTEDPROPOSAL
-    await AcceptedProposal.updateMany(
-      { conversationId },
-      {
-        $set: {
-          status: 'cancelled',
-          cancelledAt: new Date(),
-          cancelReason: reason || 'Serviço cancelado',
-          cancelledBy: adminId
         }
-      },
-      { session }
-    );
 
-    // 4️⃣ ATUALIZAR BOOSTINGREQUESTS
-    if (boostingId) {
-      await BoostingRequest.updateOne(
-        { _id: boostingId },
+        await WalletLedger.updateMany(
+          {
+            reason: 'boosting_escrow',
+            'metadata.agreementId': agreement._id.toString(),
+          },
+          {
+            $set: {
+              'metadata.status': 'refunded',
+              'metadata.refundedAt': new Date(),
+              'metadata.refundReason': reason || 'Serviço cancelado'
+            }
+          },
+          { session }
+        );
+      }
+
+      // 3️⃣ ATUALIZAR ACCEPTEDPROPOSAL
+      await AcceptedProposal.updateMany(
+        { conversationId },
         {
           $set: {
             status: 'cancelled',
-            updatedAt: new Date(),
-            cancelReason: reason || 'Cancelado pelo administrador',
-            cancelledBy: adminId,
-            cancelledAt: new Date()
+            cancelledAt: new Date(),
+            cancelReason: reason || 'Serviço cancelado',
+            cancelledBy: adminId
           }
         },
         { session }
       );
-    }
 
-    // 5️⃣ ATUALIZAR BOOSTINGORDER
-    const boostingOrderDoc = await BoostingOrder.findOne({ conversationId }).session(session);
-    if (boostingOrderDoc) {
-      boostingOrderDoc.status = 'cancelled';
-      boostingOrderDoc.cancelledAt = new Date();
-      boostingOrderDoc.cancellationDetails = {
-        cancelledBy: normalizeObjectId(adminId),
-        cancelReason: reason || 'Serviço cancelado',
-        refundAmount: 0
-      };
-      await boostingOrderDoc.save({ session });
-      boostingOrderSnapshot = boostingOrderDoc.toObject();
-    }
-  });
+      // 4️⃣ ATUALIZAR BOOSTINGREQUESTS
+      if (boostingId) {
+        await BoostingRequest.updateOne(
+          { _id: boostingId },
+          {
+            $set: {
+              status: 'cancelled',
+              updatedAt: new Date(),
+              cancelReason: reason || 'Cancelado pelo administrador',
+              cancelledBy: adminId,
+              cancelledAt: new Date()
+            }
+          },
+          { session }
+        );
+      }
+
+      // 5️⃣ ATUALIZAR BOOSTINGORDER
+      const boostingOrderDoc = await BoostingOrder.findOne({ conversationId }).session(session);
+      if (boostingOrderDoc) {
+        boostingOrderDoc.status = 'cancelled';
+        boostingOrderDoc.cancelledAt = new Date();
+        boostingOrderDoc.cancellationDetails = {
+          cancelledBy: normalizeObjectId(adminId),
+          cancelReason: reason || 'Serviço cancelado',
+          refundAmount: 0
+        };
+        await boostingOrderDoc.save({ session });
+        boostingOrderSnapshot = boostingOrderDoc.toObject();
+      }
+    });
+  } catch (txError) {
+    logger.error('[Internal Boosting Cancel] Transaction failed:', txError.message);
+    throw txError;
+  }
 
   const webSocketServer = app?.get('webSocketServer');
 
