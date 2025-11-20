@@ -148,26 +148,32 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   // ✅ TRANSAÇÃO ÚNICA PARA ATUALIZAR TODAS AS 4 COLLECTIONS
   let refundedClientId = null;
   let boostingOrderSnapshot = null;
+  const cancellationDate = new Date();
 
   try {
     await runTx(async (session) => {
-      // 1️⃣ ATUALIZAR CONVERSATION
-      const conversationInTx = await Conversation.findById(conversationId).session(session);
-      if (!conversationInTx) {
+      // 1️⃣ ATUALIZAR CONVERSATION (sem depender de validação de enum antiga)
+      const conversationUpdate = await Conversation.updateOne(
+        { _id: conversationId },
+        {
+          $set: {
+            isActive: false,
+            boostingStatus: 'cancelled',
+            status: 'cancelled',
+            isFinalized: true,
+            lastMessage: systemMessage._id,
+            lastMessageAt: cancellationDate,
+            'metadata.status': 'cancelled',
+            'metadata.cancelledAt': cancellationDate,
+            'metadata.cancelledBy': adminId
+          }
+        },
+        { session }
+      );
+
+      if (!conversationUpdate.matchedCount) {
         throw new Error(`Conversation ${conversationId} not found during transaction`);
       }
-      
-      conversationInTx.isActive = false;
-      conversationInTx.boostingStatus = 'cancelled';
-      conversationInTx.status = 'cancelled';
-      conversationInTx.isFinalized = true;
-      conversationInTx.lastMessage = systemMessage._id;
-      conversationInTx.lastMessageAt = new Date();
-      conversationInTx.metadata = conversationInTx.metadata || new Map();
-      conversationInTx.metadata.set('status', 'cancelled');
-      conversationInTx.metadata.set('cancelledAt', new Date());
-      conversationInTx.metadata.set('cancelledBy', adminId);
-      await conversationInTx.save({ session });
 
       // 2️⃣ ATUALIZAR AGREEMENT
       const agreement = await Agreement.findOne({ conversationId }).session(session).sort({ createdAt: -1 });
