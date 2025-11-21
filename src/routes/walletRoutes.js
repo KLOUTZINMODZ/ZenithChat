@@ -324,19 +324,23 @@ async function calculateAndSendEscrowUpdate(app, userId) {
     
     let totalEscrow = 0;
     
-    // Buscar purchases em escrow
-    const purchases = await Purchase.find({
-      sellerId: userId,
-      status: { $in: ['escrow_reserved', 'shipped', 'delivered'] }
-    }).select('sellerReceives');
-    
-    for (const purchase of purchases) {
-      totalEscrow += purchase.sellerReceives || 0;
+    const userIdString = typeof userId === 'string' ? userId : userId?.toString?.();
+    const isObjectId = mongoose.Types.ObjectId.isValid(userIdString);
+    const sellerObjectId = isObjectId ? new mongoose.Types.ObjectId(userIdString) : null;
+
+    if (sellerObjectId) {
+      const purchases = await Purchase.find({
+        sellerId: sellerObjectId,
+        status: { $in: ['escrow_reserved', 'shipped', 'delivered'] }
+      }).select('sellerReceives');
+      for (const purchase of purchases) {
+        totalEscrow += purchase.sellerReceives || 0;
+      }
     }
-    
+
     // Buscar propostas ativas
     const proposals = await AcceptedProposal.find({
-      'booster.userid': userId,
+      'booster.userid': userIdString,
       status: 'active'
     }).select('price');
     
