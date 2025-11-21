@@ -963,7 +963,7 @@ class BoostingChatController {
         // Se não foi (boostings antigos), debitar agora
         
         const existingEscrow = await WalletLedger.findOne({
-          userId: clientUserId,
+          userId: clientUserDoc._id,
           reason: 'boosting_escrow',
           'metadata.agreementId': agreement?._id?.toString() || acceptedProposal?._id?.toString()
         }).session(session);
@@ -987,7 +987,7 @@ class BoostingChatController {
           
           // Criar registro de liberação do escrow
           await WalletLedger.create([{
-            userId: clientUserId,
+            userId: clientUserDoc._id,
             txId: null,
             direction: 'debit',
             reason: 'boosting_escrow_release',
@@ -999,7 +999,7 @@ class BoostingChatController {
               source: 'boosting',
               agreementId: agreement?._id?.toString() || null,
               conversationId: conversationId,
-              boosterId: boosterUserId?.toString(),
+              boosterId: boosterUserDoc._id?.toString(),
               price: Number(price),
               feeAmount: Number(feeAmount),
               boosterReceives: Number(boosterReceives),
@@ -1031,7 +1031,7 @@ class BoostingChatController {
 
           // Criar registro no WalletLedger (cliente - débito)
           await WalletLedger.create([{
-            userId: clientUserId,
+            userId: clientUserDoc._id,
             txId: null,
             direction: 'debit',
             reason: 'boosting_payment',
@@ -1055,7 +1055,7 @@ class BoostingChatController {
           }], { session });
 
           console.log('[BOOSTING] Cliente debitado (fluxo legado):', {
-            clientId: clientUserId?.toString(),
+            clientId: clientUserDoc._id?.toString(),
             amount: price,
             balanceBefore: clientBalanceBefore,
             balanceAfter: clientBalanceAfter
@@ -1070,7 +1070,7 @@ class BoostingChatController {
 
         // Criar registro no WalletLedger (booster) - Formato idêntico ao marketplace
         const boosterLedger = await WalletLedger.create([{
-          userId: boosterUserId,
+          userId: boosterUserDoc._id,
           txId: null,
           direction: 'credit',
           reason: 'boosting_release',
@@ -1120,8 +1120,8 @@ class BoostingChatController {
               price: Number(price),
               feeAmount: Number(feeAmount),
               boosterReceives: Number(boosterReceives),
-              clientId: clientUserId?.toString(),
-              boosterId: boosterUserId?.toString(),
+              clientId: clientUserDoc._id?.toString(),
+              boosterId: boosterUserDoc._id?.toString(),
               // Adicionar campos extras para compatibilidade
               feePercent: 0.05,
               serviceType: 'boosting'
