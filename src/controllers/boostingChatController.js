@@ -850,6 +850,10 @@ class BoostingChatController {
         return res.status(403).json({ success: false, message: 'Apenas o cliente pode confirmar a entrega' });
       }
 
+      // Garantir que usuários existem antes da transação (evita abort por duplicate key)
+      await findOrCreateUserFromAPI(clientUserId);
+      await findOrCreateUserFromAPI(boosterUserId);
+
       // CRITICAL: Verify that only one proposal was accepted for this boosting request
       if (agreement?.boostingRequestId || acceptedProposal?.boostingId) {
         const boostingId = agreement?.boostingRequestId || acceptedProposal?.boostingId;
@@ -971,7 +975,7 @@ class BoostingChatController {
           });
           
           // Apenas registrar a liberação do escrow (não altera saldo)
-          const clientUser = await findOrCreateUserFromAPI(clientUserId, { session });
+          const clientUser = await findUserFlexible(clientUserId, { session });
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           clientBalanceAfter = clientBalanceBefore; // Saldo não muda
           
@@ -1008,9 +1012,9 @@ class BoostingChatController {
           // Debitar agora
           console.warn('[BOOSTING] Cliente NÃO foi debitado no escrow, debitando agora (fluxo legado)');
           
-          const clientUser = await findOrCreateUserFromAPI(clientUserId, { session });
+          const clientUser = await findUserFlexible(clientUserId, { session });
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
-          
+
           // Verificar se cliente tem saldo suficiente
           if (clientBalanceBefore < price) {
             throw new Error(`Saldo insuficiente. Necessário: R$ ${price.toFixed(2)}, Disponível: R$ ${clientBalanceBefore.toFixed(2)}`);
@@ -1054,8 +1058,13 @@ class BoostingChatController {
         }
 
         // 2. Transferir 95% ao booster
-        // Usar findOrCreateUserFromAPI pois o booster pode estar apenas na API externa
-        const boosterUser = await findOrCreateUserFromAPI(boosterUserId, { session });
+        // Buscar booster (já garantido fora da transação)
+        let boosterUser = await findUserFlexible(boosterUserId, { session });
+        if (!boosterUser) {
+          // fallback defensivo caso usuário tenha sido removido entre etapas
+          await findOrCreateUserFromAPI(boosterUserId);
+          boosterUser = await findUserFlexible(boosterUserId, { session });
+        }
         const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
         boosterUser.walletBalance = boosterBalanceAfter;
