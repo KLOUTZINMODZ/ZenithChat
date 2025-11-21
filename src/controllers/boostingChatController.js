@@ -1334,6 +1334,16 @@ class BoostingChatController {
       // Atualizar saldos em tempo real via WebSocket (igual ao marketplace)
       await sendBalanceUpdate(req.app, boosterUserId);
       await sendBalanceUpdate(req.app, clientUserId); // Também notificar cliente para atualizar UI
+      try {
+        if (boosterUserId) {
+          await calculateAndSendEscrowUpdate(req.app, boosterUserId);
+        }
+        if (clientUserId) {
+          await calculateAndSendEscrowUpdate(req.app, clientUserId);
+        }
+      } catch (escrowEventError) {
+        console.warn('[BOOSTING] Falha ao emitir escrow update após confirmação:', escrowEventError.message);
+      }
       
       // Enviar atualização ao mediador também (se existir)
       try {

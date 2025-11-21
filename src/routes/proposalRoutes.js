@@ -8,6 +8,7 @@ const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const Agreement = require('../models/Agreement');
 const AcceptedProposal = require('../models/AcceptedProposal');
+const { calculateAndSendEscrowUpdate } = require('./walletRoutes');
 
 
 router.get('/', (req, res) => {
@@ -598,6 +599,10 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 // Atualizar Agreement para indicar que pagamento foi reservado
                 agreement.financial.paymentStatus = 'escrowed';
                 await agreement.save();
+
+                if (boosterId) {
+                  await calculateAndSendEscrowUpdate(req.app, boosterId);
+                }
                 
                 // Client debited (escrow)
               } catch (escrowError) {
