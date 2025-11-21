@@ -854,6 +854,14 @@ class BoostingChatController {
       await findOrCreateUserFromAPI(clientUserId);
       await findOrCreateUserFromAPI(boosterUserId);
 
+      const getUserForSession = async (id, session) => {
+        const userDoc = await findUserFlexible(id, { session });
+        if (!userDoc) {
+          throw new Error(`Usuário ${id} não encontrado após sincronização pré-transação`);
+        }
+        return userDoc;
+      };
+
       // CRITICAL: Verify that only one proposal was accepted for this boosting request
       if (agreement?.boostingRequestId || acceptedProposal?.boostingId) {
         const boostingId = agreement?.boostingRequestId || acceptedProposal?.boostingId;
@@ -975,7 +983,7 @@ class BoostingChatController {
           });
           
           // Apenas registrar a liberação do escrow (não altera saldo)
-          const clientUser = await findUserFlexible(clientUserId, { session });
+          const clientUser = await getUserForSession(clientUserId, session);
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           clientBalanceAfter = clientBalanceBefore; // Saldo não muda
           
@@ -1059,12 +1067,7 @@ class BoostingChatController {
 
         // 2. Transferir 95% ao booster
         // Buscar booster (já garantido fora da transação)
-        let boosterUser = await findUserFlexible(boosterUserId, { session });
-        if (!boosterUser) {
-          // fallback defensivo caso usuário tenha sido removido entre etapas
-          await findOrCreateUserFromAPI(boosterUserId);
-          boosterUser = await findUserFlexible(boosterUserId, { session });
-        }
+        const boosterUser = await getUserForSession(boosterUserId, session);
         const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
         boosterUser.walletBalance = boosterBalanceAfter;
