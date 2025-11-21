@@ -321,40 +321,58 @@ async function calculateAndSendEscrowUpdate(app, userId) {
     const Purchase = require('../models/Purchase');
     const AcceptedProposal = require('../models/AcceptedProposal');
     const User = require('../models/User');
-    
-    let totalEscrow = 0;
-    
-    const userIdString = typeof userId === 'string' ? userId : userId?.toString?.();
-    const isObjectId = mongoose.Types.ObjectId.isValid(userIdString);
-    const sellerObjectId = isObjectId ? new mongoose.Types.ObjectId(userIdString) : null;
 
-    if (sellerObjectId) {
+    let totalEscrow = 0;
+
+    const userIdString = typeof userId === 'string' ? userId : userId?.toString?.();
+    if (!userIdString) {
+      return 0;
+    }
+
+    const isObjectId = mongoose.Types.ObjectId.isValid(userIdString);
+    let normalizedObjectId = isObjectId ? new mongoose.Types.ObjectId(userIdString) : null;
+
+    // Buscar usuário tanto por _id quanto por userid legado
+    let userDoc = null;
+    if (normalizedObjectId) {
+      userDoc = await User.findById(normalizedObjectId).select('_id walletBalance userid');
+    }
+    if (!userDoc) {
+      userDoc = await User.findOne({ userid: userIdString }).select('_id walletBalance userid');
+      if (userDoc?._id) {
+        normalizedObjectId = userDoc._id;
+      }
+    }
+
+    if (!normalizedObjectId && userDoc?._id) {
+      normalizedObjectId = userDoc._id;
+    }
+
+    if (normalizedObjectId) {
       const purchases = await Purchase.find({
-        sellerId: sellerObjectId,
+        sellerId: normalizedObjectId,
         status: { $in: ['escrow_reserved', 'shipped', 'delivered'] }
       }).select('sellerReceives');
       for (const purchase of purchases) {
         totalEscrow += purchase.sellerReceives || 0;
       }
+
+      const proposals = await AcceptedProposal.find({
+        'booster.userid': normalizedObjectId,
+        status: 'active'
+      }).select('price');
+
+      for (const proposal of proposals) {
+        totalEscrow += proposal.price || 0;
+      }
+    } else {
+      logger.warn('[EscrowUpdate] Usuário não encontrado para calcular escrow', { userId: userIdString });
     }
 
-    // Buscar propostas ativas
-    const proposals = await AcceptedProposal.find({
-      'booster.userid': userIdString,
-      status: 'active'
-    }).select('price');
-    
-    for (const proposal of proposals) {
-      totalEscrow += proposal.price || 0;
-    }
-    
-    // Buscar saldo atual
-    const user = await User.findById(userId).select('walletBalance');
-    const balance = user?.walletBalance || 0;
-    
-    // Enviar evento
+    const balance = userDoc?.walletBalance || 0;
+
     await sendEscrowUpdateEvent(app, userId, totalEscrow, balance);
-    
+
     return totalEscrow;
   } catch (error) {
     logger.error('Erro ao calcular/enviar escrow update:', error);
