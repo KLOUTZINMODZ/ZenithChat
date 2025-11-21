@@ -273,8 +273,9 @@ async function findBoostingOrderFlexible(orderId) {
   if (!orderId) return null;
 
   let boostingOrder = null;
+  const isObjectId = mongoose.Types.ObjectId.isValid(orderId);
 
-  if (mongoose.Types.ObjectId.isValid(orderId)) {
+  if (isObjectId) {
     boostingOrder = await BoostingOrder.findById(orderId);
   }
 
@@ -284,6 +285,14 @@ async function findBoostingOrderFlexible(orderId) {
 
   if (!boostingOrder) {
     boostingOrder = await BoostingOrder.findOne({ agreementId: orderId });
+  }
+
+  if (!boostingOrder && isObjectId) {
+    boostingOrder = await BoostingOrder.findOne({ conversationId: orderId });
+  }
+
+  if (!boostingOrder && isObjectId) {
+    boostingOrder = await BoostingOrder.findOne({ boostingRequestId: orderId });
   }
 
   return boostingOrder;
@@ -308,8 +317,18 @@ async function confirmDeliveryByOrder(req, res) {
     if (!boostingOrder) {
       agreement = await Agreement.findByAgreementId(orderId);
 
-      if (!agreement && mongoose.Types.ObjectId.isValid(orderId)) {
+      const isObjectId = mongoose.Types.ObjectId.isValid(orderId);
+
+      if (!agreement && isObjectId) {
         agreement = await Agreement.findById(orderId);
+      }
+
+      if (!agreement && isObjectId) {
+        agreement = await Agreement.findOne({ conversationId: orderId });
+      }
+
+      if (!agreement && isObjectId) {
+        agreement = await Agreement.findOne({ boostingRequestId: orderId });
       }
 
       if (!agreement) {
