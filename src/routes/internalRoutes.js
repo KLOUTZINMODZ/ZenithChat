@@ -61,6 +61,7 @@ async function emitBoostingStatusChanged(app, boostingOrderData, status) {
         type: 'marketplace:status_changed',
         data: payload
       });
+
     });
 
     if (ws.conversationHandler?.sendConversationsUpdate) {
@@ -428,6 +429,118 @@ router.post('/boosting/:conversationId/cancel', internalAuth, async (req, res) =
   } catch (error) {
     logger.error('[Internal Boosting Cancel] Error:', error);
     return res.status(500).json({ success: false, message: 'Erro interno ao cancelar boosting', error: error.message });
+  }
+});
+
+router.post('/boosting/break', internalAuth, async (req, res) => {
+  const { boostingId, reason, requestedBy } = req.body || {};
+
+  if (!boostingId) {
+    return res.status(400).json({
+      success: false,
+      message: 'boostingId is required'
+    });
+  }
+
+  try {
+    const now = new Date();
+    const tempChats = await Conversation.find({
+      isTemporary: true,
+      $or: [
+        { 'metadata.boostingId': boostingId },
+        { boostingId }
+      ]
+    });
+
+    const webSocketServer = req.app.get('webSocketServer');
+    const proposalHandler = req.app.get('proposalHandler') || proposalHandlerModule;
+    const deletedChats = [];
+
+    for (const chat of tempChats) {
+      try {
+        const metadata = chat.metadata instanceof Map
+          ? chat.metadata
+          : new Map(Object.entries(chat.metadata || {}));
+
+        const proposalId = metadata?.get?.('proposalId') || metadata?.proposalId || chat.proposal;
+        const clientData = metadata?.get?.('clientData') || metadata?.clientData || {};
+        const boosterData = metadata?.get?.('boosterData') || metadata?.boosterData || {};
+        const proposalData = metadata?.get?.('proposalData') || metadata?.proposalData || {};
+
+        const participants = chat.participants.map(participant =>
+          participant?._id?.toString?.() || participant?.toString?.() || participant
+        ).filter(Boolean);
+
+        if (webSocketServer?.sendToUser) {
+          participants.forEach(participantId => {
+            const payloadBase = {
+              boostingId: boostingId.toString(),
+              conversationId: chat._id.toString(),
+              reason: reason || 'Solicitação cancelada pelo cliente antes da aceitação',
+              requestedBy: requestedBy || 'system',
+              timestamp: now.toISOString()
+            };
+
+            webSocketServer.sendToUser(participantId, {
+              type: 'boosting:broken',
+              data: payloadBase
+            });
+
+            if (proposalId) {
+              webSocketServer.sendToUser(participantId, {
+                type: 'proposal:removed',
+                data: {
+                  proposalId,
+                  boostingId,
+                  reason: 'boosting_broken',
+                  proposalData,
+                  clientData,
+                  boosterData,
+                  timestamp: now.toISOString()
+                }
+              });
+            }
+
+            webSocketServer.sendToUser(participantId, {
+              type: 'conversation:deleted',
+              data: {
+                conversationId: chat._id,
+                boostingId,
+                reason: 'boosting_request_broken',
+                deletedAt: now.toISOString(),
+                message: reason || 'Solicitação cancelada pelo cliente antes da aceitação'
+              }
+            });
+          });
+        }
+
+        await Message.deleteMany({ conversation: chat._id });
+        await Conversation.deleteOne({ _id: chat._id });
+        deletedChats.push(chat._id);
+      } catch (chatError) {
+        logger.warn('[Boosting Break] Failed to clean chat', { chatId: chat?._id, error: chatError?.message });
+      }
+    }
+
+    if (proposalHandler?.broadcastBoostingBroken) {
+      proposalHandler.broadcastBoostingBroken(boostingId.toString());
+    }
+
+    return res.json({
+      success: true,
+      message: 'Temporary chats removed successfully',
+      data: {
+        boostingId,
+        removedChats: deletedChats.length
+      }
+    });
+  } catch (error) {
+    logger.error('[Boosting Break] Error while removing temporary chats', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro interno ao remover chats temporários',
+      error: error.message
+    });
   }
 });
 

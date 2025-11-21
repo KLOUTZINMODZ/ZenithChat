@@ -564,6 +564,35 @@ class ProposalHandler {
 
     // Subscriptions cleaned up
   }
+
+  broadcastBoostingBroken(boostingId) {
+    try {
+      const subscribers = this.boostingSubscriptions.get(boostingId);
+      if (!subscribers || subscribers.size === 0) {
+        return;
+      }
+
+      const message = JSON.stringify({
+        type: 'boosting:broken',
+        boostingId,
+        data: {
+          boostingId,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+      subscribers.forEach(userId => {
+        const connections = this.connectionManager.getUserConnections(userId);
+        connections.forEach(conn => {
+          if (conn.readyState === 1) {
+            conn.send(message);
+          }
+        });
+      });
+    } catch (error) {
+      logger.error('Error in broadcastBoostingBroken:', error);
+    }
+  }
 }
 
 module.exports = ProposalHandler;
