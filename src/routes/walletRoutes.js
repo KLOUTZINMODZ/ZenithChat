@@ -320,6 +320,7 @@ async function calculateAndSendEscrowUpdate(app, userId) {
   try {
     const Purchase = require('../models/Purchase');
     const AcceptedProposal = require('../models/AcceptedProposal');
+    const Agreement = require('../models/Agreement');
     const User = require('../models/User');
 
     let totalEscrow = 0;
@@ -348,6 +349,8 @@ async function calculateAndSendEscrowUpdate(app, userId) {
       normalizedObjectId = userDoc._id;
     }
 
+    const normalizedObjectIdString = normalizedObjectId?.toString();
+
     if (normalizedObjectId) {
       const purchases = await Purchase.find({
         sellerId: normalizedObjectId,
@@ -364,6 +367,17 @@ async function calculateAndSendEscrowUpdate(app, userId) {
 
       for (const proposal of proposals) {
         totalEscrow += proposal.price || 0;
+      }
+
+      const agreements = await Agreement.find({
+        'parties.booster.userid': normalizedObjectIdString,
+        status: 'active',
+        'financial.paymentStatus': { $in: ['pending', 'escrowed'] }
+      }).select('proposalSnapshot.price financial totalAmount');
+
+      for (const agreement of agreements) {
+        const agreementPrice = agreement?.proposalSnapshot?.price ?? agreement?.financial?.totalAmount ?? 0;
+        totalEscrow += Number(agreementPrice) || 0;
       }
     } else {
       logger.warn('[EscrowUpdate] Usuário não encontrado para calcular escrow', { userId: userIdString });
