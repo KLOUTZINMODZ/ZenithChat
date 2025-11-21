@@ -16,6 +16,13 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
+  userid: {
+    type: String,
+    index: true,
+    sparse: true,
+    default: null,
+    trim: true
+  },
   googleId: {
     type: String,
     unique: true,

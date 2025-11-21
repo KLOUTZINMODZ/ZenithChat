@@ -4,10 +4,12 @@ const { auth } = require('../middleware/auth');
 const logger = require('../utils/logger');
 
 const axios = require('axios');
+const mongoose = require('mongoose');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const Agreement = require('../models/Agreement');
 const AcceptedProposal = require('../models/AcceptedProposal');
+const User = require('../models/User');
 const { calculateAndSendEscrowUpdate } = require('./walletRoutes');
 
 
@@ -20,6 +22,79 @@ router.get('/', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+
+function normalizeApiBase(url) {
+  return (url || 'https://zenithggapi.vercel.app/api').replace(/\/$/, '');
+}
+
+async function fetchUserFromMainAPI(userId, roleLabel, authHeader) {
+  const baseUrl = normalizeApiBase(process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api');
+  const url = `${baseUrl}/users/${userId}`;
+  try {
+    const headers = authHeader ? { Authorization: authHeader } : {};
+    const response = await axios.get(url, {
+      headers,
+      timeout: 10000
+    });
+    return response.data?.user || response.data?.data || response.data;
+  } catch (error) {
+    logger.error(`[Proposals] Erro ao buscar ${roleLabel} ${userId} na API principal`, {
+      status: error.response?.status,
+      message: error.message
+    });
+    throw new Error(`${roleLabel} ${userId} não encontrado na API principal`);
+  }
+}
+
+async function ensureLocalUser(userId, roleLabel, authHeader) {
+  if (!userId) {
+    throw new Error(`${roleLabel} ID inválido`);
+  }
+
+  const idStr = String(userId);
+  let userDoc = null;
+
+  if (mongoose.Types.ObjectId.isValid(idStr)) {
+    userDoc = await User.findById(idStr);
+  }
+
+  if (!userDoc) {
+    userDoc = await User.findOne({ userid: idStr });
+  }
+
+  if (!userDoc) {
+    const apiUser = await fetchUserFromMainAPI(idStr, roleLabel, authHeader);
+    if (!apiUser) {
+      throw new Error(`${roleLabel} ${idStr} não pôde ser sincronizado`);
+    }
+
+    const payload = {
+      userid: apiUser.userid || idStr,
+      name: apiUser.name || apiUser.username || roleLabel,
+      email: apiUser.email || `user${idStr}@hacklote.com`,
+      avatar: apiUser.avatar || null,
+      profileImage: apiUser.avatar || null,
+      walletBalance: apiUser.walletBalance || 0
+    };
+
+    userDoc = new User(payload);
+    try {
+      await userDoc.save();
+    } catch (error) {
+      if (error.code === 11000) {
+        userDoc = await User.findOne({ email: payload.email }) || await User.findOne({ userid: payload.userid });
+      } else {
+        throw error;
+      }
+    }
+  } else if (!userDoc.userid && !mongoose.Types.ObjectId.isValid(idStr)) {
+    userDoc.userid = idStr;
+    await userDoc.save();
+  }
+
+  return userDoc;
+}
 
 
 router.get('/:proposalId/accept', auth, async (req, res) => {
@@ -83,6 +158,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     if (clientId) {
       clientId = String(clientId);
     }
+
+    const clientExternalId = clientId;
+    const boosterExternalId = boosterId;
     
     // conversationId agora é obrigatório: se não veio nem no body nem no metadata, falha imediatamente
     if (!conversationId && metadata?.conversationId) {
@@ -228,6 +306,11 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
     
     let acceptedConv = null;
     let agreementCreated = null;
+    let clientUser = null;
+    let boosterUser = null;
+    let clientDbId = null;
+    let boosterDbId = null;
+    const authHeader = req.headers.authorization;
     
     try {
       // 1. Buscar conversa EXCLUSIVAMENTE pelo conversationId informado
@@ -246,75 +329,15 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
           
           if (!existingAgreement) {
             
-            // Busca dados do cliente e booster
-            const mongoose = require('mongoose');
-            const User = require('../models/User');
-            
-            // Função auxiliar para buscar usuário (local ou API principal)
-            const fetchUser = async (userId, userType = 'user') => {
-              // Tenta buscar localmente primeiro
-              let user;
-              if (mongoose.Types.ObjectId.isValid(userId) && userId.length === 24) {
-                user = await User.findById(userId);
-                if (user) {
-                  console.log(`✅ ${userType} ${userId} encontrado no MongoDB local`);
-                  return user;
-                }
-              }
-              
-              // Se não encontrou localmente, busca na API principal
-              console.log(`🔍 Buscando ${userType} ${userId} na API principal...`);
-              
-              try {
-                const apiUrl = `${process.env.HACKLOTE_API_URL || 'https://zenithggapi.vercel.app/api'}/users/${userId}`;
-                console.log(`📡 URL da API: ${apiUrl}`);
-                
-                const userResponse = await axios.get(apiUrl, {
-                  headers: { Authorization: req.headers.authorization },
-                  timeout: 10000
-                });
-                
-                console.log(`📦 Resposta da API (status ${userResponse.status}):`, JSON.stringify(userResponse.data).substring(0, 200));
-                
-                // Tenta múltiplos formatos de resposta
-                const userData = userResponse.data?.user || userResponse.data?.data || userResponse.data;
-                
-                if (userData && (userData.id || userData._id || userData.userid)) {
-                  console.log(`✅ ${userType} encontrado na API principal:`, userData.name || userData.username);
-                  
-                  return {
-                    _id: userId,
-                    name: userData.name || userData.username || 'Usuário',
-                    email: userData.email || `user${userId}@hacklote.com`,
-                    avatar: userData.avatar || null,
-                    rating: userData.rating || 0,
-                    isVerified: userData.isVerified || false,
-                    totalBoosts: userData.totalBoosts || 0,
-                    completedBoosts: userData.completedBoosts || 0,
-                    totalOrders: userData.totalOrders || 0,
-                    walletBalance: userData.walletBalance || 0
-                  };
-                }
-                
-                console.error(`❌ ${userType} ${userId} não encontrado na resposta da API`);
-              } catch (apiError) {
-                console.error(`❌ Erro ao buscar ${userType} ${userId} na API:`, {
-                  message: apiError.message,
-                  status: apiError.response?.status,
-                  data: apiError.response?.data
-                });
-              }
-              
-              return null;
-            };
-            
-            // Busca cliente e booster com logs identificados
             console.log(`\n🔍 Iniciando busca de usuários...`);
-            console.log(`📋 Cliente ID: ${clientId}`);
-            console.log(`📋 Booster ID: ${boosterId}`);
-            
-            const clientUser = await fetchUser(clientId, 'Cliente');
-            const boosterUser = await fetchUser(boosterId, 'Booster');
+            console.log(`📋 Cliente ID (externo): ${clientId}`);
+            console.log(`📋 Booster ID (externo): ${boosterId}`);
+
+            clientUser = await ensureLocalUser(clientId, 'Cliente', authHeader);
+            boosterUser = await ensureLocalUser(boosterId, 'Booster', authHeader);
+
+            clientDbId = clientUser._id.toString();
+            boosterDbId = boosterUser._id.toString();
             
             if (!clientUser) {
               console.error(`❌ ERRO CRÍTICO: Cliente ${clientId} não encontrado`);
@@ -328,6 +351,8 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
             console.log(`✅ Ambos usuários encontrados - prosseguindo com Agreement...`);
             
             if (clientUser && boosterUser) {
+              const clientLegacyId = clientUser.userid || clientExternalId;
+              const boosterLegacyId = boosterUser.userid || boosterExternalId;
               // Extrai dados da proposta (pode estar em metadata.proposalData ou direto no metadata)
               let proposalData = metadata?.proposalData || {};
               let proposalPrice = proposalData.price || metadata?.price || metadata?.proposedPrice || 0;
@@ -529,7 +554,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 status: 'active'
               });
               
-              agreement.addAction('created', clientId, { proposalId: actualProposalId });
+              agreement.addAction('created', clientDbId, { proposalId: actualProposalId });
               await agreement.save();
               
               // Atualiza conversa com agreementId
@@ -547,19 +572,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 const WalletLedger = require('../models/WalletLedger');
                 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
                 
-                // Buscar cliente novamente para ter saldo atualizado
-                // IMPORTANTE: Só pode debitar se usuário existe localmente no MongoDB
-                let clientForDebit;
-                if (mongoose.Types.ObjectId.isValid(clientId) && clientId.length === 24) {
-                  clientForDebit = await User.findById(clientId);
-                }
-                
-                if (!clientForDebit) {
-                  // Se cliente não existe localmente, não pode debitar
-                  // Escrow será processado pela API principal
-                  console.warn(`Cliente ${clientId} não encontrado localmente - escrow delegado à API principal`);
-                  throw new Error(`Débito de escrow delegado à API principal para cliente: ${clientId}`);
-                }
+                const clientForDebit = clientUser;
                 
                 const clientBalanceBefore = round2(clientForDebit.walletBalance || 0);
                 
@@ -574,7 +587,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 
                 // Criar registro no WalletLedger (cliente - débito escrow)
                 await WalletLedger.create({
-                  userId: clientId,
+                  userId: clientForDebit._id,
                   txId: null,
                   direction: 'debit',
                   reason: 'boosting_escrow',
@@ -586,7 +599,9 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                     source: 'boosting',
                     agreementId: agreement._id.toString(),
                     conversationId: conversationId,
-                    boosterId: boosterId.toString(),
+                    boosterId: boosterDbId,
+                    boosterLegacyId: boosterExternalId,
+                    legacyClientId: clientExternalId,
                     price: Number(proposalPrice),
                     feePercent: 0.05,
                     type: 'boosting_service',
@@ -600,8 +615,8 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
                 agreement.financial.paymentStatus = 'escrowed';
                 await agreement.save();
 
-                if (boosterId) {
-                  await calculateAndSendEscrowUpdate(req.app, boosterId);
+                if (boosterUser?._id) {
+                  await calculateAndSendEscrowUpdate(req.app, boosterUser._id);
                 }
                 
                 // Client debited (escrow)
