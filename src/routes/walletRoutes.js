@@ -302,11 +302,13 @@ async function sendEscrowUpdateEvent(app, userId, escrowBalance, balance) {
   try {
     const notificationService = app?.locals?.notificationService;
     if (notificationService) {
+      const normalizedBalance = typeof balance === 'number' ? round2(balance) : undefined;
       notificationService.sendToUser(String(userId), {
         type: 'wallet:escrow_updated',
         data: {
+          userId: String(userId),
           escrowBalance: round2(escrowBalance),
-          balance: balance ? round2(balance) : undefined,
+          balance: normalizedBalance,
           timestamp: new Date().toISOString()
         }
       });
