@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const Conversation = require('./Conversation');
+const AcceptedProposal = require('./AcceptedProposal');
 
 /**
  * BoostingOrder - Snapshot persistente de pedidos de boosting
@@ -161,8 +163,45 @@ boostingOrderSchema.statics.createFromAgreement = async function(agreement) {
     return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : null;
   };
 
-  const normalizedClientId = normalizeObjectId(agreement.parties?.client?.userid);
-  const normalizedBoosterId = normalizeObjectId(agreement.parties?.booster?.userid);
+  const resolveParticipantId = async (role) => {
+    const participant = agreement.parties?.[role];
+
+    const potentialValues = [
+      participant?.userid,
+      participant?._id,
+      participant?.metadata?.userId,
+      participant?.metadata?._id,
+      participant?.metadata?.legacyUserId,
+      participant?.metadata?.legacyId,
+      participant?.metadata?.originalUserId
+    ];
+
+    for (const value of potentialValues) {
+      const normalized = normalizeObjectId(value);
+      if (normalized) return normalized;
+    }
+
+    if (agreement.conversationId) {
+      const conversation = await Conversation.findById(agreement.conversationId).select(`${role}.userid`);
+      const conversationId = conversation?.[role]?.userid;
+      const normalized = normalizeObjectId(conversationId);
+      if (normalized) return normalized;
+    }
+
+    if (agreement.acceptedProposalId) {
+      const acceptedProposal = await AcceptedProposal.findById(agreement.acceptedProposalId).select(`${role}.userid`);
+      const proposalId = acceptedProposal?.[role]?.userid;
+      const normalized = normalizeObjectId(proposalId);
+      if (normalized) return normalized;
+    }
+
+    return null;
+  };
+
+  const [normalizedClientId, normalizedBoosterId] = await Promise.all([
+    resolveParticipantId('client'),
+    resolveParticipantId('booster')
+  ]);
 
   if (!normalizedClientId || !normalizedBoosterId) {
     throw new Error(`Invalid clientId/boosterId for BoostingOrder: client=${agreement.parties?.client?.userid}, booster=${agreement.parties?.booster?.userid}`);

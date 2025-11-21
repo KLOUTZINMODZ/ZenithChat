@@ -20,4 +20,7 @@ router.get('/:orderId', boostingOrderController.getBoostingOrder);
 // Buscar boosting order por conversationId
 router.get('/conversation/:conversationId', boostingOrderController.getBoostingOrderByConversation);
 
+// Confirmar entrega via BoostingOrder
+router.post('/:orderId/confirm-delivery', boostingOrderController.confirmDeliveryByOrder);
+
 module.exports = router;

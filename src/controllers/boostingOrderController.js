@@ -1,6 +1,10 @@
+const mongoose = require('mongoose');
 const BoostingOrder = require('../models/BoostingOrder');
 const Agreement = require('../models/Agreement');
 const User = require('../models/User');
+const BoostingChatController = require('./boostingChatController');
+
+const boostingChatController = new BoostingChatController();
 
 /**
  * Buscar boosting order por ID (_id ou agreementId)
@@ -265,8 +269,85 @@ async function listBoostingOrders(req, res) {
   }
 }
 
+async function findBoostingOrderFlexible(orderId) {
+  if (!orderId) return null;
+
+  let boostingOrder = null;
+
+  if (mongoose.Types.ObjectId.isValid(orderId)) {
+    boostingOrder = await BoostingOrder.findById(orderId);
+  }
+
+  if (!boostingOrder) {
+    boostingOrder = await BoostingOrder.findOne({ orderNumber: orderId });
+  }
+
+  if (!boostingOrder) {
+    boostingOrder = await BoostingOrder.findOne({ agreementId: orderId });
+  }
+
+  return boostingOrder;
+}
+
+async function confirmDeliveryByOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Usuário não autenticado' });
+    }
+
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: 'orderId é obrigatório' });
+    }
+
+    let boostingOrder = await findBoostingOrderFlexible(orderId);
+    let agreement = null;
+
+    if (!boostingOrder) {
+      agreement = await Agreement.findByAgreementId(orderId);
+
+      if (!agreement && mongoose.Types.ObjectId.isValid(orderId)) {
+        agreement = await Agreement.findById(orderId);
+      }
+
+      if (!agreement) {
+        return res.status(404).json({ success: false, message: 'BoostingOrder não encontrado' });
+      }
+
+      try {
+        boostingOrder = await BoostingOrder.createFromAgreement(agreement);
+      } catch (error) {
+        console.warn('Falha ao criar BoostingOrder antes da confirmação:', error.message);
+      }
+    }
+
+    const conversationId = boostingOrder?.conversationId || agreement?.conversationId;
+
+    if (!conversationId) {
+      return res.status(400).json({ success: false, message: 'BoostingOrder sem conversationId associado' });
+    }
+
+    const clientId = boostingOrder?.clientId?.toString() || agreement?.parties?.client?.userid?.toString();
+    const boosterId = boostingOrder?.boosterId?.toString() || agreement?.parties?.booster?.userid?.toString();
+
+    const normalizedUserId = userId?.toString();
+    if (clientId !== normalizedUserId && boosterId !== normalizedUserId) {
+      return res.status(403).json({ success: false, message: 'Acesso negado ao pedido' });
+    }
+
+    req.params.conversationId = conversationId.toString();
+    return boostingChatController.confirmDelivery(req, res);
+  } catch (error) {
+    console.error('Erro ao confirmar entrega por BoostingOrder:', error);
+    return res.status(500).json({ success: false, message: 'Erro interno ao confirmar entrega' });
+  }
+}
+
 module.exports = {
   getBoostingOrder,
   listBoostingOrders,
-  getBoostingOrderByConversation
+  getBoostingOrderByConversation,
+  confirmDeliveryByOrder
 };
