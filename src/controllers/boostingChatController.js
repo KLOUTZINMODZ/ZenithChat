@@ -851,16 +851,12 @@ class BoostingChatController {
       }
 
       // Garantir que usuários existem antes da transação (evita abort por duplicate key)
-      await findOrCreateUserFromAPI(clientUserId);
-      await findOrCreateUserFromAPI(boosterUserId);
+      const clientUserDoc = await findOrCreateUserFromAPI(clientUserId);
+      const boosterUserDoc = await findOrCreateUserFromAPI(boosterUserId);
 
-      const getUserForSession = async (id, session) => {
-        const userDoc = await findUserFlexible(id, { session });
-        if (!userDoc) {
-          throw new Error(`Usuário ${id} não encontrado após sincronização pré-transação`);
-        }
-        return userDoc;
-      };
+      if (!clientUserDoc || !boosterUserDoc) {
+        throw new Error('Falha ao sincronizar usuários antes da confirmação');
+      }
 
       // CRITICAL: Verify that only one proposal was accepted for this boosting request
       if (agreement?.boostingRequestId || acceptedProposal?.boostingId) {
@@ -974,6 +970,9 @@ class BoostingChatController {
         
         let clientBalanceBefore, clientBalanceAfter;
         
+        const clientUser = clientUserDoc;
+        const boosterUser = boosterUserDoc;
+
         if (existingEscrow) {
           // Cliente JÁ FOI DEBITADO ao aceitar proposta (novo fluxo)
           console.log('[BOOSTING] Cliente já foi debitado no escrow:', {
@@ -983,7 +982,6 @@ class BoostingChatController {
           });
           
           // Apenas registrar a liberação do escrow (não altera saldo)
-          const clientUser = await getUserForSession(clientUserId, session);
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           clientBalanceAfter = clientBalanceBefore; // Saldo não muda
           
@@ -1020,8 +1018,7 @@ class BoostingChatController {
           // Debitar agora
           console.warn('[BOOSTING] Cliente NÃO foi debitado no escrow, debitando agora (fluxo legado)');
           
-          const clientUser = await findUserFlexible(clientUserId, { session });
-          clientBalanceBefore = round2(clientUser.walletBalance || 0);
+          clientBalanceBefore = round2(clientUserDoc.walletBalance || 0);
 
           // Verificar se cliente tem saldo suficiente
           if (clientBalanceBefore < price) {
@@ -1065,9 +1062,7 @@ class BoostingChatController {
           });
         }
 
-        // 2. Transferir 95% ao booster
-        // Buscar booster (já garantido fora da transação)
-        const boosterUser = await getUserForSession(boosterUserId, session);
+        // 2. Transferir 95% ao booster (documento já garantido fora da transação)
         const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
         boosterUser.walletBalance = boosterBalanceAfter;
