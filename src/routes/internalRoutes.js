@@ -98,6 +98,62 @@ async function runTx(callback) {
   }
 }
 
+async function resolveConversationForCancel(identifier) {
+  if (!identifier) return null;
+
+  let conversation = null;
+
+  const isObjectId = mongoose.Types.ObjectId.isValid(identifier);
+  if (isObjectId) {
+    conversation = await Conversation.findById(identifier);
+    if (conversation) return conversation;
+  }
+
+  conversation = await Conversation.findOne({ 'metadata.boostingId': identifier });
+  if (conversation) return conversation;
+
+  const agreement = await Agreement.findOne({
+    $or: [
+      { _id: identifier },
+      { boostingRequestId: identifier },
+      { agreementId: identifier }
+    ]
+  }).sort({ createdAt: -1 });
+
+  if (agreement?.conversationId) {
+    conversation = await Conversation.findById(agreement.conversationId);
+    if (conversation) return conversation;
+  }
+
+  const boostingOrder = await BoostingOrder.findOne({
+    $or: [
+      { _id: identifier },
+      { boostingRequestId: identifier },
+      { orderNumber: identifier }
+    ]
+  }).sort({ createdAt: -1 });
+
+  if (boostingOrder?.conversationId) {
+    conversation = await Conversation.findById(boostingOrder.conversationId);
+    if (conversation) return conversation;
+  }
+
+  const acceptedProposal = await AcceptedProposal.findOne({
+    $or: [
+      { _id: identifier },
+      { boostingId: identifier },
+      { proposalId: identifier }
+    ]
+  }).sort({ createdAt: -1 });
+
+  if (acceptedProposal?.conversationId) {
+    conversation = await Conversation.findById(acceptedProposal.conversationId);
+    if (conversation) return conversation;
+  }
+
+  return null;
+}
+
 async function performInternalBoostingCancel({ app, conversationId, reason, adminId = 'internal-admin' }) {
   if (!conversationId) {
     throw new Error('conversationId is required for boosting cancel');
@@ -418,9 +474,21 @@ router.post('/boosting/:conversationId/cancel', internalAuth, async (req, res) =
   const { reason } = req.body || {};
 
   try {
+    let resolvedConversationId = conversationId;
+
+    let conversation = await resolveConversationForCancel(conversationId);
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation not found for provided identifier'
+      });
+    }
+
+    resolvedConversationId = conversation._id.toString();
+
     const result = await performInternalBoostingCancel({
       app: req.app,
-      conversationId,
+      conversationId: resolvedConversationId,
       reason,
       adminId: req.admin?._id || 'internal-admin'
     });
