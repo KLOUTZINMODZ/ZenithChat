@@ -164,6 +164,20 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
     throw new Error('Conversation not found');
   }
 
+  const resolvedAdminId = (() => {
+    if (adminId && mongoose.Types.ObjectId.isValid(adminId)) {
+      return normalizeObjectId(adminId);
+    }
+    const fallbackParticipant = conversation.participants?.[0] || conversation.participants?.[1];
+    return normalizeObjectId(fallbackParticipant);
+  })();
+
+  if (!resolvedAdminId) {
+    throw new Error('Unable to resolve admin user for cancellation message');
+  }
+
+  const adminLabel = adminId || 'internal-admin';
+
   let boostingId = conversation.metadata?.get?.('boostingId') || conversation.proposal || conversation.marketplaceItem;
 
   if (!boostingId) {
@@ -182,13 +196,14 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
 
   const systemMessage = new Message({
     conversation: conversationId,
-    sender: adminId,
+    sender: resolvedAdminId,
     content: `❌ Atendimento cancelado pelo administrador\n📝 Motivo: ${reason || 'Não informado'}`,
     type: 'system',
     metadata: {
       type: 'cancellation',
       reason,
-      cancelledBy: adminId,
+      cancelledBy: resolvedAdminId,
+      cancelledByLabel: adminLabel,
       source: 'internal-api'
     }
   });
@@ -202,7 +217,8 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
   conversation.metadata = conversation.metadata || new Map();
   conversation.metadata.set('status', 'cancelled');
   conversation.metadata.set('cancelledAt', new Date());
-  conversation.metadata.set('cancelledBy', adminId);
+  conversation.metadata.set('cancelledBy', resolvedAdminId);
+  conversation.metadata.set('cancelledByLabel', adminLabel);
 
   await conversation.save();
 
@@ -250,7 +266,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
                 source: 'boosting',
                 agreementId: agreement._id.toString(),
                 conversationId: normalizeObjectId(conversationId),
-                cancelledBy: adminId,
+                cancelledBy: resolvedAdminId,
                 cancelReason: reason || 'Serviço cancelado',
                 originalEscrowId: escrow._id.toString(),
                 type: 'escrow_refund'
@@ -264,7 +280,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         }
       }
 
-      await agreement.cancel(adminId, reason || '', idemKey);
+      await agreement.cancel(adminLabel, reason || '', idemKey);
 
       await WalletLedger.updateMany(
         {
@@ -286,7 +302,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         boostingOrderDoc.status = 'cancelled';
         boostingOrderDoc.cancelledAt = new Date();
         boostingOrderDoc.cancellationDetails = {
-          cancelledBy: normalizeObjectId(adminId),
+          cancelledBy: resolvedAdminId,
           cancelReason: reason || 'Serviço cancelado',
           refundAmount: Number(escrow?.amount || 0)
         };
@@ -308,10 +324,10 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
       data: {
         conversationId: normalizeObjectId(conversationId),
         reason,
-        cancelledBy: adminId,
+        cancelledBy: resolvedAdminId,
         boostingStatus: 'cancelled',
         isActive: false,
-        timestamp: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         source: 'internal-api'
       }
     };
@@ -376,7 +392,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
           status: 'cancelled',
           updatedAt: new Date(),
           cancelReason: reason || 'Cancelado pelo administrador',
-          cancelledBy: adminId,
+          cancelledBy: resolvedAdminId,
           cancelledAt: new Date()
         }
       }
