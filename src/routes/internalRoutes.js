@@ -257,7 +257,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
               userId: formattedClientId,
               txId: null,
               direction: 'credit',
-              reason: 'boosting_escrow_refund',
+              reason: 'boosting_escrow_release',
               amount: Number(escrow.amount),
               operationId: `boosting_escrow_refund:${agreement._id}`,
               balanceBefore: before,
