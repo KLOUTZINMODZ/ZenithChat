@@ -280,7 +280,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
         }
       }
 
-      await agreement.cancel(adminLabel, reason || '', idemKey);
+      await agreement.cancel(resolvedAdminId, reason || '', idemKey);
 
       await WalletLedger.updateMany(
         {
