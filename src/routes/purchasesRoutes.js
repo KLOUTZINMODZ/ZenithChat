@@ -584,7 +584,8 @@ router.post('/initiate', auth, async (req, res) => {
     // Fetch item to derive true seller and price (lean for initial validation)
     const itemDoc = await MarketItem.findById(itemId).lean();
     if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
-    const isAutomaticDelivery = String(itemDoc.deliveryMethod || '').toLowerCase() === 'automatic' && !!itemDoc.automaticDeliveryCredentials;
+    const isAutomaticDelivery = String(itemDoc.deliveryMethod || '').toLowerCase() === 'automatic'
+      && !!(itemDoc.automaticDelivery && itemDoc.automaticDelivery.hasCredentials);
     // Validate seller id on the item (support legacy shapes). Prefer sellerId (main API canonical), then userId, then others
     let sellerUserIdFromItem = safeId(itemDoc.sellerId)
       || safeId(itemDoc.userId)
@@ -805,7 +806,7 @@ router.post('/initiate', auth, async (req, res) => {
     // Criar credenciais automáticas imediatamente após a compra, se aplicável
     try {
       const deliveryMethod = String(itemDoc.deliveryMethod || '').toLowerCase();
-      if (deliveryMethod === 'automatic' && itemDoc.automaticDeliveryCredentials) {
+      if (deliveryMethod === 'automatic' && itemDoc?.automaticDelivery?.hasCredentials) {
         const accountDeliveryApiUrl = process.env.ACCOUNT_DELIVERY_API_URL || 'http://localhost:5000/api/v1/account-delivery';
         const rawDiscount = Number(itemDoc.discount ?? 0);
         const discountApplied = Number.isFinite(rawDiscount) ? rawDiscount : 0;
@@ -815,7 +816,6 @@ router.post('/initiate', auth, async (req, res) => {
           sellerId: sellerUserIdFromItem.toString(),
           purchaseId: purchase._id.toString(),
           itemId,
-          credentials: itemDoc.automaticDeliveryCredentials,
           pricePaid: Number(priceUsed),
           discountApplied
         }, {
