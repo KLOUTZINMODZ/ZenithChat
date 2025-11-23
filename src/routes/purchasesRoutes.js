@@ -701,8 +701,18 @@ router.post('/initiate', auth, async (req, res) => {
         metadata: { source: 'purchase', purchaseId: p._id.toString(), itemId }
       }], { session });
 
-      p.status = 'escrow_reserved';
-      p.escrowReservedAt = new Date();
+      // Se for entrega automática, marcar como shipped automaticamente
+      const isAutomatic = String(itemInTx.deliveryMethod || '').toLowerCase() === 'automatic';
+      if (isAutomatic) {
+        p.status = 'shipped';
+        p.shippedAt = new Date();
+        const auto = new Date(); auto.setDate(auto.getDate() + 7);
+        p.autoReleaseAt = auto;
+        p.logs.push({ level: 'info', message: 'Automatic delivery: marked as shipped automatically' });
+      } else {
+        p.status = 'escrow_reserved';
+        p.escrowReservedAt = new Date();
+      }
       await p.save({ session });
 
       // cpf already ensured above
@@ -791,6 +801,34 @@ router.post('/initiate', auth, async (req, res) => {
 
     await sendBalanceUpdate(req.app, buyerId);
 
+    // Se for entrega automática, criar as credenciais automaticamente
+    try {
+      const itemFull = await MarketItem.findById(itemId);
+      if (itemFull && itemFull.deliveryMethod === 'automatic' && itemFull.automaticDeliveryCredentials) {
+        const accountDeliveryApiUrl = process.env.ACCOUNT_DELIVERY_API_URL || 'http://localhost:5000/api/v1/account-delivery';
+        try {
+          await axios.post(`${accountDeliveryApiUrl}/internal/create-from-purchase`, {
+            buyerId: buyerId.toString(),
+            sellerId: sellerUserIdFromItem.toString(),
+            purchaseId: purchase._id.toString(),
+            itemId: itemId,
+            credentials: itemFull.automaticDeliveryCredentials
+          }, {
+            headers: {
+              'Authorization': `Bearer ${process.env.INTERNAL_API_KEY || ''}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log('[PURCHASES] Credenciais de entrega automática criadas na iniciação da compra:', purchase._id);
+        } catch (credErr) {
+          console.error('[PURCHASES] Erro ao criar credenciais na iniciação:', credErr?.message);
+          // Não falhar a compra se houver erro ao criar credenciais
+        }
+      }
+    } catch (credErr) {
+      console.error('[PURCHASES] Erro ao processar entrega automática na iniciação:', credErr?.message);
+    }
+
     // Proactively update conversations list for both participants and clear caches
     try {
       const ws = req.app.get('webSocketServer');
@@ -872,35 +910,6 @@ router.post('/:purchaseId/ship', auth, async (req, res) => {
 
       await updateConversationMarketplaceStatus(session, purchase, 'shipped');
     });
-
-    // Se for entrega automática, criar as credenciais para o comprador
-    try {
-      const item = await MarketItem.findById(purchase.itemId).lean();
-      if (item && item.deliveryMethod === 'automatic' && item.automaticDeliveryCredentials) {
-        // Chamar a API de account delivery para criar as credenciais
-        const accountDeliveryApiUrl = process.env.ACCOUNT_DELIVERY_API_URL || 'http://localhost:5000/api/v1/account-delivery';
-        try {
-          await axios.post(`${accountDeliveryApiUrl}/credentials`, {
-            buyerId: purchase.buyerId.toString(),
-            sellerId: purchase.sellerId.toString(),
-            purchaseId: purchase._id.toString(),
-            itemId: purchase.itemId,
-            credentials: item.automaticDeliveryCredentials
-          }, {
-            headers: {
-              'Authorization': `Bearer ${process.env.INTERNAL_API_KEY || ''}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          console.log('[PURCHASES] Credenciais de entrega automática criadas para comprador:', purchase.buyerId);
-        } catch (credErr) {
-          console.error('[PURCHASES] Erro ao criar credenciais de entrega automática:', credErr?.message);
-          // Não falhar a compra se houver erro ao criar credenciais
-        }
-      }
-    } catch (credErr) {
-      console.error('[PURCHASES] Erro ao processar entrega automática:', credErr?.message);
-    }
 
     await emitMarketplaceStatusChanged(req.app, purchase, 'shipped');
 
