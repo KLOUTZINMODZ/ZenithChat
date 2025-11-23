@@ -1096,6 +1096,20 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
 
     await emitMarketplaceStatusChanged(req.app, purchase, 'completed');
 
+    try {
+      const accountDeliveryApiUrl = process.env.ACCOUNT_DELIVERY_API_URL || 'http://localhost:5000/api/v1/account-delivery';
+      await axios.post(`${accountDeliveryApiUrl}/internal/confirm-from-purchase`, {
+        purchaseId: purchase._id.toString()
+      }, {
+        headers: {
+          Authorization: `Bearer ${process.env.INTERNAL_API_KEY || ''}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (autoDeliveryErr) {
+      console.error('[PURCHASES] Falha ao marcar entrega automática como confirmada:', autoDeliveryErr?.message, autoDeliveryErr?.response?.data);
+    }
+
     await sendBalanceUpdate(req.app, purchase.sellerId);
     // Also notify buyer so their UI can refresh transaction history
     await sendBalanceUpdate(req.app, purchase.buyerId);
