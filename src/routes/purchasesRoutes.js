@@ -1553,64 +1553,12 @@ router.post('/internal/:purchaseId/cancel', async (req, res) => {
   }
 });
 
-// Internal auto-release job trigger (can be called by cron)
-router.post('/auto-release/run', auth, async (req, res) => {
-  try {
-    const now = new Date();
-    const candidates = await Purchase.find({ status: 'shipped', autoReleaseAt: { $lte: now } }).limit(50);
-    let released = 0;
-    for (const p of candidates) {
-      try {
-        // ...
-                  amount: Number(p.sellerReceives),
-                  currency: 'BRL',
-                  operationId,
-                  source: 'ZenithChatApi',
-                  occurredAt: new Date(),
-                  reference: { purchaseId: p._id, orderId: null, walletLedgerId: release?._id || null, transactionId: null, asaasTransferId: null },
-                  metadata: { auto: true, itemId: p.itemId },
-                  description: 'Liberação automática de escrow ao vendedor (7 dias)'
-                }
-              },
-              { upsert: true }
-            );
-          } catch (_) {}
-          p.status = 'completed';
-          p.logs.push({ level: 'info', message: 'Auto-release after 7 days from shipped' });
-          await p.save({ session });
-
-          await updateConversationMarketplaceStatus(session, p, 'completed');
-
-          // Finalize item status similar to manual confirm
-          try {
-            const item = await MarketItem.findById(p.itemId).session(session);
-            if (item) {
-              const isAccount = String(item.category || '').toLowerCase() === 'account' || item.stock == null;
-              if (isAccount) {
-                item.status = 'sold';
-                item.soldAt = new Date();
-              } else {
-                if (item.stockLeft == null) {
-                  item.stockLeft = Math.max(0, Math.min(Number(item.stock || 0), 9999));
-                }
-                if (Number(item.stockLeft) <= 0) {
-                  item.status = 'sold';
-                  item.soldAt = new Date();
-                } else {
-                  item.status = 'active';
-                }
-              }
-              await item.save({ session });
-            }
-          } catch (_) {}
-        });
-        released++;
-        await sendBalanceUpdate(req.app, p.sellerId);
-        await emitMarketplaceStatusChanged(req.app, p, 'completed');
-      } catch (_) {}
-    }
-    return res.json({ success: true, data: { released } });
-  } catch (error) { return res.status(500).json({ success: false, message: 'Erro no auto-release', error: error.message }); }
+// Internal auto-release job trigger (temporarily stubbed)
+router.post('/auto-release/run', auth, async (_req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: 'Auto-release job temporarily disabled.'
+  });
 });
 
 router.get('/:purchaseId', auth, async (req, res) => {
