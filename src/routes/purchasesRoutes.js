@@ -791,6 +791,38 @@ router.post('/initiate', auth, async (req, res) => {
 
     await sendBalanceUpdate(req.app, buyerId);
 
+    // Criar credenciais automáticas imediatamente após a compra, se aplicável
+    try {
+      const deliveryMethod = String(itemDoc.deliveryMethod || '').toLowerCase();
+      if (deliveryMethod === 'automatic' && itemDoc.automaticDeliveryCredentials) {
+        const accountDeliveryApiUrl = process.env.ACCOUNT_DELIVERY_API_URL || 'http://localhost:5000/api/v1/account-delivery';
+        const rawDiscount = Number(itemDoc.discount ?? 0);
+        const discountApplied = Number.isFinite(rawDiscount) ? rawDiscount : 0;
+
+        const response = await axios.post(`${accountDeliveryApiUrl}/internal/create-from-purchase`, {
+          buyerId: buyerId.toString(),
+          sellerId: sellerUserIdFromItem.toString(),
+          purchaseId: purchase._id.toString(),
+          itemId,
+          credentials: itemDoc.automaticDeliveryCredentials,
+          pricePaid: Number(priceUsed),
+          discountApplied
+        }, {
+          headers: {
+            Authorization: `Bearer ${process.env.INTERNAL_API_KEY || ''}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('[PURCHASES] Credenciais automáticas geradas na criação da compra:', {
+          purchaseId: purchase._id.toString(),
+          deliveryId: response?.data?.data?.deliveryId
+        });
+      }
+    } catch (autoErr) {
+      console.error('[PURCHASES] Falha ao gerar credenciais automáticas na criação:', autoErr?.message, autoErr?.response?.data);
+    }
+
     // Proactively update conversations list for both participants and clear caches
     try {
       const ws = req.app.get('webSocketServer');
