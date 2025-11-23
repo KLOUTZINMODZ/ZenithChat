@@ -873,35 +873,6 @@ router.post('/:purchaseId/ship', auth, async (req, res) => {
       await updateConversationMarketplaceStatus(session, purchase, 'shipped');
     });
 
-    // Se for entrega automática, criar as credenciais para o comprador
-    try {
-      const item = await MarketItem.findById(purchase.itemId).lean();
-      if (item && item.deliveryMethod === 'automatic' && item.automaticDeliveryCredentials) {
-        // Chamar a API de account delivery para criar as credenciais
-        const accountDeliveryApiUrl = process.env.ACCOUNT_DELIVERY_API_URL || 'http://localhost:5000/api/v1/account-delivery';
-        try {
-          const response = await axios.post(`${accountDeliveryApiUrl}/internal/create-from-purchase`, {
-            buyerId: purchase.buyerId.toString(),
-            sellerId: purchase.sellerId.toString(),
-            purchaseId: purchase._id.toString(),
-            itemId: purchase.itemId,
-            credentials: item.automaticDeliveryCredentials
-          }, {
-            headers: {
-              'Authorization': `Bearer ${process.env.INTERNAL_API_KEY || ''}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          console.log('[PURCHASES] Credenciais de entrega automática criadas para comprador:', purchase.buyerId, 'Delivery ID:', response.data?.data?.deliveryId);
-        } catch (credErr) {
-          console.error('[PURCHASES] Erro ao criar credenciais de entrega automática:', credErr?.message, credErr?.response?.data);
-          // Não falhar a compra se houver erro ao criar credenciais
-        }
-      }
-    } catch (credErr) {
-      console.error('[PURCHASES] Erro ao processar entrega automática:', credErr?.message);
-    }
-
     await emitMarketplaceStatusChanged(req.app, purchase, 'shipped');
 
     try {
@@ -1590,32 +1561,7 @@ router.post('/auto-release/run', auth, async (req, res) => {
     let released = 0;
     for (const p of candidates) {
       try {
-        await runTx(async (session) => {
-          const seller = await User.findById(p.sellerId).session(session);
-          const before = round2(seller.walletBalance || 0);
-          const after = round2(before + Number(p.sellerReceives));
-          seller.walletBalance = after;
-          await seller.save({ session });
-          const release = await WalletLedger.create({
-            userId: p.sellerId,
-            txId: null,
-            direction: 'credit',
-            reason: 'purchase_release',
-            amount: Number(p.sellerReceives),
-            operationId: `purchase_release:${p._id.toString()}`,
-            balanceBefore: before,
-            balanceAfter: after,
-            metadata: { source: 'purchase', auto: true, purchaseId: p._id.toString(), itemId: p.itemId }
-          }, { session });
-          // Log platform release into mediator (auto)
-          try {
-            const Mediator = require('../models/Mediator');
-            const operationId = `release:${p._id.toString()}`;
-            await Mediator.updateOne(
-              { operationId },
-              {
-                $setOnInsert: {
-                  eventType: 'release',
+        // ...
                   amount: Number(p.sellerReceives),
                   currency: 'BRL',
                   operationId,
