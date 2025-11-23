@@ -584,6 +584,7 @@ router.post('/initiate', auth, async (req, res) => {
     // Fetch item to derive true seller and price (lean for initial validation)
     const itemDoc = await MarketItem.findById(itemId).lean();
     if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
+    const isAutomaticDelivery = String(itemDoc.deliveryMethod || '').toLowerCase() === 'automatic' && !!itemDoc.automaticDeliveryCredentials;
     // Validate seller id on the item (support legacy shapes). Prefer sellerId (main API canonical), then userId, then others
     let sellerUserIdFromItem = safeId(itemDoc.sellerId)
       || safeId(itemDoc.userId)
@@ -704,6 +705,16 @@ router.post('/initiate', auth, async (req, res) => {
       p.status = 'escrow_reserved';
       p.escrowReservedAt = new Date();
       await p.save({ session });
+
+      if (isAutomaticDelivery) {
+        p.status = 'shipped';
+        p.shippedAt = new Date();
+        const auto = new Date();
+        auto.setDate(auto.getDate() + 7);
+        p.autoReleaseAt = auto;
+        p.logs.push({ level: 'info', message: 'Auto-shipped due to automatic delivery', data: { autoReleaseAt: auto } });
+        await p.save({ session });
+      }
 
       // cpf already ensured above
 
