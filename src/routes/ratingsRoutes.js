@@ -222,6 +222,8 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     const { agreementId } = req.params;
     const { rating, comment } = req.body || {};
     
+    console.log('[RATINGS] Recebido POST /boosting/:agreementId', { agreementId, rating, comment });
+    
     if (!rating) {
       return res.status(400).json({ success: false, message: 'Rating é obrigatório' });
     }
@@ -232,12 +234,28 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     }
 
     // Buscar agreement por _id ou agreementId
-    let agreement = await Agreement.findById(agreementId);
+    let agreement = null;
+    
+    // Tentar buscar por _id (ObjectId)
+    try {
+      if (/^[0-9a-fA-F]{24}$/.test(agreementId)) {
+        agreement = await Agreement.findById(agreementId);
+      }
+    } catch (err) {
+      console.warn('Erro ao buscar Agreement por _id:', err.message);
+    }
+    
+    // Se não encontrou, tentar buscar por agreementId (string)
     if (!agreement) {
-      agreement = await Agreement.findOne({ agreementId });
+      try {
+        agreement = await Agreement.findOne({ agreementId });
+      } catch (err) {
+        console.warn('Erro ao buscar Agreement por agreementId:', err.message);
+      }
     }
     
     if (!agreement) {
+      console.error(`Agreement não encontrado para: ${agreementId}`);
       return res.status(404).json({ success: false, message: 'Boosting não encontrado' });
     }
 
