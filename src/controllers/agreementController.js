@@ -180,9 +180,17 @@ class AgreementController {
       }
 
       // Buscar dados atualizados do booster e cliente para obter rating correto
+      // Validar se os IDs são ObjectIds válidos antes de fazer a busca
+      const isValidObjectId = (id) => {
+        return typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id);
+      };
+
+      const boosterUserId = agreement.parties.booster.userid;
+      const clientUserId = agreement.parties.client.userid;
+
       const [boosterUser, clientUser] = await Promise.all([
-        User.findById(agreement.parties.booster.userid).select('_id name avatar rating').lean(),
-        User.findById(agreement.parties.client.userid).select('_id name avatar rating').lean()
+        isValidObjectId(boosterUserId) ? User.findById(boosterUserId).select('_id name avatar rating').lean() : null,
+        isValidObjectId(clientUserId) ? User.findById(clientUserId).select('_id name avatar rating').lean() : null
       ]);
 
       // Atualizar parties com dados frescos
