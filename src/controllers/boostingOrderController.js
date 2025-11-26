@@ -207,6 +207,7 @@ async function getBoostingOrderByConversation(req, res) {
       }
     }
 
+    console.log('[BOOSTING_ORDER] Retornando BoostingOrder com _id:', boostingOrder._id?.toString());
     return res.json({ success: true, data: boostingOrder });
   } catch (error) {
     console.error('Erro ao buscar boosting order por conversa:', error);
