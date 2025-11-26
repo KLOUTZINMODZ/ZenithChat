@@ -300,10 +300,18 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     }
 
     // Criar avaliação
-    const boosterId = agreement.parties?.booster?.userid;
+    const boosterUserid = agreement.parties?.booster?.userid;
+    
+    // Buscar o usuário booster pelo userid para obter seu _id do MongoDB
+    const boosterUser = await User.findOne({ userid: boosterUserid }).select('_id');
+    if (!boosterUser) {
+      console.error(`[RATINGS] Booster não encontrado com userid: ${boosterUserid}`);
+      return res.status(404).json({ success: false, message: 'Booster não encontrado' });
+    }
+    
     const review = await Review.create({
       userId: agreement.parties.client.userid,
-      targetId: boosterId,
+      targetId: boosterUser._id,
       targetType: 'Boosting',
       agreementId: agreement._id,
       rating: Math.max(1, Math.min(5, Number(rating))),
@@ -314,10 +322,10 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
 
     // Atualizar rating do booster
     try {
-      console.log(`[BOOSTING RATING] Atualizando rating para booster: ${boosterId}`);
+      console.log(`[BOOSTING RATING] Atualizando rating para booster: ${boosterUser._id}`);
       
       const allBoosterReviews = await Review.find({ 
-        targetId: boosterId,
+        targetId: boosterUser._id,
         status: 'approved'
       });
       
@@ -330,7 +338,7 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
         console.log(`[BOOSTING RATING] Média calculada: ${averageRating.toFixed(2)} (${totalRating}/${allBoosterReviews.length})`);
         
         const updateResult = await User.findByIdAndUpdate(
-          boosterId, 
+          boosterUser._id, 
           { rating: Number(averageRating.toFixed(2)) },
           { new: true }
         );
@@ -338,7 +346,7 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
         if (updateResult) {
           console.log(`[BOOSTING RATING] Rating atualizado com sucesso! Novo rating: ${updateResult.rating}`);
         } else {
-          console.error(`[BOOSTING RATING] ❌ Usuário não encontrado: ${boosterId}`);
+          console.error(`[BOOSTING RATING] ❌ Usuário não encontrado: ${boosterUser._id}`);
         }
       } else {
         console.log(`[BOOSTING RATING] Nenhuma avaliação encontrada ainda`);
