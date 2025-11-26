@@ -156,9 +156,10 @@ async function getBoostingOrderByConversation(req, res) {
         return res.json({
           success: true,
           data: {
-            _id: agreement._id,
-            orderNumber: agreement.agreementId,
+            _id: agreement._id.toString(),
+            orderNumber: agreement.orderNumber,
             agreementId: agreement.agreementId,
+            agreementObjectId: agreement._id.toString(),
             boostingRequestId: agreement.boostingRequestId,
             conversationId: agreement.conversationId,
             clientId: agreement.parties.client.userid,
