@@ -153,14 +153,19 @@ async function getBoostingOrderByConversation(req, res) {
       } catch (createError) {
         console.error('Erro ao criar BoostingOrder a partir de Agreement (fallback para snapshot):', createError.message);
 
+        const responseData = {
+          _id: agreement._id.toString(),
+          orderNumber: agreement.orderNumber,
+          agreementId: agreement.agreementId,
+          agreementObjectId: agreement._id.toString(),
+          boostingRequestId: agreement.boostingRequestId,
+        };
+        console.log('[BOOSTING_ORDER] Retornando fallback com agreementObjectId:', responseData.agreementObjectId);
+        
         return res.json({
           success: true,
           data: {
-            _id: agreement._id.toString(),
-            orderNumber: agreement.orderNumber,
-            agreementId: agreement.agreementId,
-            agreementObjectId: agreement._id.toString(),
-            boostingRequestId: agreement.boostingRequestId,
+            ...responseData,
             conversationId: agreement.conversationId,
             clientId: agreement.parties.client.userid,
             boosterId: agreement.parties.booster.userid,
