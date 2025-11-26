@@ -188,10 +188,18 @@ class AgreementController {
       const boosterUserId = agreement.parties.booster.userid;
       const clientUserId = agreement.parties.client.userid;
 
-      const [boosterUser, clientUser] = await Promise.all([
-        isValidObjectId(boosterUserId) ? User.findById(boosterUserId).select('_id name avatar rating').lean() : null,
-        isValidObjectId(clientUserId) ? User.findById(clientUserId).select('_id name avatar rating').lean() : null
-      ]);
+      let boosterUser = null;
+      let clientUser = null;
+
+      try {
+        [boosterUser, clientUser] = await Promise.all([
+          isValidObjectId(boosterUserId) ? User.findById(boosterUserId).select('_id name avatar rating').lean().catch(() => null) : Promise.resolve(null),
+          isValidObjectId(clientUserId) ? User.findById(clientUserId).select('_id name avatar rating').lean().catch(() => null) : Promise.resolve(null)
+        ]);
+      } catch (userError) {
+        console.warn('Aviso ao buscar dados de usuários:', userError.message);
+        // Continuar mesmo se falhar ao buscar usuários
+      }
 
       // Atualizar parties com dados frescos
       const updatedParties = {

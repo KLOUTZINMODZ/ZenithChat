@@ -226,8 +226,9 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Rating é obrigatório' });
     }
 
-    if (!comment || comment.trim().length < 10) {
-      return res.status(400).json({ success: false, message: 'Comentário deve ter pelo menos 10 caracteres' });
+    // Comentário é opcional, mas se fornecido, deve ter pelo menos 5 caracteres
+    if (comment && comment.trim().length > 0 && comment.trim().length < 5) {
+      return res.status(400).json({ success: false, message: 'Comentário deve ter pelo menos 5 caracteres' });
     }
 
     // Buscar agreement por _id ou agreementId
