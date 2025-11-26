@@ -239,7 +239,13 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     // Tentar buscar por _id (ObjectId)
     try {
       if (/^[0-9a-fA-F]{24}$/.test(agreementId)) {
+        console.log(`[RATINGS] Tentando buscar Agreement por _id: ${agreementId}`);
         agreement = await Agreement.findById(agreementId);
+        if (agreement) {
+          console.log(`[RATINGS] Agreement encontrado por _id:`, agreement._id);
+        } else {
+          console.log(`[RATINGS] Nenhum Agreement encontrado com _id: ${agreementId}`);
+        }
       }
     } catch (err) {
       console.warn('Erro ao buscar Agreement por _id:', err.message);
@@ -248,14 +254,27 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     // Se não encontrou, tentar buscar por agreementId (string)
     if (!agreement) {
       try {
+        console.log(`[RATINGS] Tentando buscar Agreement por agreementId: ${agreementId}`);
         agreement = await Agreement.findOne({ agreementId });
+        if (agreement) {
+          console.log(`[RATINGS] Agreement encontrado por agreementId:`, agreement._id);
+        } else {
+          console.log(`[RATINGS] Nenhum Agreement encontrado com agreementId: ${agreementId}`);
+        }
       } catch (err) {
         console.warn('Erro ao buscar Agreement por agreementId:', err.message);
       }
     }
     
     if (!agreement) {
-      console.error(`Agreement não encontrado para: ${agreementId}`);
+      console.error(`[RATINGS] Agreement não encontrado para: ${agreementId}`);
+      // Listar todos os agreements para debug
+      try {
+        const allAgreements = await Agreement.find().select('_id agreementId status').limit(5);
+        console.log(`[RATINGS] Primeiros 5 agreements no banco:`, allAgreements.map(a => ({ _id: a._id.toString(), agreementId: a.agreementId, status: a.status })));
+      } catch (err) {
+        console.error('Erro ao listar agreements:', err.message);
+      }
       return res.status(404).json({ success: false, message: 'Boosting não encontrado' });
     }
 
