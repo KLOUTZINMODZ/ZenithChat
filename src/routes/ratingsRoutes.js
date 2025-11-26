@@ -303,10 +303,26 @@ router.post('/boosting/:agreementId', auth, async (req, res) => {
     const boosterUserid = agreement.parties?.booster?.userid;
     
     // Buscar o usuário booster pelo userid para obter seu _id do MongoDB
-    const boosterUser = await User.findOne({ userid: boosterUserid }).select('_id');
+    let boosterUser = await User.findOne({ userid: boosterUserid }).select('_id');
+    
+    // Se não encontrar pelo userid, tentar buscar pelo nome (fallback)
+    if (!boosterUser && agreement.parties?.booster?.name) {
+      console.log(`[RATINGS] Tentando buscar booster pelo nome: ${agreement.parties.booster.name}`);
+      boosterUser = await User.findOne({ name: agreement.parties.booster.name }).select('_id');
+    }
+    
+    // Se ainda não encontrar, tentar buscar pelo email (fallback)
+    if (!boosterUser && agreement.parties?.booster?.email) {
+      console.log(`[RATINGS] Tentando buscar booster pelo email: ${agreement.parties.booster.email}`);
+      boosterUser = await User.findOne({ email: agreement.parties.booster.email }).select('_id');
+    }
+    
     if (!boosterUser) {
-      console.error(`[RATINGS] Booster não encontrado com userid: ${boosterUserid}`);
-      return res.status(404).json({ success: false, message: 'Booster não encontrado' });
+      console.error(`[RATINGS] Booster não encontrado com userid: ${boosterUserid}, nome: ${agreement.parties.booster.name}, email: ${agreement.parties.booster.email}`);
+      // Listar alguns usuários para debug
+      const sampleUsers = await User.find().select('_id userid name email').limit(5);
+      console.log('[RATINGS] Amostra de usuários no banco:', sampleUsers);
+      return res.status(404).json({ success: false, message: 'Booster não encontrado no sistema' });
     }
     
     const review = await Review.create({
