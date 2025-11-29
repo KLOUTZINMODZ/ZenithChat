@@ -283,7 +283,7 @@ router.get('/list', auth, async (req, res) => {
     const allAgreementIds = [...boostingOrderIds, ...agreementIds];
     
     const [items, buyers, sellers, purchaseReviews, boostingReviews] = await Promise.all([
-      itemIds.length > 0 ? MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images').lean() : Promise.resolve([]),
+      itemIds.length > 0 ? MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images deliveryMethod').lean() : Promise.resolve([]),
       allBuyerIds.length > 0 ? User.find({ _id: { $in: allBuyerIds } }).select('_id name legalName username avatar').lean() : Promise.resolve([]),
       allSellerIds.length > 0 ? User.find({ _id: { $in: allSellerIds } }).select('_id name legalName username avatar').lean() : Promise.resolve([]),
       purchaseIds.length > 0 ? Review.find({ purchaseId: { $in: purchaseIds } }).select('purchaseId').lean() : Promise.resolve([]),
@@ -318,7 +318,8 @@ router.get('/list', auth, async (req, res) => {
         hasReview: purchaseReviewSet.has(String(p._id)), // Verifica se já foi avaliado
         item: { _id: String(p.itemId || ''), title: String(item.title || ''), image: img },
         buyer: { _id: String(p.buyerId || ''), name: userName(buyer) },
-        seller: { _id: String(p.sellerId || ''), name: userName(seller) }
+        seller: { _id: String(p.sellerId || ''), name: userName(seller) },
+        deliveryMethod: item?.deliveryMethod || ''
       };
     });
 
@@ -875,7 +876,7 @@ router.post('/initiate', auth, async (req, res) => {
         });
         await ns.sendNotification(String(sellerUserIdFromItem), {
           type: 'purchase:new',
-          title: 'Novo pedido',
+          title: 'Nova Venda!',
           message: `Um comprador iniciou a compra de ${itemTitle || 'seu item'}.`,
           data: { purchaseId: purchase._id, conversationId: conv._id, itemId }
         });
@@ -1635,7 +1636,7 @@ router.get('/:purchaseId', auth, async (req, res) => {
 
     // Populate item and users
     const [item, buyer, seller] = await Promise.all([
-      MarketItem.findById(purchase.itemId).select('_id title image images').lean(),
+      MarketItem.findById(purchase.itemId).select('_id title image images deliveryMethod').lean(),
       User.findById(purchase.buyerId).select('_id name legalName username avatar rating').lean(),
       User.findById(purchase.sellerId).select('_id name legalName username avatar rating').lean()
     ]);
@@ -1677,7 +1678,8 @@ router.get('/:purchaseId', auth, async (req, res) => {
         name: userName(seller),
         avatar: seller?.avatar,
         rating: seller?.rating
-      }
+      },
+      deliveryMethod: item?.deliveryMethod || ''
     };
 
     return res.json({ success: true, data });
