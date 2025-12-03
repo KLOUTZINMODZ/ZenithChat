@@ -364,6 +364,7 @@ router.get('/list', auth, async (req, res) => {
       return {
         _id: String(bo._id),
         orderNumber: bo.orderNumber || String(bo._id).slice(-8).toUpperCase(),
+        agreementId: String(bo.agreementId || ''),
         status: mappedStatus,
         price: Number(bo.price) || 0,
         feePercent: 0,
@@ -431,6 +432,7 @@ router.get('/list', auth, async (req, res) => {
       return {
         _id: String(ag._id),
         orderNumber: ag.agreementId || String(ag._id).slice(-8).toUpperCase(),
+        agreementId: String(ag._id || ''),
         status: mappedStatus,
         price: Number(ag.proposalSnapshot?.price || ag.price || 0),
         feePercent: 0,
