@@ -72,12 +72,11 @@ async function getBoostingOrder(req, res) {
             boosterId: agreement.parties.booster.userid,
             clientData: {
               name: agreement.parties.client.name,
-              email: agreement.parties.client.email,
-              avatar: agreement.parties.client.avatar
+              avatar: agreement.parties.client.avatar,
+              rating: agreement.parties.client.rating
             },
             boosterData: {
               name: agreement.parties.booster.name,
-              email: agreement.parties.booster.email,
               avatar: agreement.parties.booster.avatar,
               rating: agreement.parties.booster.rating
             },
@@ -166,12 +165,11 @@ async function getBoostingOrderByConversation(req, res) {
             boosterId: agreement.parties.booster.userid,
             clientData: {
               name: agreement.parties.client.name,
-              email: agreement.parties.client.email,
-              avatar: agreement.parties.client.avatar
+              avatar: agreement.parties.client.avatar,
+              rating: agreement.parties.client.rating
             },
             boosterData: {
               name: agreement.parties.booster.name,
-              email: agreement.parties.booster.email,
               avatar: agreement.parties.booster.avatar,
               rating: agreement.parties.booster.rating
             },

@@ -201,17 +201,29 @@ class AgreementController {
         // Continuar mesmo se falhar ao buscar usuários
       }
 
-      // Atualizar parties com dados frescos
+      // Atualizar parties com dados frescos - SANITIZAR dados sensíveis
       const updatedParties = {
         client: {
-          ...agreement.parties.client,
+          userid: agreement.parties.client.userid,
+          name: agreement.parties.client.name,
           avatar: clientUser?.avatar || agreement.parties.client.avatar,
-          rating: clientUser?.rating
+          rating: clientUser?.rating || agreement.parties.client.rating,
+          metadata: {
+            isVerified: agreement.parties.client.metadata?.isVerified || false,
+            totalOrders: agreement.parties.client.metadata?.totalOrders || 0,
+            rating: clientUser?.rating || agreement.parties.client.metadata?.rating || 0
+          }
         },
         booster: {
-          ...agreement.parties.booster,
+          userid: agreement.parties.booster.userid,
+          name: agreement.parties.booster.name,
           avatar: boosterUser?.avatar || agreement.parties.booster.avatar,
-          rating: boosterUser?.rating || 0
+          rating: boosterUser?.rating || agreement.parties.booster.rating || 0,
+          metadata: {
+            isVerified: agreement.parties.booster.metadata?.isVerified || false,
+            totalBoosts: agreement.parties.booster.metadata?.totalBoosts || 0,
+            completedBoosts: agreement.parties.booster.metadata?.completedBoosts || 0
+          }
         }
       };
 

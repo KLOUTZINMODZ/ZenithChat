@@ -1820,7 +1820,6 @@ class BoostingChatController {
           client: {
             userid: clientData.userid,
             name: clientData.name,
-            email: clientData.email,
             avatar: clientData.avatar,
             metadata: new Map([
               ['isVerified', clientData.isVerified || false],
@@ -1832,7 +1831,6 @@ class BoostingChatController {
           booster: {
             userid: boosterData.userid,
             name: boosterData.name,
-            email: boosterData.email,
             avatar: boosterData.avatar,
             rating: boosterData.rating || 0,
             metadata: new Map([
