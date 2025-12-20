@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const BoostingOrder = require('../models/BoostingOrder');
 const Agreement = require('../models/Agreement');
 const User = require('../models/User');
+const Review = require('../models/Review');
 const BoostingChatController = require('./boostingChatController');
 
 const boostingChatController = new BoostingChatController();
@@ -108,9 +109,19 @@ async function getBoostingOrder(req, res) {
       return res.status(403).json({ success: false, message: 'Acesso negado ao pedido' });
     }
 
+    // Garantir hasReview consistente (campo do documento OU existência em Reviews)
+    const hasReviewFlag =
+      boostingOrder.hasReview === true ||
+      boostingOrder.reviewId ||
+      !!(await Review.exists({ agreementId: boostingOrder.agreementId || boostingOrder._id }));
+
+    const responseData = boostingOrder.toObject ? boostingOrder.toObject() : boostingOrder;
+    responseData.hasReview = hasReviewFlag;
+    responseData.reviewed = hasReviewFlag;
+
     res.json({
       success: true,
-      data: boostingOrder
+      data: responseData
     });
   } catch (error) {
     console.error('Erro ao buscar boosting order:', error);
@@ -152,6 +163,8 @@ async function getBoostingOrderByConversation(req, res) {
       } catch (createError) {
         console.error('Erro ao criar BoostingOrder a partir de Agreement (fallback para snapshot):', createError.message);
 
+        const hasReviewFlag = !!(await Review.exists({ agreementId: agreement._id }));
+
         return res.json({
           success: true,
           data: {
@@ -186,7 +199,9 @@ async function getBoostingOrderByConversation(req, res) {
             createdAt: agreement.createdAt,
             activatedAt: agreement.activatedAt,
             completedAt: agreement.completedAt,
-            cancelledAt: agreement.cancelledAt
+            cancelledAt: agreement.cancelledAt,
+            hasReview: hasReviewFlag,
+            reviewed: hasReviewFlag
           }
         });
       }
@@ -201,8 +216,15 @@ async function getBoostingOrderByConversation(req, res) {
     }
 
     // Adicionar agreementObjectId ao retorno
+    const hasReviewFlag =
+      boostingOrder.hasReview === true ||
+      boostingOrder.reviewId ||
+      !!(await Review.exists({ agreementId: boostingOrder.agreementId || boostingOrder._id }));
+
     const responseData = boostingOrder.toObject ? boostingOrder.toObject() : boostingOrder;
     responseData.agreementObjectId = boostingOrder.agreementId.toString();
+    responseData.hasReview = hasReviewFlag;
+    responseData.reviewed = hasReviewFlag;
     
     return res.json({ success: true, data: responseData });
   } catch (error) {
