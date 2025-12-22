@@ -1,38 +1,8 @@
-const nodemailer = require('nodemailer');
+const emailClient = require('./emailClient');
 const logger = require('../utils/logger');
 
 class EmailService {
   constructor() {
-    this.transporter = null;
-    this.initialize();
-  }
-
-  initialize() {
-    try {
-      // Configuração do Gmail usando OAuth2 ou App Password
-      this.transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_USER, // Seu email do Gmail
-          pass: process.env.EMAIL_PASSWORD // Senha de app do Gmail
-        },
-        secure: true,
-        tls: {
-          rejectUnauthorized: false
-        }
-      });
-
-      // Verificar conexão
-      this.transporter.verify((error) => {
-        if (error) {
-          logger.error('Email service configuration error:', error);
-        } else {
-          logger.info('Email service ready to send emails');
-        }
-      });
-    } catch (error) {
-      logger.error('Failed to initialize email service:', error);
-    }
   }
 
   /**
@@ -40,10 +10,6 @@ class EmailService {
    */
   async sendPasswordResetEmail(email, code, userName) {
     try {
-      if (!this.transporter) {
-        throw new Error('Email service not initialized');
-      }
-
       const mailOptions = {
         from: {
           name: 'Zenith - Recuperação de Senha',
@@ -54,12 +20,13 @@ class EmailService {
         html: this.getPasswordResetTemplate(code, userName)
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      logger.info(`Password reset email sent to ${email}:`, info.messageId);
+      const { provider, result } = await emailClient.send(mailOptions);
+      logger.info(`Password reset email sent to ${email} via ${provider}:`, result.messageId);
       
       return {
         success: true,
-        messageId: info.messageId
+        provider,
+        messageId: result.messageId
       };
     } catch (error) {
       logger.error('Error sending password reset email:', error);
@@ -72,10 +39,6 @@ class EmailService {
    */
   async sendVerificationCode(email, code) {
     try {
-      if (!this.transporter) {
-        throw new Error('Email service not initialized');
-      }
-
       const mailOptions = {
         from: {
           name: 'Zenith Gaming - Verificação',
@@ -86,12 +49,13 @@ class EmailService {
         html: this.getVerificationCodeTemplate(code)
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      logger.info(`Verification email sent to ${email}:`, info.messageId);
+      const { provider, result } = await emailClient.send(mailOptions);
+      logger.info(`Verification email sent to ${email} via ${provider}:`, result.messageId);
       
       return {
         success: true,
-        messageId: info.messageId
+        provider,
+        messageId: result.messageId
       };
     } catch (error) {
       logger.error('Error sending verification email:', error);
@@ -308,10 +272,6 @@ class EmailService {
    */
   async sendCustomEmail(email, userName, subject, templateType, customMessage) {
     try {
-      if (!this.transporter) {
-        throw new Error('Email service not initialized');
-      }
-
       const mailOptions = {
         from: {
           name: 'Zenith Gaming',
@@ -322,12 +282,13 @@ class EmailService {
         html: this.getCustomEmailTemplate(templateType, userName, customMessage)
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      logger.info(`Custom email sent to ${email}:`, info.messageId);
+      const { provider, result } = await emailClient.send(mailOptions);
+      logger.info(`Custom email sent to ${email} via ${provider}:`, result.messageId);
       
       return {
         success: true,
-        messageId: info.messageId
+        provider,
+        messageId: result.messageId
       };
     } catch (error) {
       logger.error('Error sending custom email:', error);
@@ -537,10 +498,6 @@ class EmailService {
    */
   async sendRawHtmlEmail(email, subject, htmlContent) {
     try {
-      if (!this.transporter) {
-        throw new Error('Email service not initialized');
-      }
-
       const mailOptions = {
         from: {
           name: 'Zenith Gaming',
@@ -551,16 +508,20 @@ class EmailService {
         html: htmlContent
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      logger.info(`Raw HTML email sent to ${email}:`, info.messageId);
+      const { provider, result } = await emailClient.send(mailOptions);
+      logger.info(`Raw HTML email sent to ${email} via ${provider}:`, result.messageId);
       
       return {
         success: true,
-        messageId: info.messageId
+        provider,
+        messageId: result.messageId
       };
     } catch (error) {
       logger.error('Error sending raw HTML email:', error);
-      throw error;
+      return {
+        success: false,
+        error: error.message
+      };
     }
   }
 }
