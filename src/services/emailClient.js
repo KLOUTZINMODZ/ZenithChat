@@ -1,6 +1,6 @@
 const logger = require('../utils/logger');
 const GmailProvider = require('./providers/gmailProvider');
-const SesProvider = require('./providers/sesProvider');
+const ResendProvider = require('./providers/resendProvider');
 
 class EmailClient {
   constructor() {
@@ -14,21 +14,19 @@ class EmailClient {
       password: process.env.EMAIL_PASSWORD
     };
 
-    const sesConfig = {
-      accessKeyId: process.env.SES_ACCESS_KEY_ID,
-      secretAccessKey: process.env.SES_SECRET_ACCESS_KEY,
-      region: process.env.SES_REGION,
-      fromOverride: process.env.SES_FROM_OVERRIDE
+    const resendConfig = {
+      apiKey: process.env.RESEND_API_KEY,
+      fromOverride: process.env.RESEND_FROM_OVERRIDE
     };
 
     const gmailProvider = new GmailProvider(gmailConfig);
-    const sesProvider = new SesProvider(sesConfig);
+    const resendProvider = new ResendProvider(resendConfig);
 
-    // Ordem de prioridade: Gmail (primário) -> SES (fallback)
-    this.providers = [gmailProvider, sesProvider].filter(p => p.enabled);
+    // Ordem de prioridade: Gmail (primário) -> Resend (fallback)
+    this.providers = [gmailProvider, resendProvider].filter(p => p.enabled);
 
     if (this.providers.length === 0) {
-      logger.error('[EmailClient] Nenhum provedor configurado. Configure Gmail ou SES.');
+      logger.error('[EmailClient] Nenhum provedor configurado. Configure Gmail ou Resend.');
     } else {
       logger.info(`[EmailClient] Provedores ativos: ${this.providers.map(p => p.name).join(', ')}`);
     }
