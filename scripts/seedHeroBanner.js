@@ -35,7 +35,7 @@ const seedBanner = async () => {
       },
       secondaryButton: {
         text: 'Ver Boostings',
-        link: '/boostings'
+        link: '/browse-boostings'
       },
       isActive: true
     });
