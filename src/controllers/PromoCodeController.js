@@ -60,7 +60,7 @@ const promoCodeController = {
 
     listCodes: async (req, res) => {
         try {
-            const codes = await PromoCode.find().sort('-createdAt');
+            const codes = await PromoCode.find().populate('users.userId', 'name email').sort('-createdAt');
             return res.json({ success: true, data: codes });
         } catch (error) {
             return res.status(500).json({ success: false, message: 'Erro ao listar códigos' });
@@ -217,7 +217,7 @@ const promoCodeController = {
                     operationId: `promo:${p.code}:${userId}:${Date.now()}`,
                     balanceBefore,
                     balanceAfter: u.walletBalance,
-                    metadata: { code: p.code }
+                    metadata: { cupomreward: true, code: p.code }
                 }], { session });
 
                 return { success: true, newBalance: u.walletBalance, amount: creditAmount };
