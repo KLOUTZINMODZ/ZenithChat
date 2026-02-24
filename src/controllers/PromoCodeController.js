@@ -60,7 +60,7 @@ const promoCodeController = {
 
     listCodes: async (req, res) => {
         try {
-            const codes = await PromoCode.find().populate('users.userId', 'name email').sort('-createdAt');
+            const codes = await PromoCode.find().populate('users.userId', 'name email profileImage').sort('-createdAt');
             return res.json({ success: true, data: codes });
         } catch (error) {
             return res.status(500).json({ success: false, message: 'Erro ao listar códigos' });
