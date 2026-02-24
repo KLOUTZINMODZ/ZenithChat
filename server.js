@@ -6,13 +6,13 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
-const { 
-  apiLimiter, 
-  authLimiter, 
-  messageLimiter, 
-  uploadLimiter, 
-  adminLimiter, 
-  webhookLimiter 
+const {
+  apiLimiter,
+  authLimiter,
+  messageLimiter,
+  uploadLimiter,
+  adminLimiter,
+  webhookLimiter
 } = require('./src/middleware/rateLimiters');
 const WebSocketServer = require('./src/websocket/WebSocketServer');
 const connectDB = require('./src/config/database');
@@ -50,6 +50,7 @@ const imageServeMiddleware = require('./src/middleware/imageServeMiddleware');
 const homeRoutes = require('./src/routes/homeRoutes');
 const heroBannerRoutes = require('./src/routes/heroBannerRoutes');
 const boostingCancelRoutes = require('./src/routes/boostingCancelRoutes');
+const promoCodeRoutes = require('./src/routes/promoCodeRoutes');
 
 const app = express();
 
@@ -78,9 +79,9 @@ const corsOptions = {
     }
 
     if (allowedOrigins.includes(origin) ||
-        origin.includes('localhost') ||
-        origin.includes('127.0.0.1') ||
-        origin.includes('ngrok')) {
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.includes('ngrok')) {
       callback(null, true);
     } else {
       logger.warn(`CORS blocked origin: ${origin}`);
@@ -123,14 +124,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
       res.setHeader('Access-Control-Allow-Origin', '*');
-    } catch (_) {}
+    } catch (_) { }
   }
 }));
 
 // 404 final para /uploads - imagem não encontrada nem no banco nem no disco
 app.use('/uploads/*', (req, res) => {
-  res.status(404).json({ 
-    success: false, 
+  res.status(404).json({
+    success: false,
     message: 'Image not found'
   });
 });
@@ -161,9 +162,9 @@ app.get('/', (req, res) => {
       websocket: {
         url: (process.env.CHAT_PUBLIC_BASE_URL
           ? `${process.env.CHAT_PUBLIC_BASE_URL
-              .replace(/^http:/, 'ws:')
-              .replace(/^https:/, 'wss:')
-              .replace(/\/$/, '')}/ws`
+            .replace(/^http:/, 'ws:')
+            .replace(/^https:/, 'wss:')
+            .replace(/\/$/, '')}/ws`
           : `${req.secure ? 'wss' : 'ws'}://${req.get('host')}/ws`),
         authentication: 'JWT token required in query parameter: ?token=YOUR_JWT_TOKEN'
       }
@@ -175,8 +176,8 @@ app.get('/', (req, res) => {
 
 app.get('/health', (req, res) => {
   const cacheStats = cache.getStats();
-  res.json({ 
-    status: 'healthy', 
+  res.json({
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
@@ -231,6 +232,7 @@ app.use('/api/achievements', achievementRoutes);
 app.use('/api/purchases', purchasesRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/hero-banners', heroBannerRoutes);
+app.use('/api/promo-codes', promoCodeRoutes);
 
 // Boosting cancel routes (sem rate limiter - rotas administrativas)
 app.use('/api/boosting-cancel', boostingCancelRoutes);
@@ -265,9 +267,9 @@ app.use('/api', compatibilityRoutes);
 app.get('/api/ws-info', (req, res) => {
   const wsUrl = process.env.CHAT_PUBLIC_BASE_URL
     ? `${process.env.CHAT_PUBLIC_BASE_URL
-        .replace(/^http:/, 'ws:')
-        .replace(/^https:/, 'wss:')
-        .replace(/\/$/, '')}/ws`
+      .replace(/^http:/, 'ws:')
+      .replace(/^https:/, 'wss:')
+      .replace(/\/$/, '')}/ws`
     : `${req.secure ? 'wss' : 'ws'}://${req.get('host')}/ws`;
   res.json({
     url: wsUrl,
@@ -331,16 +333,16 @@ function gracefulShutdown(signal = 'SIGTERM') {
   const FORCE_EXIT_AFTER_MS = parseInt(process.env.FORCE_EXIT_AFTER_MS || '8000');
   const forceTimer = setTimeout(() => {
     logger.warn(`Force exiting process after ${FORCE_EXIT_AFTER_MS}ms grace period`);
-    try { cache.close(); } catch (_) {}
-    try { mongoose.connection?.close?.(); } catch (_) {}
+    try { cache.close(); } catch (_) { }
+    try { mongoose.connection?.close?.(); } catch (_) { }
     process.exit(0);
   }, FORCE_EXIT_AFTER_MS);
   forceTimer.unref?.();
 
   server.close(() => {
     logger.info(`HTTP server closed in ${Date.now() - start}ms`);
-    try { cache.close(); } catch (_) {}
-    try { mongoose.connection?.close?.(); } catch (_) {}
+    try { cache.close(); } catch (_) { }
+    try { mongoose.connection?.close?.(); } catch (_) { }
     clearTimeout(forceTimer);
     process.exit(0);
   });

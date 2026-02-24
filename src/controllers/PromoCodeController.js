@@ -1,0 +1,247 @@
+const PromoCode = require('../models/PromoCode');
+const User = require('../models/User');
+const WalletLedger = require('../models/WalletLedger');
+const WalletTransaction = require('../models/WalletTransaction');
+const mongoose = require('mongoose');
+const logger = require('../utils/logger');
+const crypto = require('crypto');
+
+function round2(v) {
+    return Math.round(Number(v) * 100) / 100;
+}
+
+// Helper for atomic wallet operations
+async function runWithTransactionOrFallback(executor) {
+    let session;
+    try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+        const res = await executor(session);
+        await session.commitTransaction();
+        session.endSession();
+        return res;
+    } catch (err) {
+        if (session) {
+            try { await session.abortTransaction(); } catch (_) { }
+            session.endSession();
+        }
+        return executor(null);
+    }
+}
+
+const promoCodeController = {
+    // --- ADMIN METHODS ---
+
+    createCode: async (req, res) => {
+        try {
+            const { code, type, value, validFrom, validUntil, maxUses, description } = req.body;
+
+            const existing = await PromoCode.findOne({ code: code.toUpperCase() });
+            if (existing) {
+                return res.status(400).json({ success: false, message: 'Código já existe' });
+            }
+
+            const newCode = await PromoCode.create({
+                code: code.toUpperCase(),
+                type,
+                value,
+                validFrom,
+                validUntil,
+                maxUses,
+                description
+            });
+
+            return res.status(201).json({ success: true, data: newCode });
+        } catch (error) {
+            logger.error('Error creating promo code:', error);
+            return res.status(500).json({ success: false, message: 'Erro ao criar código', error: error.message });
+        }
+    },
+
+    listCodes: async (req, res) => {
+        try {
+            const codes = await PromoCode.find().sort('-createdAt');
+            return res.json({ success: true, data: codes });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'Erro ao listar códigos' });
+        }
+    },
+
+    updateCode: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const updates = req.body;
+            const updated = await PromoCode.findByIdAndUpdate(id, updates, { new: true });
+            return res.json({ success: true, data: updated });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'Erro ao atualizar código' });
+        }
+    },
+
+    // --- USER METHODS ---
+
+    redeemCode: async (req, res) => {
+        try {
+            const { code, cpfCnpj: cpfInput } = req.body;
+            const userId = req.user._id;
+
+            if (!code) return res.status(400).json({ success: false, message: 'Código é obrigatório' });
+
+            const promo = await PromoCode.findOne({ code: code.toUpperCase(), status: 'active' });
+            if (!promo) return res.status(404).json({ success: false, message: 'Código inválido ou inativo' });
+
+            // Check validity dates
+            const now = new Date();
+            if (promo.validFrom && now < promo.validFrom) {
+                return res.status(400).json({ success: false, message: 'Código ainda não está ativo' });
+            }
+            if (promo.validUntil && now > promo.validUntil) {
+                return res.status(400).json({ success: false, message: 'Código expirado' });
+            }
+
+            // Check max uses
+            if (promo.maxUses !== null && promo.currentUses >= promo.maxUses) {
+                return res.status(400).json({ success: false, message: 'Limite de usos atingido' });
+            }
+
+            // Check if user already redeemed
+            if (promo.users.some(u => u.userId.toString() === userId.toString())) {
+                return res.status(400).json({ success: false, message: 'Você já resgatou este código' });
+            }
+
+            // CPF Validation Logic
+            const user = await User.findById(userId);
+            let targetCpf = user.pixKeyNormalized || user.cpfCnpj || cpfInput;
+
+            // Se o usuário passou um CPF e não tinhamos um, vamos validar e usar esse
+            if (!targetCpf) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'CPF é obrigatório para resgate',
+                    error: 'MISSING_CPF'
+                });
+            }
+
+            // Normalizar CPF
+            const digits = String(targetCpf).replace(/\D/g, '');
+            if (digits.length !== 11) {
+                return res.status(400).json({ success: false, message: 'CPF inválid' });
+            }
+
+            // Vincular CPF se ainda não vinculado
+            if (!user.pixKeyNormalized) {
+                // Verificar se outro usuário já usa este CPF
+                const h = crypto.createHash('sha256').update(`CPF:${digits}`).digest('hex');
+                const fp = `sha256:${h}`;
+
+                const exists = await User.findOne({ pixKeyFingerprint: fp, _id: { $ne: user._id } });
+                if (exists) {
+                    return res.status(409).json({ success: false, message: 'Este CPF já está vinculado a outra conta' });
+                }
+
+                user.pixKeyType = 'CPF';
+                user.pixKeyNormalized = digits;
+                user.pixKeyFingerprint = fp;
+                user.pixKeyLinkedAt = new Date();
+                user.cpfCnpj = digits; // Sincroniza tb o campo legado
+                await user.save();
+            } else {
+                // Se já tem CPF vinculado, o informado deve ser o mesmo
+                if (user.pixKeyNormalized !== digits) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'O CPF informado deve ser o mesmo cadastrado na sua conta'
+                    });
+                }
+            }
+
+            // Atomic Redemption
+            const result = await runWithTransactionOrFallback(async (session) => {
+                // Re-fetch promo to ensure limits in transaction if possible
+                const p = session ? await PromoCode.findById(promo._id).session(session) : promo;
+
+                if (p.maxUses !== null && p.currentUses >= p.maxUses) throw new Error('LIMIT_REACHED');
+
+                const u = await User.findById(userId).session(session);
+                const balanceBefore = round2(u.walletBalance || 0);
+
+                let creditAmount = 0;
+                if (p.type === 'fixed') {
+                    creditAmount = p.value;
+                } else {
+                    // Percentage could be based on something, but here we assume it's a direct gift value
+                    // If it's a gift card, usually it's fixed. 
+                    creditAmount = p.value;
+                }
+
+                u.walletBalance = round2(balanceBefore + creditAmount);
+                await u.save({ session });
+
+                // Record usage in PromoCode
+                p.currentUses += 1;
+                p.users.push({
+                    userId,
+                    redeemedAt: new Date(),
+                    cpfCnpj: digits
+                });
+                await p.save({ session });
+
+                // Create Transaction Record
+                const tx = await WalletTransaction.create([{
+                    userId,
+                    type: 'deposit',
+                    amountGross: creditAmount,
+                    amountNet: creditAmount,
+                    status: 'credited',
+                    description: `Resgate de código: ${p.code}`,
+                    logs: [{ level: 'info', message: 'Promo code redeemed', data: { code: p.code, value: creditAmount } }]
+                }], { session });
+
+                // Create Ledger Record
+                await WalletLedger.create([{
+                    userId,
+                    txId: tx[0]._id,
+                    direction: 'credit',
+                    reason: 'promo_code_redemption',
+                    amount: creditAmount,
+                    operationId: `promo:${p.code}:${userId}:${Date.now()}`,
+                    balanceBefore,
+                    balanceAfter: u.walletBalance,
+                    metadata: { code: p.code }
+                }], { session });
+
+                return { success: true, newBalance: u.walletBalance, amount: creditAmount };
+            });
+
+            if (result.success) {
+                // Send balance update via WebSocket if available
+                const notificationService = req.app.locals.notificationService;
+                if (notificationService) {
+                    notificationService.sendToUser(String(userId), {
+                        type: 'wallet:balance_updated',
+                        data: {
+                            userId: String(userId),
+                            balance: result.newBalance,
+                            timestamp: new Date().toISOString()
+                        }
+                    });
+                }
+
+                return res.json({
+                    success: true,
+                    message: `Código resgatado com sucesso! Você recebeu R$ ${result.amount.toFixed(2)}`,
+                    data: { balance: result.newBalance }
+                });
+            } else {
+                throw new Error('Falha no resgate');
+            }
+
+        } catch (error) {
+            logger.error('Redeem error:', error);
+            if (error.message === 'LIMIT_REACHED') return res.status(400).json({ success: false, message: 'Limite de usos atingido' });
+            return res.status(500).json({ success: false, message: 'Erro ao processar resgate' });
+        }
+    }
+};
+
+module.exports = promoCodeController;

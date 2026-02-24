@@ -8,26 +8,29 @@ const walletLedgerSchema = new mongoose.Schema({
 
 
   direction: { type: String, enum: ['debit', 'credit'], required: true },
-  reason: { type: String, enum: [
-    'withdraw_reserve',
-    'withdraw_refund',
-    'withdraw_settle',
-    'withdraw_fee',            // Taxa de saque creditada ao mediador
-    'deposit_credit',
-    'deposit_revert',
-    'adjustment',
-    'purchase_reserve',
-    'purchase_refund',
-    'purchase_cancel_refund',
-    'purchase_release',
-    'purchase_fee',
-    'purchase_settle',
-    'boosting_escrow',         // NOVO: Cliente debitado ao aceitar proposta
-    'boosting_escrow_release',  // NOVO: Escrow liberado ao confirmar entrega
-    'boosting_payment',         // NOVO: Fluxo legado (sem escrow)
-    'boosting_release',
-    'boosting_fee'
-  ], required: true },
+  reason: {
+    type: String, enum: [
+      'withdraw_reserve',
+      'withdraw_refund',
+      'withdraw_settle',
+      'withdraw_fee',            // Taxa de saque creditada ao mediador
+      'deposit_credit',
+      'deposit_revert',
+      'adjustment',
+      'purchase_reserve',
+      'purchase_refund',
+      'purchase_cancel_refund',
+      'purchase_release',
+      'purchase_fee',
+      'purchase_settle',
+      'boosting_escrow',         // NOVO: Cliente debitado ao aceitar proposta
+      'boosting_escrow_release',  // NOVO: Escrow liberado ao confirmar entrega
+      'boosting_payment',         // NOVO: Fluxo legado (sem escrow)
+      'boosting_release',
+      'boosting_fee',
+      'promo_code_redemption'
+    ], required: true
+  },
 
   amount: { type: Number, required: true },
   currency: { type: String, default: 'BRL' },
