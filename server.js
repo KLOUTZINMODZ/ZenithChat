@@ -58,7 +58,10 @@ app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(compression());
 
 const corsOptions = {
@@ -130,6 +133,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
 
 // 404 final para /uploads - imagem não encontrada nem no banco nem no disco
 app.use('/uploads/*', (req, res) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.status(404).json({
     success: false,
     message: 'Image not found'
