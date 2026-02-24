@@ -82,7 +82,16 @@ const promoCodeController = {
 
     redeemCode: async (req, res) => {
         try {
-            const { code, cpfCnpj: cpfInput } = req.body;
+            let { code, cpfCnpj: cpfInput } = req.body;
+
+            // Decodificar CPF se estiver em Base64 (para maior privacidade no tráfego)
+            if (cpfInput && !/^\d+$/.test(cpfInput)) {
+                try {
+                    cpfInput = Buffer.from(cpfInput, 'base64').toString('utf-8');
+                } catch (e) {
+                    logger.warn('Failed to decode CPF base64', { cpfInput });
+                }
+            }
             const userId = req.user._id;
 
             if (!code) return res.status(400).json({ success: false, message: 'Código é obrigatório' });
@@ -90,9 +99,10 @@ const promoCodeController = {
             const promo = await PromoCode.findOne({ code: code.toUpperCase(), status: 'active' });
             if (!promo) return res.status(404).json({ success: false, message: 'Código inválido ou inativo' });
 
-            // Check validity dates
+            // Check validity dates (com margem de 2 horas para fuso horário)
             const now = new Date();
-            if (promo.validFrom && now < promo.validFrom) {
+            const gracePeriod = 2 * 60 * 60 * 1000; // 2 horas de tolerância
+            if (promo.validFrom && (now.getTime() + gracePeriod) < promo.validFrom.getTime()) {
                 return res.status(400).json({ success: false, message: 'Código ainda não está ativo' });
             }
             if (promo.validUntil && now > promo.validUntil) {
