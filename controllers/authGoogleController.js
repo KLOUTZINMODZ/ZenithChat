@@ -153,7 +153,8 @@ exports.googleCallback = async (req, res) => {
 // Endpoint 2: Completar registro com telefone (e senha opcional)
 exports.completeGoogleRegistration = async (req, res) => {
   try {
-    const { googleToken, phone, password, referredBy } = req.body;
+    const { googleToken, phone, password, referredBy, influencerCoupon } = req.body;
+    const PromoCode = require('../src/models/PromoCode');
 
     if (!googleToken || !phone) {
       return res.status(400).json({
@@ -211,6 +212,37 @@ exports.completeGoogleRegistration = async (req, res) => {
       });
     }
 
+    // Process Influencer Coupon
+    let effectiveReferredBy = referredBy || null;
+    let promo = null;
+    if (influencerCoupon) {
+      promo = await PromoCode.findOne({
+        code: influencerCoupon.toUpperCase(),
+        status: 'active',
+        isInfluencerCoupon: true
+      });
+
+      if (promo) {
+        // Check limits
+        if (promo.maxUses && promo.currentUses >= promo.maxUses) {
+          return res.status(400).json({
+            success: false,
+            error: 'Este cupom já atingiu o limite de usos'
+          });
+        }
+
+        if (promo.influencerId) {
+          effectiveReferredBy = promo.influencerId;
+          console.log(`[REGISTER-GOOGLE] Linked user ${decoded.email} to influencer ${promo.influencerId} via coupon ${influencerCoupon}`);
+        }
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Cupom de influenciador inválido ou expirado'
+        });
+      }
+    }
+
     // Criar novo usuário
     const userData = {
       email: decoded.email,
@@ -219,7 +251,7 @@ exports.completeGoogleRegistration = async (req, res) => {
       googleId: decoded.googleId,
       avatar: decoded.picture,
       isVerified: true,
-      referredBy: referredBy || null,
+      referredBy: effectiveReferredBy,
       createdAt: new Date()
     };
 
@@ -234,6 +266,17 @@ exports.completeGoogleRegistration = async (req, res) => {
     const user = new User(userData);
     await user.save();
     console.log('✅ Usuário criado com sucesso:', user._id);
+
+    // Update Promo Code stats
+    if (promo) {
+      await PromoCode.updateOne(
+        { _id: promo._id },
+        {
+          $inc: { currentUses: 1 },
+          $push: { users: { userId: user._id } }
+        }
+      );
+    }
 
     // CRÍTICO: Sincronizar usuário completo com HackLoteAPI (banco principal)
     try {
