@@ -51,6 +51,12 @@ const influencerController = {
                 // Auto-sync role if not explicitly provided
                 if (isInfluencer) {
                     updates.role = 'influencer';
+                    // Initialize default settings if not already present
+                    updates.influencerSettings = {
+                        buyerDiscountDefault: 0,
+                        influencerCommissionDefault: 0,
+                        mediatorCommissionDefault: 0
+                    };
                 } else {
                     // Only revert to user if currently influencer
                     const currentUser = await User.findById(userId).select('role');
