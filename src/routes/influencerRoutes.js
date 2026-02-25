@@ -38,4 +38,8 @@ router.get('/search', requireAdminKey, influencerController.searchUsers);
 router.patch('/:userId', requireAdminKey, influencerController.updateInfluencer);
 router.get('/:userId/stats', requireAdminKey, influencerController.getInfluencerStats);
 
+// Coupon management
+router.post('/:userId/coupons', requireAdminKey, influencerController.createInfluencerCoupon);
+router.delete('/:userId/coupons/:couponId', requireAdminKey, influencerController.deleteInfluencerCoupon);
+
 module.exports = router;

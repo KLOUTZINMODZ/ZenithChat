@@ -170,6 +170,84 @@ const influencerController = {
             logger.error('Error fetching influencer stats:', error);
             return res.status(500).json({ success: false, message: 'Erro ao buscar estatísticas do influenciador' });
         }
+    },
+
+    /**
+     * Create a new coupon for an influencer
+     */
+    createInfluencerCoupon: async (req, res) => {
+        try {
+            const { userId } = req.params;
+            const { code, discount, commission, mediatorCommission } = req.body;
+
+            if (!mongoose.Types.ObjectId.isValid(userId)) {
+                return res.status(400).json({ success: false, message: 'ID de usuário inválido' });
+            }
+
+            if (!code || code.length < 3) {
+                return res.status(400).json({ success: false, message: 'Código inválido (mínimo 3 caracteres)' });
+            }
+
+            // Check if coupon already exists
+            const existing = await PromoCode.findOne({ code: code.toUpperCase() });
+            if (existing) {
+                return res.status(400).json({ success: false, message: 'Este código de cupom já existe' });
+            }
+
+            // Validate commissions
+            const total = (Number(discount) || 0) + (Number(commission) || 0) + (Number(mediatorCommission) || 0);
+            if (total > 5.001) {
+                return res.status(400).json({ success: false, message: 'O total das taxas não pode exceder 5%' });
+            }
+
+            const promoCode = new PromoCode({
+                code: code.toUpperCase(),
+                type: 'percentage',
+                value: 0, // In this system, 'value' might be used for generic discounts, but we use commissionSplit for influencers
+                status: 'active',
+                influencerId: userId,
+                isInfluencerCoupon: true,
+                commissionSplit: {
+                    buyerDiscount: Number(discount) || 0,
+                    influencerCommission: Number(commission) || 0,
+                    mediatorCommission: Number(mediatorCommission) || 0
+                }
+            });
+
+            await promoCode.save();
+
+            return res.json({ success: true, data: promoCode });
+        } catch (error) {
+            logger.error('Error creating influencer coupon:', error);
+            return res.status(500).json({ success: false, message: 'Erro ao criar cupom' });
+        }
+    },
+
+    /**
+     * Delete an influencer coupon
+     */
+    deleteInfluencerCoupon: async (req, res) => {
+        try {
+            const { userId, couponId } = req.params;
+
+            if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(couponId)) {
+                return res.status(400).json({ success: false, message: 'IDs inválidos' });
+            }
+
+            const result = await PromoCode.findOneAndDelete({
+                _id: couponId,
+                influencerId: userId
+            });
+
+            if (!result) {
+                return res.status(404).json({ success: false, message: 'Cupom não encontrado' });
+            }
+
+            return res.json({ success: true, message: 'Cupom excluído com sucesso' });
+        } catch (error) {
+            logger.error('Error deleting influencer coupon:', error);
+            return res.status(500).json({ success: false, message: 'Erro ao excluir cupom' });
+        }
     }
 };
 
