@@ -100,6 +100,22 @@ const userSchema = new mongoose.Schema({
     min: 0,
     max: 5
   },
+  // Influencer Fields
+  isInfluencer: {
+    type: Boolean,
+    default: false
+  },
+  referredBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+    index: true
+  },
+  influencerSettings: {
+    buyerDiscountDefault: { type: Number, default: 0 },
+    influencerCommissionDefault: { type: Number, default: 0 },
+    mediatorCommissionDefault: { type: Number, default: 5 }
+  },
   // Complaints counters
   complaintsSent: {
     type: Number,
@@ -121,7 +137,7 @@ const userSchema = new mongoose.Schema({
     }],
     default: []
   },
-  
+
   preferences: {
     notifications: {
       newProposal: {
@@ -207,7 +223,7 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  
+
   // Sistema de Banimento
   banned: {
     type: Boolean,
@@ -255,13 +271,13 @@ userSchema.index({ complaintsSent: -1 });
  * Solução: Sempre que phone é definido, phoneNormalized é automaticamente 
  * preenchido com o telefone normalizado (apenas dígitos).
  */
-userSchema.pre('save', function(next) {
+userSchema.pre('save', function (next) {
   // Se telefone foi modificado ou é novo, normalizar
   if (this.isModified('phone') || this.isNew) {
     if (this.phone && typeof this.phone === 'string') {
       // Normalizar: remover tudo que não for dígito
       const normalized = this.phone.replace(/\D/g, '');
-      
+
       // Só definir phoneNormalized se temos dígitos
       if (normalized.length > 0) {
         this.phoneNormalized = normalized;
@@ -275,23 +291,23 @@ userSchema.pre('save', function(next) {
       this.phoneNormalized = null;
     }
   }
-  
+
   next();
 });
 
 
-userSchema.virtual('displayName').get(function() {
+userSchema.virtual('displayName').get(function () {
   return this.name || this.email.split('@')[0];
 });
 
 
-userSchema.methods.updateLastSeen = function() {
+userSchema.methods.updateLastSeen = function () {
   this.lastSeen = new Date();
   return this.save();
 };
 
 
-userSchema.methods.setOnlineStatus = function(isOnline) {
+userSchema.methods.setOnlineStatus = function (isOnline) {
   this.isOnline = isOnline;
   if (!isOnline) {
     this.lastSeen = new Date();
@@ -300,49 +316,49 @@ userSchema.methods.setOnlineStatus = function(isOnline) {
 };
 
 // Achievement methods
-userSchema.methods.hasAchievement = function(achievementId) {
+userSchema.methods.hasAchievement = function (achievementId) {
   if (!this.achievements || !this.achievements.unlocked) return false;
   return this.achievements.unlocked.some(a => a.achievementId === achievementId);
 };
 
-userSchema.methods.unlockAchievement = function(achievementId) {
+userSchema.methods.unlockAchievement = function (achievementId) {
   if (!this.achievements) {
     this.achievements = { unlocked: [], stats: {} };
   }
   if (!this.achievements.unlocked) {
     this.achievements.unlocked = [];
   }
-  
+
   // Verificar se já foi desbloqueada
   if (this.hasAchievement(achievementId)) {
     return { alreadyUnlocked: true };
   }
-  
+
   // Adicionar nova conquista
   this.achievements.unlocked.push({
     achievementId,
     unlockedAt: new Date(),
     notified: false
   });
-  
+
   return { alreadyUnlocked: false, achievement: achievementId };
 };
 
-userSchema.methods.updateAchievementStats = function(stats) {
+userSchema.methods.updateAchievementStats = function (stats) {
   if (!this.achievements) {
     this.achievements = { unlocked: [], stats: {} };
   }
   if (!this.achievements.stats) {
     this.achievements.stats = {};
   }
-  
+
   // Atualizar estatísticas
   this.achievements.stats = {
     ...this.achievements.stats,
     ...stats,
     lastUpdated: new Date()
   };
-  
+
   // Atualizar highestBalance se necessário
   if (stats.currentBalance && stats.currentBalance > (this.achievements.stats.highestBalance || 0)) {
     this.achievements.stats.highestBalance = stats.currentBalance;
@@ -350,9 +366,9 @@ userSchema.methods.updateAchievementStats = function(stats) {
 };
 
 // Métodos de Banimento
-userSchema.methods.isBanned = function() {
+userSchema.methods.isBanned = function () {
   if (!this.banned) return false;
-  
+
   // Se tem data de expiração, verificar se ainda está banido
   if (this.bannedUntil) {
     const now = new Date();
@@ -363,16 +379,16 @@ userSchema.methods.isBanned = function() {
       return false;
     }
   }
-  
+
   return true;
 };
 
-userSchema.methods.banUser = function(reason, bannedBy, duration = null) {
+userSchema.methods.banUser = function (reason, bannedBy, duration = null) {
   this.banned = true;
   this.bannedAt = new Date();
   this.bannedReason = reason;
   this.bannedBy = bannedBy;
-  
+
   if (duration) {
     // Banimento temporário (duration em dias)
     this.bannedUntil = new Date(Date.now() + duration * 24 * 60 * 60 * 1000);
@@ -380,11 +396,11 @@ userSchema.methods.banUser = function(reason, bannedBy, duration = null) {
     // Banimento permanente
     this.bannedUntil = null;
   }
-  
+
   return this.save();
 };
 
-userSchema.methods.unbanUser = function() {
+userSchema.methods.unbanUser = function () {
   this.banned = false;
   this.bannedUntil = null;
   return this.save();
@@ -394,31 +410,31 @@ userSchema.methods.unbanUser = function() {
  * Garante que os índices estejam corretos no banco de dados
  * Corrige o problema do índice phoneNormalized sem sparse
  */
-userSchema.statics.ensureIndexes = async function() {
+userSchema.statics.ensureIndexes = async function () {
   try {
     const collection = this.collection;
     const indexes = await collection.indexes();
-    
+
     // Verificar se phoneNormalized_1 existe e está correto
     const phoneIndex = indexes.find(idx => idx.name === 'phoneNormalized_1');
-    
+
     if (phoneIndex && phoneIndex.unique && !phoneIndex.sparse) {
       console.log('⚠️  [User Model] Corrigindo índice phoneNormalized...');
-      
+
       // Remover índice antigo
       await collection.dropIndex('phoneNormalized_1');
       console.log('✅ [User Model] Índice antigo removido');
-      
+
       // Criar novo índice correto
       await collection.createIndex(
-        { phoneNormalized: 1 }, 
+        { phoneNormalized: 1 },
         { unique: true, sparse: true, name: 'phoneNormalized_1' }
       );
       console.log('✅ [User Model] Índice phoneNormalized criado corretamente (unique + sparse)');
     } else if (!phoneIndex) {
       // Criar índice se não existir
       await collection.createIndex(
-        { phoneNormalized: 1 }, 
+        { phoneNormalized: 1 },
         { unique: true, sparse: true, name: 'phoneNormalized_1' }
       );
       console.log('✅ [User Model] Índice phoneNormalized criado');

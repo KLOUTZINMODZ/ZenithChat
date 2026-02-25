@@ -11,9 +11,9 @@ async function ensureUserIdExists(user) {
   try {
     const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
     const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
-    
+
     console.log(`[ENSURE-USERID] 🔒 Garantindo userid para ${user.email}`);
-    
+
     const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-google-user`, {
       email: user.email,
       name: user.name,
@@ -26,7 +26,7 @@ async function ensureUserIdExists(user) {
       },
       timeout: 5000
     });
-    
+
     console.log(`[ENSURE-USERID] ✅ Userid garantido: ${response.data.userid}`);
     return response.data.userid;
   } catch (error) {
@@ -78,7 +78,7 @@ exports.googleCallback = async (req, res) => {
 
     if (user) {
       console.log('✅ Usuário existente encontrado');
-      
+
       // Atualizar googleId se não existir
       if (!user.googleId) {
         user.googleId = googleId;
@@ -120,7 +120,7 @@ exports.googleCallback = async (req, res) => {
       });
     } else {
       console.log('🆕 Novo usuário - precisa completar cadastro');
-      
+
       // Novo usuário - precisa completar cadastro com telefone
       const tempToken = jwt.sign(
         {
@@ -153,7 +153,7 @@ exports.googleCallback = async (req, res) => {
 // Endpoint 2: Completar registro com telefone (e senha opcional)
 exports.completeGoogleRegistration = async (req, res) => {
   try {
-    const { googleToken, phone, password } = req.body;
+    const { googleToken, phone, password, referredBy } = req.body;
 
     if (!googleToken || !phone) {
       return res.status(400).json({
@@ -190,7 +190,7 @@ exports.completeGoogleRegistration = async (req, res) => {
     // Validar formato do telefone
     const phoneRegex = /^\d{10,13}$/;
     const cleanPhone = phone.replace(/\D/g, '');
-    
+
     if (!phoneRegex.test(cleanPhone)) {
       return res.status(400).json({
         success: false,
@@ -219,6 +219,7 @@ exports.completeGoogleRegistration = async (req, res) => {
       googleId: decoded.googleId,
       avatar: decoded.picture,
       isVerified: true,
+      referredBy: referredBy || null,
       createdAt: new Date()
     };
 
@@ -238,11 +239,11 @@ exports.completeGoogleRegistration = async (req, res) => {
     try {
       const mainApiUrl = process.env.VERCEL_API_URL || 'https://zenithggapi.vercel.app';
       const adminSecret = process.env.VERCEL_API_SECRET || 'default_secret';
-      
+
       if (hashedPassword) {
         // Usuário com senha - sincronizar com endpoint de senha
         console.log(`[SYNC] Sincronizando usuário com senha para ${user.email}`);
-        
+
         const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-password`, {
           email: user.email,
           hashedPassword: hashedPassword,
@@ -256,12 +257,12 @@ exports.completeGoogleRegistration = async (req, res) => {
           },
           timeout: 5000
         });
-        
+
         console.log(`[SYNC] ✅ Usuário com senha sincronizado: ${response.data.message} (userid: ${response.data.userid})`);
       } else {
         // Usuário só com Google - sincronizar com endpoint específico
         console.log(`[SYNC] Sincronizando usuário Google (sem senha) para ${user.email}`);
-        
+
         const response = await axios.post(`${mainApiUrl}/api/v1/admin/sync-google-user`, {
           email: user.email,
           name: user.name,
@@ -274,7 +275,7 @@ exports.completeGoogleRegistration = async (req, res) => {
           },
           timeout: 5000
         });
-        
+
         console.log(`[SYNC] ✅ Usuário Google sincronizado: ${response.data.message} (userid: ${response.data.userid})`);
       }
     } catch (syncError) {
@@ -345,7 +346,7 @@ exports.linkGoogleAccount = async (req, res) => {
 
     // Buscar usuário atual pelo ID do token
     const currentUser = await User.findById(userId);
-    
+
     if (!currentUser) {
       return res.status(404).json({
         success: false,
@@ -375,7 +376,7 @@ exports.linkGoogleAccount = async (req, res) => {
 
     // Verificar se o googleId já está sendo usado por outra conta
     const existingGoogleUser = await User.findOne({ googleId });
-    
+
     if (existingGoogleUser && existingGoogleUser._id.toString() !== userId.toString()) {
       console.log('❌ [LINK] GoogleId já vinculado a outra conta');
       return res.status(400).json({

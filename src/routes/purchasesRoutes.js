@@ -33,7 +33,7 @@ function safeId(v) {
       // Some drivers expose toHexString
       if (typeof v.toHexString === 'function') return v.toHexString();
     }
-  } catch (_) {}
+  } catch (_) { }
   return null;
 }
 
@@ -63,7 +63,7 @@ async function runTx(executor) {
     session.endSession();
     return res;
   } catch (err) {
-    if (session) { try { await session.abortTransaction(); } catch (_) {} session.endSession(); }
+    if (session) { try { await session.abortTransaction(); } catch (_) { } session.endSession(); }
     return executor(null);
   }
 }
@@ -78,7 +78,7 @@ async function sendBalanceUpdate(app, userId) {
         data: { userId: String(userId), balance: round2(u?.walletBalance || 0), timestamp: new Date().toISOString() }
       });
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 // Helper: ensure conversation marketplace.statusCompra is updated within the same DB session/transaction
@@ -91,7 +91,7 @@ async function updateConversationMarketplaceStatus(session, purchase, status) {
       session ? { session } : {}
     );
   } catch (e) {
-    try { logger?.warn?.('[PURCHASES] Failed to update conversation marketplace status', { purchaseId: String(purchase?._id), status, error: e?.message }); } catch (_) {}
+    try { logger?.warn?.('[PURCHASES] Failed to update conversation marketplace status', { purchaseId: String(purchase?._id), status, error: e?.message }); } catch (_) { }
   }
 }
 
@@ -115,14 +115,14 @@ async function emitMarketplaceStatusChanged(app, purchase, status) {
         updatedAt: now.toISOString(), // Para priorização no front-end
         source: 'realtime' // Identifica origem do evento
       };
-      
+
       for (const uid of participants) {
         ws.sendToUser(uid, {
           type: 'marketplace:status_changed',
           data: wsData
         });
       }
-      
+
       if (ws.conversationHandler) {
         for (const uid of participants) {
           await ws.conversationHandler.sendConversationsUpdate(uid);
@@ -130,7 +130,7 @@ async function emitMarketplaceStatusChanged(app, purchase, status) {
       }
     }
     participants.forEach(pid => cache.invalidateUserCache(pid));
-  } catch (_) {}
+  } catch (_) { }
 }
 
 async function getOrCreateConversation(buyerId, sellerId, metadata) {
@@ -197,7 +197,7 @@ router.get('/list', auth, async (req, res) => {
 
     // ========== BOOSTING ORDERS ==========
     const boostingFilter = {};
-    
+
     // Filtrar por status se especificado
     if (statusParam) {
       const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
@@ -205,7 +205,7 @@ router.get('/list', auth, async (req, res) => {
         boostingFilter.status = { $in: statuses };
       }
     }
-    
+
     if (type === 'sales') {
       boostingFilter.boosterId = userId;
     } else if (type === 'purchases') {
@@ -223,7 +223,7 @@ router.get('/list', auth, async (req, res) => {
 
     // ========== FALLBACK: BUSCAR AGREEMENTS (para boostings não migrados) ==========
     const agreementFilter = {};
-    
+
     // Filtrar por status se especificado (mapear para status de Agreement)
     if (statusParam) {
       const statuses = statusParam.split(',').map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
@@ -237,7 +237,7 @@ router.get('/list', auth, async (req, res) => {
         agreementFilter.status = { $in: mappedStatuses };
       }
     }
-    
+
     if (type === 'sales') {
       agreementFilter['parties.booster.userid'] = userId;
     } else if (type === 'purchases') {
@@ -263,7 +263,7 @@ router.get('/list', auth, async (req, res) => {
 
     // ========== BUSCAR DADOS ADICIONAIS ==========
     const itemIds = Array.from(new Set((purchases || []).map(p => (p.itemId || '').toString()).filter(Boolean)));
-    
+
     // Coletar IDs de usuários, filtrando apenas ObjectIds válidos
     const allBuyerIds = Array.from(new Set([
       ...(purchases || []).map(p => (p.buyerId || '').toString()).filter(id => mongoose.Types.ObjectId.isValid(id)),
@@ -281,7 +281,7 @@ router.get('/list', auth, async (req, res) => {
     const boostingOrderIds = (boostingOrders || []).map(bo => bo.agreementId);
     const agreementIds = (agreementsNotMigrated || []).map(ag => ag._id);
     const allAgreementIds = [...boostingOrderIds, ...agreementIds];
-    
+
     const [items, buyers, sellers, purchaseReviews, boostingReviews] = await Promise.all([
       itemIds.length > 0 ? MarketItem.find({ _id: { $in: itemIds } }).select('_id title image images deliveryMethod').lean() : Promise.resolve([]),
       allBuyerIds.length > 0 ? User.find({ _id: { $in: allBuyerIds } }).select('_id name legalName username avatar').lean() : Promise.resolve([]),
@@ -294,7 +294,7 @@ router.get('/list', auth, async (req, res) => {
     const buyerMap = new Map((buyers || []).map(u => [String(u._id), u]));
     const sellerMap = new Map((sellers || []).map(u => [String(u._id), u]));
     const userName = (u) => (u?.name || u?.legalName || u?.username || 'Usuário');
-    
+
     // Criar Maps de reviews para verificação rápida
     const purchaseReviewSet = new Set((purchaseReviews || []).map(r => String(r.purchaseId)));
     const agreementReviewSet = new Set((boostingReviews || []).map(r => String(r.agreementId)));
@@ -328,16 +328,16 @@ router.get('/list', auth, async (req, res) => {
       // BoostingOrder já tem todos os dados estruturados!
       const buyer = buyerMap.get(String(bo.clientId));
       const seller = sellerMap.get(String(bo.boosterId));
-      
-      const title = bo.serviceSnapshot?.game 
-        ? `Boosting ${bo.serviceSnapshot.game}` 
+
+      const title = bo.serviceSnapshot?.game
+        ? `Boosting ${bo.serviceSnapshot.game}`
         : 'Boosting';
-      
+
       // Mapear status do BoostingOrder para status compatível com marketplace UI
       // Status possíveis: pending, active, completed, cancelled, expired, disputed
       const boostingStatus = String(bo.status || 'pending').toLowerCase();
       let mappedStatus = boostingStatus;
-      
+
       if (boostingStatus === 'active') {
         mappedStatus = 'shipped'; // Em andamento
       } else if (boostingStatus === 'pending') {
@@ -348,7 +348,7 @@ router.get('/list', auth, async (req, res) => {
         mappedStatus = 'shipped'; // Disputados aparecem como em progresso (aguardando resolução)
       }
       // completed e cancelled permanecem iguais (sem alteração)
-      
+
       // Determinar timestamp correto baseado no status
       let orderTimestamp = bo.createdAt;
       if (boostingStatus === 'completed' && bo.completedAt) {
@@ -360,7 +360,7 @@ router.get('/list', auth, async (req, res) => {
       } else if (boostingStatus === 'active' && bo.activatedAt) {
         orderTimestamp = bo.activatedAt;
       }
-      
+
       return {
         _id: String(bo._id),
         orderNumber: bo.orderNumber || String(bo._id).slice(-8).toUpperCase(),
@@ -373,17 +373,17 @@ router.get('/list', auth, async (req, res) => {
         createdAt: orderTimestamp,
         type: 'boosting',
         hasReview: bo.hasReview || agreementReviewSet.has(String(bo.agreementId)),
-        item: { 
-          _id: String(bo.boostingRequestId || ''), 
-          title, 
-          image: '' 
+        item: {
+          _id: String(bo.boostingRequestId || ''),
+          title,
+          image: ''
         },
-        buyer: { 
-          _id: String(bo.clientId || ''), 
+        buyer: {
+          _id: String(bo.clientId || ''),
           name: bo.clientData?.name || userName(buyer)
         },
-        seller: { 
-          _id: String(bo.boosterId || ''), 
+        seller: {
+          _id: String(bo.boosterId || ''),
           name: bo.boosterData?.name || userName(seller)
         },
         boostingRequest: {
@@ -401,24 +401,24 @@ router.get('/list', auth, async (req, res) => {
       const boosterId = ag.parties?.booster?.userid || '';
       const buyer = buyerMap.get(String(clientId));
       const seller = sellerMap.get(String(boosterId));
-      
-      const title = ag.proposalSnapshot?.game 
-        ? `Boosting ${ag.proposalSnapshot.game}` 
+
+      const title = ag.proposalSnapshot?.game
+        ? `Boosting ${ag.proposalSnapshot.game}`
         : ag.metadata?.boostingData?.game
-        ? `Boosting ${ag.metadata.boostingData.game}`
-        : 'Boosting';
-      
+          ? `Boosting ${ag.metadata.boostingData.game}`
+          : 'Boosting';
+
       // Mapear status do Agreement para status compatível com marketplace UI
       const agreementStatus = String(ag.status || 'pending').toLowerCase();
       let mappedStatus = agreementStatus;
-      
+
       if (agreementStatus === 'active') {
         mappedStatus = 'shipped'; // Em andamento
       } else if (agreementStatus === 'pending') {
         mappedStatus = 'initiated'; // Pendente
       }
       // completed e cancelled permanecem iguais
-      
+
       // Determinar timestamp correto baseado no status
       let orderTimestamp = ag.createdAt;
       if (agreementStatus === 'completed' && ag.completedAt) {
@@ -428,7 +428,7 @@ router.get('/list', auth, async (req, res) => {
       } else if (agreementStatus === 'active' && ag.activatedAt) {
         orderTimestamp = ag.activatedAt;
       }
-      
+
       return {
         _id: String(ag._id),
         orderNumber: ag.agreementId || String(ag._id).slice(-8).toUpperCase(),
@@ -441,17 +441,17 @@ router.get('/list', auth, async (req, res) => {
         createdAt: orderTimestamp,
         type: 'boosting',
         hasReview: agreementReviewSet.has(String(ag._id)),
-        item: { 
-          _id: String(ag.boostingRequestId || ''), 
-          title, 
-          image: '' 
+        item: {
+          _id: String(ag.boostingRequestId || ''),
+          title,
+          image: ''
         },
-        buyer: { 
-          _id: String(clientId), 
+        buyer: {
+          _id: String(clientId),
           name: ag.parties?.client?.name || userName(buyer)
         },
-        seller: { 
-          _id: String(boosterId), 
+        seller: {
+          _id: String(boosterId),
           name: ag.parties?.booster?.name || userName(seller)
         },
         boostingRequest: {
@@ -466,11 +466,11 @@ router.get('/list', auth, async (req, res) => {
     // ========== MERGE AND DEDUPLICATE ==========
     // Primeiro juntamos todos os pedidos
     let allOrdersWithDuplicates = [...marketplaceOrders, ...formattedBoostingOrders, ...formattedAgreements];
-    
+
     // Criamos um Map para detectar duplicatas baseado em propriedades relevantes
     const orderMap = new Map();
     const uniqueOrders = [];
-    
+
     allOrdersWithDuplicates.forEach(order => {
       // Criar uma chave única baseada em identificação relevante
       // Para boosting, usamos o agreementId ou boostingRequestId se disponível
@@ -482,26 +482,26 @@ router.get('/list', auth, async (req, res) => {
         // Para marketplace, usamos o ID do item e do comprador
         key = `marketplace:${order.item?._id || ''}:${order.buyer?._id || ''}`;
       }
-      
+
       // Se já temos um pedido com esta chave, vamos decidir qual manter
       if (orderMap.has(key)) {
         const existingOrder = orderMap.get(key);
-        
+
         // Se o pedido existente é mais recente, ignoramos o atual
         if (new Date(existingOrder.createdAt) >= new Date(order.createdAt)) {
           return;
         }
       }
-      
+
       // Armazenar o pedido no map e na lista de únicos
       orderMap.set(key, order);
       uniqueOrders.push(order);
     });
-    
+
     console.log(`[PURCHASES] Removidas ${allOrdersWithDuplicates.length - uniqueOrders.length} duplicatas`);
-    
+
     // Ordenar por data de criação (mais recente primeiro)
-    const allOrders = uniqueOrders.sort((a, b) => 
+    const allOrders = uniqueOrders.sort((a, b) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
@@ -584,6 +584,56 @@ router.post('/initiate', auth, async (req, res) => {
     if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'E-mail inválido' });
     if (getAge(birthDate) < 18) return res.status(400).json({ success: false, message: 'Idade mínima para compra é 18 anos' });
 
+    // Influencer Coupon Handling
+    let influencerId = null;
+    let influencerCommission = 0;
+    let buyerDiscount = 0;
+    let mediatorCommissionPercent = 5;
+    let couponCodeApplied = null;
+
+    if (req.body.couponCode) {
+      const PromoCode = require('../models/PromoCode');
+      const coupon = await PromoCode.findOne({
+        code: String(req.body.couponCode).toUpperCase(),
+        status: 'active'
+      });
+
+      if (coupon && coupon.isInfluencerCoupon) {
+        // VALIDATIONS
+        // 1. Influencer cannot use their own coupon
+        if (coupon.influencerId && coupon.influencerId.toString() === buyerId.toString()) {
+          return res.status(400).json({ success: false, message: 'Você não pode usar seu próprio cupom de influenciador.' });
+        }
+
+        // 2. Only one influencer coupon per account
+        const hasUsedInfluencerCoupon = await Purchase.findOne({
+          buyerId,
+          influencerId: { $ne: null },
+          status: { $nin: ['cancelled'] }
+        });
+        if (hasUsedInfluencerCoupon) {
+          return res.status(400).json({ success: false, message: 'Você já utilizou um cupom de influenciador nesta conta.' });
+        }
+
+        // 3. User can only use the coupon once (PromoCode handles users array)
+        const userRedeemed = coupon.users.find(u => u.userId.toString() === buyerId.toString());
+        if (userRedeemed) {
+          return res.status(400).json({ success: false, message: 'Você já utilizou este cupom.' });
+        }
+
+        // Apply split from coupon
+        const { commissionSplit } = coupon;
+        buyerDiscount = round2((price * (commissionSplit.buyerDiscount || 0)) / 100);
+        influencerCommission = round2((price * (commissionSplit.influencerCommission || 0)) / 100);
+        mediatorCommissionPercent = commissionSplit.mediatorCommission || 5;
+        influencerId = coupon.influencerId;
+        couponCodeApplied = coupon.code;
+
+        // Mark as used for the user (will be finalized in transaction)
+        // Actually, we'll do the save inside the runTx to be safe
+      }
+    }
+
     // Fetch item to derive true seller and price (lean for initial validation)
     const itemDoc = await MarketItem.findById(itemId).lean();
     if (!itemDoc) return res.status(404).json({ success: false, message: 'Item não encontrado' });
@@ -596,7 +646,7 @@ router.post('/initiate', auth, async (req, res) => {
       || safeId(itemDoc.user)
       || safeId(itemDoc.createdBy);
     if (!sellerUserIdFromItem) {
-      try { logger.warn('[PURCHASES] Invalid item seller id for initiate', { itemId, sellerId: itemDoc?.sellerId, userIdField: itemDoc?.userId, ownerId: itemDoc?.ownerId }); } catch (_) {}
+      try { logger.warn('[PURCHASES] Invalid item seller id for initiate', { itemId, sellerId: itemDoc?.sellerId, userIdField: itemDoc?.userId, ownerId: itemDoc?.ownerId }); } catch (_) { }
       return res.status(400).json({ success: false, message: 'Item inválido: vendedor não configurado ou inválido' });
     }
 
@@ -612,7 +662,9 @@ router.post('/initiate', auth, async (req, res) => {
 
     const buyer = await User.findById(buyerId);
     if (!buyer) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
-    if (buyer.walletBalance < Number(priceUsed)) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
+
+    const finalPriceForBuyer = round2(Number(priceUsed) - buyerDiscount);
+    if (buyer.walletBalance < finalPriceForBuyer) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
 
     // Validate seller
     const seller = await User.findById(sellerUserIdFromItem);
@@ -628,8 +680,8 @@ router.post('/initiate', auth, async (req, res) => {
       return res.status(409).json({ success: false, message: 'Nome completo em conflito com o já vinculado à conta.' });
     }
     if (buyer.birthDate) {
-      const stored = new Date(buyer.birthDate).toISOString().slice(0,10);
-      const incoming = birthDate.toISOString().slice(0,10);
+      const stored = new Date(buyer.birthDate).toISOString().slice(0, 10);
+      const incoming = birthDate.toISOString().slice(0, 10);
       if (stored !== incoming) {
         return res.status(409).json({ success: false, message: 'Data de nascimento em conflito com a já vinculada à conta.' });
       }
@@ -639,8 +691,9 @@ router.post('/initiate', auth, async (req, res) => {
     }
 
     const feePercent = 5;
-    const platformFee = round2((Number(priceUsed) * feePercent) / 100);
-    const sellerReceives = round2(Number(priceUsed) - platformFee);
+    const totalPotentialFee = round2((Number(priceUsed) * feePercent) / 100);
+    const platformFee = round2(totalPotentialFee - buyerDiscount); // recorded fee in Purchase (split between influencer and mediator)
+    const sellerReceives = round2(Number(priceUsed) - totalPotentialFee); // Always 95% of original price
 
     const purchase = await runTx(async (session) => {
       // Stock and availability guard within the same transaction
@@ -679,15 +732,31 @@ router.post('/initiate', auth, async (req, res) => {
       }
 
       let p = await Purchase.create([{
-        buyerId, sellerId: sellerUserIdFromItem, itemId, price: Number(priceUsed), feePercent, feeAmount: platformFee, sellerReceives,
+        buyerId, sellerId: sellerUserIdFromItem, itemId, price: finalPriceForBuyer, feePercent, feeAmount: platformFee, sellerReceives,
         status: 'initiated',
         buyerInfo: { fullName, cpf, birthDate, email },
-        logs: [{ level: 'info', message: 'Purchase initiated' }]
+        influencerId,
+        influencerCommission,
+        couponCode: couponCodeApplied,
+        logs: [{ level: 'info', message: 'Purchase initiated' + (couponCodeApplied ? ` with coupon ${couponCodeApplied}` : '') }]
       }], { session });
       p = p[0];
 
+      // If coupon used, record usage in PromoCode
+      if (couponCodeApplied) {
+        const PromoCode = require('../models/PromoCode');
+        await PromoCode.updateOne(
+          { code: couponCodeApplied },
+          {
+            $inc: { currentUses: 1 },
+            $push: { users: { userId: buyerId, redeemedAt: new Date(), cpfCnpj: cpf } }
+          },
+          { session }
+        );
+      }
+
       const before = round2(buyer.walletBalance || 0);
-      const after = round2(before - Number(priceUsed));
+      const after = round2(before - finalPriceForBuyer);
       buyer.walletBalance = after;
       if (!buyer.cpfCnpj) buyer.cpfCnpj = cpf;
       if (!buyer.legalName) buyer.legalName = fullName;
@@ -699,7 +768,7 @@ router.post('/initiate', auth, async (req, res) => {
         txId: null,
         direction: 'debit',
         reason: 'purchase_reserve',
-        amount: Number(priceUsed),
+        amount: finalPriceForBuyer,
         operationId: `purchase_reserve:${p._id.toString()}`,
         balanceBefore: before,
         balanceAfter: after,
@@ -865,7 +934,7 @@ router.post('/initiate', auth, async (req, res) => {
         }
       }
       participants.forEach(pid => cache.invalidateUserCache(pid));
-    } catch (_) {}
+    } catch (_) { }
 
     try {
       const ns = req.app?.locals?.notificationService;
@@ -883,7 +952,7 @@ router.post('/initiate', auth, async (req, res) => {
           data: { purchaseId: purchase._id, conversationId: conv._id, itemId }
         });
       }
-    } catch (_) {}
+    } catch (_) { }
 
     return res.status(201).json({ success: true, message: 'Compra iniciada e valor bloqueado em escrow', data: { purchaseId: purchase._id, conversationId: conv._id } });
   } catch (error) {
@@ -924,7 +993,7 @@ router.post('/:purchaseId/ship', auth, async (req, res) => {
     try {
       const ns = req.app?.locals?.notificationService;
       if (ns) ns.sendNotification(String(purchase.buyerId), { type: 'purchase:shipped', title: 'Pedido enviado', message: 'O vendedor confirmou o envio do item.', data: { purchaseId } });
-    } catch (_) {}
+    } catch (_) { }
 
     return res.json({ success: true, message: 'Envio confirmado. Escrow será liberado automaticamente em 7 dias se o comprador não confirmar.', data: { autoReleaseAt: purchase.autoReleaseAt } });
   } catch (error) { return res.status(500).json({ success: false, message: 'Erro ao marcar envio', error: error.message }); }
@@ -984,65 +1053,106 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
           },
           { upsert: true, session }
         );
-      } catch (_) {}
+      } catch (_) { }
 
-      // Credit mediator with platform fee (5%) within the same transaction
+      // Credit mediator and influencer with platform fee split
       try {
-        const feeAmount = Number(purchase.feeAmount || 0);
-        if (feeAmount > 0) {
-          let mediatorUser = null;
-          const envId = process.env.MEDIATOR_USER_ID;
-          const envEmail = process.env.MEDIATOR_EMAIL;
-          if (envId) {
-            try { mediatorUser = await User.findById(envId).session(session); } catch (_) {}
-          }
-          if (!mediatorUser && envEmail) {
-            try { mediatorUser = await User.findOne({ email: envEmail }).session(session); } catch (_) {}
-          }
-          if (mediatorUser) {
-            const medBefore = round2(mediatorUser.walletBalance || 0);
-            const medAfter = round2(medBefore + feeAmount);
-            mediatorUser.walletBalance = medAfter;
-            await mediatorUser.save({ session });
-            const created = await WalletLedger.create([{
-              userId: mediatorUser._id,
-              txId: null,
-              direction: 'credit',
-              reason: 'purchase_fee',
-              amount: feeAmount,
-              operationId: `purchase_fee:${purchase._id.toString()}`,
-              balanceBefore: medBefore,
-              balanceAfter: medAfter,
-              metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, sellerId: purchase.sellerId, price: Number(purchase.price), feeAmount: feeAmount, sellerReceives: Number(purchase.sellerReceives) }
-            }], { session });
+        const totalFeeAmount = Number(purchase.feeAmount || 0);
+        const infCommission = Number(purchase.influencerCommission || 0);
+        const mediatorFee = round2(totalFeeAmount - infCommission);
 
-            // Log mediator fee event for precise financial reporting
-            try {
-              const medLedgerDoc = Array.isArray(created) ? created[0] : created;
-              await Mediator.create([{
-                eventType: 'fee',
-                amount: feeAmount,
-                currency: 'BRL',
-                operationId: `purchase_fee:${purchase._id.toString()}`,
-                source: 'ZenithChatApi',
-                occurredAt: new Date(),
-                reference: {
-                  purchaseId: purchase._id,
-                  walletLedgerId: medLedgerDoc?._id || null,
-                  orderId: null,
-                  transactionId: null,
-                  asaasTransferId: null
-                },
-                metadata: { price: Number(purchase.price), feeAmount: feeAmount, sellerReceives: Number(purchase.sellerReceives), sellerId: purchase.sellerId },
-                description: 'Taxa de mediação (5%) creditada ao mediador'
+        if (totalFeeAmount > 0) {
+          // 1. Credit Influencer if applicable
+          if (infCommission > 0 && purchase.influencerId) {
+            const influencer = await User.findById(purchase.influencerId).session(session);
+            if (influencer) {
+              const infBefore = round2(influencer.walletBalance || 0);
+              const infAfter = round2(infBefore + infCommission);
+              influencer.walletBalance = infAfter;
+              await influencer.save({ session });
+
+              const infLedger = await WalletLedger.create([{
+                userId: influencer._id,
+                txId: null,
+                direction: 'credit',
+                reason: 'influencer_commission',
+                amount: infCommission,
+                operationId: `inf_comm:${purchase._id.toString()}`,
+                balanceBefore: infBefore,
+                balanceAfter: infAfter,
+                metadata: { source: 'purchase', purchaseId: purchase._id.toString(), buyerId: purchase.buyerId, couponCode: purchase.couponCode }
               }], { session });
-            } catch (_) {}
-          } else {
-            try { logger?.warn?.('[PURCHASES] Mediator user not found; fee not credited', { purchaseId: String(purchase._id), feeAmount }); } catch (_) {}
+
+              // Log mediator event for influencer commission
+              try {
+                await Mediator.create([{
+                  eventType: 'payout',
+                  amount: infCommission,
+                  currency: 'BRL',
+                  operationId: `inf_comm:${purchase._id.toString()}`,
+                  source: 'ZenithChatApi',
+                  occurredAt: new Date(),
+                  reference: {
+                    purchaseId: purchase._id,
+                    walletLedgerId: infLedger[0]?._id || null
+                  },
+                  metadata: { type: 'influencer_commission', influencerId: influencer._id, couponCode: purchase.couponCode },
+                  description: `Comissão de influenciador para ${influencer.username || influencer.name}`
+                }], { session });
+              } catch (_) { }
+            }
+          }
+
+          // 2. Credit Mediator with the remainder
+          if (mediatorFee > 0) {
+            let mediatorUser = null;
+            const envId = process.env.MEDIATOR_USER_ID;
+            const envEmail = process.env.MEDIATOR_EMAIL;
+            if (envId) {
+              try { mediatorUser = await User.findById(envId).session(session); } catch (_) { }
+            }
+            if (!mediatorUser && envEmail) {
+              try { mediatorUser = await User.findOne({ email: envEmail }).session(session); } catch (_) { }
+            }
+            if (mediatorUser) {
+              const medBefore = round2(mediatorUser.walletBalance || 0);
+              const medAfter = round2(medBefore + mediatorFee);
+              mediatorUser.walletBalance = medAfter;
+              await mediatorUser.save({ session });
+              const created = await WalletLedger.create([{
+                userId: mediatorUser._id,
+                txId: null,
+                direction: 'credit',
+                reason: 'purchase_fee',
+                amount: mediatorFee,
+                operationId: `purchase_fee:${purchase._id.toString()}`,
+                balanceBefore: medBefore,
+                balanceAfter: medAfter,
+                metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, sellerId: purchase.sellerId, price: Number(purchase.price), feeAmount: mediatorFee }
+              }], { session });
+
+              try {
+                const medLedgerDoc = Array.isArray(created) ? created[0] : created;
+                await Mediator.create([{
+                  eventType: 'fee',
+                  amount: mediatorFee,
+                  currency: 'BRL',
+                  operationId: `purchase_fee:${purchase._id.toString()}`,
+                  source: 'ZenithChatApi',
+                  occurredAt: new Date(),
+                  reference: {
+                    purchaseId: purchase._id,
+                    walletLedgerId: medLedgerDoc?._id || null
+                  },
+                  metadata: { price: Number(purchase.price), feeAmount: mediatorFee, sellerReceives: Number(purchase.sellerReceives), sellerId: purchase.sellerId },
+                  description: 'Taxa de mediação creditada ao mediador (líquida)'
+                }], { session });
+              } catch (_) { }
+            }
           }
         }
       } catch (e) {
-        try { logger?.error?.('[PURCHASES] Failed to credit mediator fee', { error: e?.message }); } catch (_) {}
+        try { logger?.error?.('[PURCHASES] Failed to credit mediator/influencer fees', { error: e?.message }); } catch (_) { }
       }
 
       // Buyer settlement ledger (amount 0) to appear in history without changing balance
@@ -1060,7 +1170,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
           balanceAfter: buyerBefore,
           metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId }
         }], { session });
-      } catch (_) {}
+      } catch (_) { }
 
       purchase.status = 'completed';
       purchase.deliveredAt = new Date();
@@ -1093,7 +1203,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
           await item.save({ session });
         }
       } catch (e) {
-        try { logger?.warn?.('[PURCHASES] Failed to finalize MarketItem status on confirm', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
+        try { logger?.warn?.('[PURCHASES] Failed to finalize MarketItem status on confirm', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) { }
       }
     });
 
@@ -1122,7 +1232,7 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
         ns.sendNotification(String(purchase.sellerId), { type: 'purchase:completed', title: 'Pagamento liberado', message: 'O comprador confirmou o recebimento. Valor liberado na sua carteira.', data: { purchaseId } });
         ns.sendNotification(String(purchase.buyerId), { type: 'purchase:completed', title: 'Pedido concluído', message: 'Obrigado por confirmar. Pedido concluído com sucesso.', data: { purchaseId } });
       }
-    } catch (_) {}
+    } catch (_) { }
 
     return res.json({ success: true, message: 'Recebimento confirmado. Valores liberados ao vendedor.' });
   } catch (error) { return res.status(500).json({ success: false, message: 'Erro ao confirmar recebimento', error: error.message }); }
@@ -1192,13 +1302,13 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
         priority: 'high'
       });
       try {
-      await report.save();
-    } catch (e) {
-      if (e && (e.code === 11000 || e.code === 'E11000')) {
-        return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: e?.keyValue?._id || null } });
+        await report.save();
+      } catch (e) {
+        if (e && (e.code === 11000 || e.code === 'E11000')) {
+          return res.status(409).json({ success: false, message: 'Já existe um ticket para este pedido', data: { reportId: e?.keyValue?._id || null } });
+        }
+        throw e;
       }
-      throw e;
-    }
 
       // Envia notificação ao Telegram com dados do cliente (comprador)
       try {
@@ -1210,7 +1320,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
           });
           clientApi = resp?.data?.user || null;
         } catch (e) {
-          try { logger?.warn?.('[PURCHASES] Falha ao obter dados do cliente na MAIN_API', { error: e?.message }); } catch (_) {}
+          try { logger?.warn?.('[PURCHASES] Falha ao obter dados do cliente na MAIN_API', { error: e?.message }); } catch (_) { }
         }
 
         await sendSupportTicketNotification({
@@ -1244,7 +1354,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
             purchaseId: purchase?._id?.toString?.() || String(purchaseId)
           }
         });
-      } catch (_) {}
+      } catch (_) { }
 
       // Notifica o vendedor
       try {
@@ -1255,7 +1365,7 @@ router.post('/:purchaseId/not-received', auth, async (req, res) => {
           message: 'O comprador declarou que não recebeu o item. A liberação foi pausada e a mediação foi aberta.',
           data: { purchaseId }
         });
-      } catch (_) {}
+      } catch (_) { }
 
       return res.json({ success: true, message: 'Status retornado ao escrow. Vendedor notificado e arbitragem aberta.' });
     } catch (error) {
@@ -1279,7 +1389,7 @@ router.get('/:purchaseId/support-ticket/status', auth, async (req, res) => {
         try {
           const conv = await Conversation.findOne({ 'metadata.purchaseId': purchase._id });
           if (conv) conversationId = conv._id;
-        } catch (_) {}
+        } catch (_) { }
       }
     }
     const existing = await Report.findOne({
@@ -1313,7 +1423,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
       if (safety && safety.ok === false && Array.isArray(safety.violations) && safety.violations.length > 0) {
         return res.status(400).json({ success: false, message: 'Descrição contém conteúdo não permitido.', data: { violations: safety.violations } });
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Prevent duplicate ticket for the same purchase (also consider legacy tickets by conversation)
     let convIdForCheck = purchase.conversationId || null;
@@ -1321,7 +1431,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
       try {
         const conv = await Conversation.findOne({ 'metadata.purchaseId': purchase._id });
         if (conv) convIdForCheck = conv._id;
-      } catch (_) {}
+      } catch (_) { }
     }
     const existing = await Report.findOne({
       $or: [
@@ -1345,13 +1455,13 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
       try {
         const conv = await Conversation.findOne({ 'metadata.purchaseId': purchase._id });
         if (conv) conversationId = conv._id;
-      } catch (_) {}
+      } catch (_) { }
     }
 
     const report = new Report({
       conversationId,
       purchaseId: purchase._id,
-      type: ['service_not_delivered','payment_issues','other'].includes(String(issueType)) ? String(issueType) : 'payment_issues',
+      type: ['service_not_delivered', 'payment_issues', 'other'].includes(String(issueType)) ? String(issueType) : 'payment_issues',
       reason: 'support_ticket_opened',
       description: description || 'Ticket de suporte aberto pelo usuário.',
       reporter: {
@@ -1403,7 +1513,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
           clientApi = resp?.data?.user || null;
         }
       } catch (e) {
-        try { logger?.warn?.('[PURCHASES] Falha ao obter dados do cliente na MAIN_API (support-ticket)', { error: e?.message }); } catch (_) {}
+        try { logger?.warn?.('[PURCHASES] Falha ao obter dados do cliente na MAIN_API (support-ticket)', { error: e?.message }); } catch (_) { }
       }
 
       await sendSupportTicketNotification({
@@ -1427,7 +1537,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
         },
         report: {
           id: report?._id?.toString?.() || String(report._id),
-          type: ['service_not_delivered','payment_issues','other'].includes(String(issueType)) ? String(issueType) : 'payment_issues',
+          type: ['service_not_delivered', 'payment_issues', 'other'].includes(String(issueType)) ? String(issueType) : 'payment_issues',
           reason: 'support_ticket_opened',
           description: description || 'Ticket de suporte aberto pelo usuário.'
         },
@@ -1436,7 +1546,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
           purchaseId: purchase?._id?.toString?.() || String(purchaseId)
         }
       });
-    } catch (_) {}
+    } catch (_) { }
 
     // Atualiza conversa com marcações leves, se existir
     try {
@@ -1449,7 +1559,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
           }
         });
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Notifica via WS e Notifications
     try {
@@ -1480,7 +1590,7 @@ router.post('/:purchaseId/support-ticket', auth, async (req, res) => {
           });
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     return res.json({ success: true, message: 'Ticket de suporte aberto com sucesso', data: { reportId: report._id } });
   } catch (error) {
@@ -1563,7 +1673,7 @@ async function performPurchaseCancel(app, purchaseId, reason) {
         await item.save({ session });
       }
     } catch (e) {
-      try { logger?.warn?.('[PURCHASES] Failed to restore MarketItem on cancel', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) {}
+      try { logger?.warn?.('[PURCHASES] Failed to restore MarketItem on cancel', { purchaseId: String(purchase?._id), error: e?.message }); } catch (_) { }
     }
   });
 
@@ -1576,7 +1686,7 @@ async function performPurchaseCancel(app, purchaseId, reason) {
       ns.sendNotification(String(purchase.buyerId), { type: 'purchase:cancelled', title: 'Compra cancelada', message: 'Seu pagamento foi estornado.', data: { purchaseId } });
       ns.sendNotification(String(purchase.sellerId), { type: 'purchase:cancelled', title: 'Compra cancelada', message: 'O pedido foi cancelado.', data: { purchaseId } });
     }
-  } catch (_) {}
+  } catch (_) { }
 
   return purchase;
 }
@@ -1622,7 +1732,7 @@ router.post('/auto-release/run', auth, async (_req, res) => {
 });
 
 router.get('/:purchaseId', auth, async (req, res) => {
-    try {
+  try {
     const { purchaseId } = req.params;
     const purchase = await Purchase.findById(purchaseId).lean();
     if (!purchase) {

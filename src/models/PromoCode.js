@@ -54,6 +54,21 @@ const promoCodeSchema = new mongoose.Schema({
     description: {
         type: String,
         trim: true
+    },
+    // Influencer Fields
+    influencerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    isInfluencerCoupon: {
+        type: Boolean,
+        default: false
+    },
+    commissionSplit: {
+        buyerDiscount: { type: Number, default: 0, min: 0, max: 5 },
+        influencerCommission: { type: Number, default: 0, min: 0, max: 5 },
+        mediatorCommission: { type: Number, default: 5, min: 0, max: 5 }
     }
 }, { timestamps: true });
 

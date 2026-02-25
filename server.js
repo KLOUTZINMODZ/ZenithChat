@@ -51,6 +51,7 @@ const homeRoutes = require('./src/routes/homeRoutes');
 const heroBannerRoutes = require('./src/routes/heroBannerRoutes');
 const boostingCancelRoutes = require('./src/routes/boostingCancelRoutes');
 const promoCodeRoutes = require('./src/routes/promoCodeRoutes');
+const influencerRoutes = require('./src/routes/influencerRoutes');
 
 const app = express();
 
@@ -238,6 +239,7 @@ app.use('/api/purchases', purchasesRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/hero-banners', heroBannerRoutes);
 app.use('/api/promo-codes', promoCodeRoutes);
+app.use('/api/admin/influencers', influencerRoutes);
 
 // Boosting cancel routes (sem rate limiter - rotas administrativas)
 app.use('/api/boosting-cancel', boostingCancelRoutes);

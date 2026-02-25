@@ -34,7 +34,10 @@ const promoCodeController = {
 
     createCode: async (req, res) => {
         try {
-            const { code, type, value, validFrom, validUntil, maxUses, description } = req.body;
+            const {
+                code, type, value, validFrom, validUntil, maxUses, description,
+                influencerId, isInfluencerCoupon, commissionSplit
+            } = req.body;
 
             const existing = await PromoCode.findOne({ code: code.toUpperCase() });
             if (existing) {
@@ -48,7 +51,14 @@ const promoCodeController = {
                 validFrom,
                 validUntil,
                 maxUses,
-                description
+                description,
+                influencerId: influencerId || null,
+                isInfluencerCoupon: !!isInfluencerCoupon,
+                commissionSplit: commissionSplit || {
+                    buyerDiscount: 0,
+                    influencerCommission: 0,
+                    mediatorCommission: 5
+                }
             });
 
             return res.status(201).json({ success: true, data: newCode });
@@ -98,6 +108,14 @@ const promoCodeController = {
 
             const promo = await PromoCode.findOne({ code: code.toUpperCase(), status: 'active' });
             if (!promo) return res.status(404).json({ success: false, message: 'Código inválido ou inativo' });
+
+            // Block influencer coupons from direct wallet redemption
+            if (promo.isInfluencerCoupon) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Este é um cupom de influenciador e deve ser usado no momento da compra de um item.'
+                });
+            }
 
             // Check validity dates (com margem de 2 horas para fuso horário)
             const now = new Date();

@@ -9,15 +9,17 @@ const purchaseSchema = new mongoose.Schema({
   feeAmount: { type: Number, default: 0 },
   sellerReceives: { type: Number, required: true },
 
-  status: { type: String, enum: [
-    'initiated',
-    'escrow_reserved',
-    'shipped',
-    'delivered',
-    'completed',
-    'cancelled',
-    'disputed'
-  ], default: 'initiated', index: true },
+  status: {
+    type: String, enum: [
+      'initiated',
+      'escrow_reserved',
+      'shipped',
+      'delivered',
+      'completed',
+      'cancelled',
+      'disputed'
+    ], default: 'initiated', index: true
+  },
 
   escrowReservedAt: { type: Date },
   shippedAt: { type: Date },
@@ -36,10 +38,14 @@ const purchaseSchema = new mongoose.Schema({
 
   logs: [{
     at: { type: Date, default: Date.now },
-    level: { type: String, enum: ['info','warn','error'], default: 'info' },
+    level: { type: String, enum: ['info', 'warn', 'error'], default: 'info' },
     message: { type: String },
     data: { type: Object }
-  }]
+  }],
+  // Influencer Fields
+  influencerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  influencerCommission: { type: Number, default: 0 },
+  couponCode: { type: String, default: null }
 }, { timestamps: true });
 
 purchaseSchema.index({ buyerId: 1, itemId: 1, status: 1 });
