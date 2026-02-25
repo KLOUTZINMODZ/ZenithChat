@@ -246,6 +246,12 @@ const userSchema = new mongoose.Schema({
   bannedUntil: {
     type: Date,
     default: null // null = banimento permanente
+  },
+  role: {
+    type: String,
+    enum: ['user', 'admin', 'moderator', 'influencer'],
+    default: 'user',
+    index: true
   }
 }, {
   timestamps: true,

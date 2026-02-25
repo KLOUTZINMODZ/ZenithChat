@@ -34,6 +34,7 @@ function requireAdminKey(req, res, next) {
 
 // Admin Routes
 router.get('/', requireAdminKey, influencerController.getInfluencers);
+router.get('/search', requireAdminKey, influencerController.searchUsers);
 router.patch('/:userId', requireAdminKey, influencerController.updateInfluencer);
 router.get('/:userId/stats', requireAdminKey, influencerController.getInfluencerStats);
 

@@ -28,7 +28,7 @@ const influencerController = {
     updateInfluencer: async (req, res) => {
         try {
             const { userId } = req.params;
-            const { isInfluencer, influencerSettings } = req.body;
+            const { isInfluencer, influencerSettings, role } = req.body;
 
             if (!mongoose.Types.ObjectId.isValid(userId)) {
                 return res.status(400).json({ success: false, message: 'ID de usuário inválido' });
@@ -36,6 +36,30 @@ const influencerController = {
 
             const updates = {};
             if (isInfluencer !== undefined) updates.isInfluencer = !!isInfluencer;
+
+            // Handle role change if provided
+            if (role !== undefined) {
+                // If removing influencer status, check if role was influencer and revert to user
+                if (!isInfluencer && role === 'user') {
+                    updates.role = 'user';
+                } else if (isInfluencer && role === 'influencer') {
+                    updates.role = 'influencer';
+                } else {
+                    updates.role = role;
+                }
+            } else if (isInfluencer !== undefined) {
+                // Auto-sync role if not explicitly provided
+                if (isInfluencer) {
+                    updates.role = 'influencer';
+                } else {
+                    // Only revert to user if currently influencer
+                    const currentUser = await User.findById(userId).select('role');
+                    if (currentUser && currentUser.role === 'influencer') {
+                        updates.role = 'user';
+                    }
+                }
+            }
+
             if (influencerSettings) {
                 updates.influencerSettings = {
                     buyerDiscountDefault: Number(influencerSettings.buyerDiscountDefault) || 0,
@@ -44,17 +68,17 @@ const influencerController = {
                 };
 
                 // Validate 5% cap
-                const total = updates.influencerSettings.buyerDiscountDefault +
-                    updates.influencerSettings.influencerCommissionDefault +
-                    updates.influencerSettings.mediatorCommissionDefault;
+                const total = (updates.influencerSettings.buyerDiscountDefault || 0) +
+                    (updates.influencerSettings.influencerCommissionDefault || 0) +
+                    (updates.influencerSettings.mediatorCommissionDefault || 0);
 
-                if (total > 5.001) { // Floating point tolerance
+                if (total > 5.001) {
                     return res.status(400).json({ success: false, message: 'O total das taxas não pode exceder 5%' });
                 }
             }
 
             const user = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true })
-                .select('_id name email isInfluencer influencerSettings');
+                .select('_id name email isInfluencer influencerSettings role');
 
             if (!user) {
                 return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
@@ -64,6 +88,38 @@ const influencerController = {
         } catch (error) {
             logger.error('Error updating influencer:', error);
             return res.status(500).json({ success: false, message: 'Erro ao atualizar influenciador' });
+        }
+    },
+
+    /**
+     * Search users to be promoted to influencers
+     */
+    searchUsers: async (req, res) => {
+        try {
+            const { query } = req.query;
+            if (!query || query.length < 2) {
+                return res.json({ success: true, data: [] });
+            }
+
+            const users = await User.find({
+                $and: [
+                    { isInfluencer: { $ne: true } }, // Only non-influencers
+                    {
+                        $or: [
+                            { name: { $regex: query, $options: 'i' } },
+                            { email: { $regex: query, $options: 'i' } }
+                        ]
+                    }
+                ]
+            })
+                .select('_id name email avatar')
+                .limit(10)
+                .lean();
+
+            return res.json({ success: true, data: users });
+        } catch (error) {
+            logger.error('Error searching users for influencer promotion:', error);
+            return res.status(500).json({ success: false, message: 'Erro ao buscar usuários' });
         }
     },
 
