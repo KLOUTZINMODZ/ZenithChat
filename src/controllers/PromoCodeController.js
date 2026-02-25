@@ -114,22 +114,8 @@ const promoCodeController = {
                 return res.status(400).json({ success: false, message: 'Limite de usos atingido' });
             }
 
-            logger.error('DEBUG REDEEM ATTEMPT:', {
-                searchingUserId: userId.toString(),
-                promoCode: promo.code,
-                usersCount: promo.users.length,
-                users: promo.users.map(u => ({ id: u.userId?.toString(), cpf: u.cpfCnpj }))
-            });
-
-            // Check if user already redeemed (robust comparison)
-            const alreadyRedeemed = promo.users.some(u => {
-                const match = u.userId && u.userId.toString() === userId.toString();
-                if (match) logger.error('DEBUG MATCH FOUND BY USERID:', { uUserId: u.userId.toString(), currentUserId: userId.toString() });
-                return match;
-            });
-
-            if (alreadyRedeemed) {
-                logger.info('Duplicate redemption attempt by userId', { userId, code: promo.code });
+            // Check if user already redeemed
+            if (promo.users.some(u => u.userId.toString() === userId.toString())) {
                 return res.status(400).json({ success: false, message: 'Você já resgatou este código' });
             }
 
@@ -150,13 +136,6 @@ const promoCodeController = {
             const digits = String(targetCpf).replace(/\D/g, '');
             if (digits.length !== 11) {
                 return res.status(400).json({ success: false, message: 'CPF inválido' });
-            }
-
-            // Check if this CPF has already redeemed this code (even on different accounts)
-            const cpfAlreadyRedeemed = promo.users.some(u => u.cpfCnpj === digits);
-            if (cpfAlreadyRedeemed) {
-                logger.info('Duplicate redemption attempt by CPF', { userId, code: promo.code, cpf: digits });
-                return res.status(400).json({ success: false, message: 'Este CPF já foi utilizado para resgatar este código' });
             }
 
             // Vincular CPF se ainda não vinculado
@@ -221,9 +200,9 @@ const promoCodeController = {
                 const tx = await WalletTransaction.create([{
                     userId,
                     type: 'deposit',
-                    amountGross: p.value,
-                    amountNet: p.value,
-                    status: 'completed',
+                    amountGross: creditAmount,
+                    amountNet: creditAmount,
+                    status: 'credited',
                     description: `Resgate de cupom: ${p.code}`,
                     metadata: {
                         cupomreward: true,
