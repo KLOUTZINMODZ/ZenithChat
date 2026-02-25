@@ -135,7 +135,7 @@ const promoCodeController = {
             // Normalizar CPF
             const digits = String(targetCpf).replace(/\D/g, '');
             if (digits.length !== 11) {
-                return res.status(400).json({ success: false, message: 'CPF inválido' });
+                return res.status(400).json({ success: false, message: 'CPF inválid' });
             }
 
             // Vincular CPF se ainda não vinculado
@@ -203,11 +203,8 @@ const promoCodeController = {
                     amountGross: creditAmount,
                     amountNet: creditAmount,
                     status: 'credited',
-                    description: `Resgate de cupom: ${p.code}`,
-                    metadata: {
-                        cupomreward: true,
-                        code: p.code
-                    },
+                    description: `Resgate de código: ${p.code}`,
+                    metadata: { cupomreward: true, code: p.code },
                     logs: [{ level: 'info', message: 'Promo code redeemed', data: { code: p.code, value: creditAmount } }]
                 }], { session });
 

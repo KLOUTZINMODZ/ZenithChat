@@ -9,6 +9,8 @@ const walletTransactionSchema = new mongoose.Schema({
   feePercent: { type: Number, default: 0 },
   feeAmount: { type: Number, default: 0 },
   amountNet: { type: Number, required: true },
+  description: { type: String },
+  metadata: { type: Object },
 
   currency: { type: String, default: 'BRL' },
 
@@ -46,8 +48,7 @@ const walletTransactionSchema = new mongoose.Schema({
     level: { type: String, enum: ['info', 'warn', 'error'], default: 'info' },
     message: { type: String },
     data: { type: Object }
-  }],
-  metadata: { type: Object }
+  }]
 }, { timestamps: true });
 
 
