@@ -24,8 +24,8 @@ const walletTransactionSchema = new mongoose.Schema({
   withdrawPixKeyType: { type: String },
 
 
-  status: { 
-    type: String, 
+  status: {
+    type: String,
     enum: [
       'pending',
       'paid',
@@ -46,7 +46,8 @@ const walletTransactionSchema = new mongoose.Schema({
     level: { type: String, enum: ['info', 'warn', 'error'], default: 'info' },
     message: { type: String },
     data: { type: Object }
-  }]
+  }],
+  metadata: { type: Object }
 }, { timestamps: true });
 
 

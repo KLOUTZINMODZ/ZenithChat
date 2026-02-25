@@ -200,10 +200,14 @@ const promoCodeController = {
                 const tx = await WalletTransaction.create([{
                     userId,
                     type: 'deposit',
-                    amountGross: creditAmount,
-                    amountNet: creditAmount,
-                    status: 'credited',
-                    description: `Resgate de código: ${p.code}`,
+                    amountGross: p.value,
+                    amountNet: p.value,
+                    status: 'completed',
+                    description: `Resgate de cupom: ${p.code}`,
+                    metadata: {
+                        cupomreward: true,
+                        code: p.code
+                    },
                     logs: [{ level: 'info', message: 'Promo code redeemed', data: { code: p.code, value: creditAmount } }]
                 }], { session });
 
