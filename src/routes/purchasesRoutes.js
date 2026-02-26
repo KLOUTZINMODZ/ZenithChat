@@ -584,53 +584,70 @@ router.post('/initiate', auth, async (req, res) => {
     if (!isValidEmail(email)) return res.status(400).json({ success: false, message: 'E-mail inválido' });
     if (getAge(birthDate) < 18) return res.status(400).json({ success: false, message: 'Idade mínima para compra é 18 anos' });
 
+    const buyer = await User.findById(buyerId);
+    if (!buyer) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+
     // Influencer Coupon Handling
     let influencerId = null;
     let influencerCommission = 0;
     let buyerDiscount = 0;
     let mediatorCommissionPercent = 5;
     let couponCodeApplied = null;
+    let renewInfluencer = false;
 
+    // First, check if a new coupon is provided
+    let newPromoCode = null;
     if (req.body.couponCode) {
       const PromoCode = require('../models/PromoCode');
-      const coupon = await PromoCode.findOne({
+      newPromoCode = await PromoCode.findOne({
         code: String(req.body.couponCode).toUpperCase(),
-        status: 'active'
+        status: 'active',
+        isInfluencerCoupon: true
       });
+    }
 
-      if (coupon && coupon.isInfluencerCoupon) {
+    // Try to apply new coupon or use the active one
+    let targetInfluencerCode = null;
+    let targetInfluencerId = null;
+
+    if (newPromoCode) {
+      targetInfluencerCode = newPromoCode.code;
+      targetInfluencerId = newPromoCode.influencerId;
+      renewInfluencer = true;
+    } else if (buyer.hasActiveInfluencer && buyer.hasActiveInfluencer()) {
+      targetInfluencerCode = buyer.activeInfluencer.couponCode;
+      targetInfluencerId = buyer.activeInfluencer.influencerId;
+    }
+
+    if (targetInfluencerCode && targetInfluencerId) {
+      const PromoCode = require('../models/PromoCode');
+      const activeCoupon = newPromoCode || await PromoCode.findOne({ code: targetInfluencerCode, status: 'active' });
+
+      if (activeCoupon && activeCoupon.isInfluencerCoupon) {
         // VALIDATIONS
         // 1. Influencer cannot use their own coupon
-        if (coupon.influencerId && coupon.influencerId.toString() === buyerId.toString()) {
+        if (activeCoupon.influencerId && activeCoupon.influencerId.toString() === buyerId.toString()) {
           return res.status(400).json({ success: false, message: 'Você não pode usar seu próprio cupom de influenciador.' });
         }
 
-        // 2. Only one influencer coupon per account
-        const hasUsedInfluencerCoupon = await Purchase.findOne({
-          buyerId,
-          influencerId: { $ne: null },
-          status: { $nin: ['cancelled'] }
-        });
-        if (hasUsedInfluencerCoupon) {
-          return res.status(400).json({ success: false, message: 'Você já utilizou um cupom de influenciador nesta conta.' });
-        }
-
-        // 3. User can only use the coupon once (PromoCode handles users array)
-        const userRedeemed = coupon.users.find(u => u.userId.toString() === buyerId.toString());
-        if (userRedeemed) {
-          return res.status(400).json({ success: false, message: 'Você já utilizou este cupom.' });
-        }
-
         // Apply split from coupon
-        const { commissionSplit } = coupon;
+        const { commissionSplit } = activeCoupon;
         buyerDiscount = round2((price * (commissionSplit.buyerDiscount || 0)) / 100);
         influencerCommission = round2((price * (commissionSplit.influencerCommission || 0)) / 100);
         mediatorCommissionPercent = commissionSplit.mediatorCommission || 5;
-        influencerId = coupon.influencerId;
-        couponCodeApplied = coupon.code;
+        influencerId = activeCoupon.influencerId;
+        couponCodeApplied = activeCoupon.code;
 
-        // Mark as used for the user (will be finalized in transaction)
-        // Actually, we'll do the save inside the runTx to be safe
+        // Setup renewal
+        if (renewInfluencer) {
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 14); // 14 days validity
+          buyer.activeInfluencer = {
+            influencerId: activeCoupon.influencerId,
+            couponCode: activeCoupon.code,
+            expiresAt: expires
+          };
+        }
       }
     }
 
@@ -659,9 +676,6 @@ router.post('/initiate', auth, async (req, res) => {
     if (!Number.isFinite(priceUsed) || priceUsed <= 0) {
       return res.status(400).json({ success: false, message: 'Preço inválido para a compra' });
     }
-
-    const buyer = await User.findById(buyerId);
-    if (!buyer) return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
 
     const finalPriceForBuyer = round2(Number(priceUsed) - buyerDiscount);
     if (buyer.walletBalance < finalPriceForBuyer) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });

@@ -255,6 +255,17 @@ exports.completeGoogleRegistration = async (req, res) => {
       createdAt: new Date()
     };
 
+    // Set activeInfluencer if referred via coupon
+    if (promo && promo.influencerId) {
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 14); // 14 days validity
+      userData.activeInfluencer = {
+        influencerId: promo.influencerId,
+        couponCode: influencerCoupon.toUpperCase(),
+        expiresAt: expires
+      };
+    }
+
     // Se senha foi fornecida, adicionar hash
     let hashedPassword = null;
     if (password && password.trim().length >= 6) {

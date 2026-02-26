@@ -111,6 +111,21 @@ const userSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  activeInfluencer: {
+    influencerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    couponCode: {
+      type: String,
+      default: null
+    },
+    expiresAt: {
+      type: Date,
+      default: null
+    }
+  },
   influencerSettings: {
     buyerDiscountDefault: { type: Number, default: 0 },
     influencerCommissionDefault: { type: Number, default: 0 },
@@ -319,6 +334,13 @@ userSchema.methods.setOnlineStatus = function (isOnline) {
     this.lastSeen = new Date();
   }
   return this.save();
+};
+
+userSchema.methods.hasActiveInfluencer = function () {
+  return this.activeInfluencer &&
+    this.activeInfluencer.influencerId &&
+    this.activeInfluencer.expiresAt &&
+    new Date(this.activeInfluencer.expiresAt) > new Date();
 };
 
 // Achievement methods
