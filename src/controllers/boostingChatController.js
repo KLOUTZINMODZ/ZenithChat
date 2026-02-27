@@ -1062,7 +1062,7 @@ class BoostingChatController {
           });
         }
 
-        // 2. Transferir 95% ao booster (documento já garantido fora da transação)
+        // 2. Transferir 90% ao booster (documento já garantido fora da transação)
         const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
         boosterUser.walletBalance = boosterBalanceAfter;
@@ -1087,7 +1087,7 @@ class BoostingChatController {
             feeAmount: Number(feeAmount),
             boosterReceives: Number(boosterReceives),
             // Adicionar campos extras para compatibilidade com marketplace
-            feePercent: 0.05,
+            feePercent: 0.10,
             type: 'boosting_service'
           }
         }], { session });
@@ -1130,7 +1130,7 @@ class BoostingChatController {
           }], { session });
         } catch (_) { }
 
-        // 3. Transferir taxa ao mediador (5%)
+        // 3. Transferir taxa ao mediador (10%)
         if (feeAmount > 0) {
           // Buscar mediador apenas por email (igual walletRoutes.js)
           const mediatorEmail = process.env.MEDIATOR_EMAIL || 'mediador@zenith.com';

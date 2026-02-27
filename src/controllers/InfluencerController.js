@@ -78,8 +78,8 @@ const influencerController = {
                     (updates.influencerSettings.influencerCommissionDefault || 0) +
                     (updates.influencerSettings.mediatorCommissionDefault || 0);
 
-                if (total > 5.001) {
-                    return res.status(400).json({ success: false, message: 'O total das taxas não pode exceder 5%' });
+                if (total > 15.001) {
+                    return res.status(400).json({ success: false, message: 'O total das taxas não pode exceder 15%' });
                 }
             }
 
@@ -202,8 +202,8 @@ const influencerController = {
 
             // Validate commissions
             const total = (Number(discount) || 0) + (Number(commission) || 0) + (Number(mediatorCommission) || 0);
-            if (total > 5.001) {
-                return res.status(400).json({ success: false, message: 'O total das taxas não pode exceder 5%' });
+            if (total > 15.001) {
+                return res.status(400).json({ success: false, message: 'O total das taxas não pode exceder 15%' });
             }
 
             const promoCode = new PromoCode({
