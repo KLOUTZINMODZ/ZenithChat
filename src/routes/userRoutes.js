@@ -93,6 +93,16 @@ router.post('/me/influencer', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Você não pode usar seu próprio cupom.' });
     }
 
+    // Check if current coupon is still valid
+    const user = await User.findById(req.user._id);
+    if (user.hasActiveInfluencer && user.hasActiveInfluencer()) {
+      const remainingDays = Math.ceil((new Date(user.activeInfluencer.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      return res.status(400).json({
+        success: false,
+        message: `Você já possui um cupom ativo. Você poderá trocar ou renovar em ${remainingDays} dia(s).`
+      });
+    }
+
     const expires = new Date();
     expires.setDate(expires.getDate() + 14);
 
