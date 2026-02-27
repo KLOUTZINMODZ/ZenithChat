@@ -82,12 +82,12 @@ async function expireStalePendingWithdrawsForUser(app, userId) {
     }).limit(50);
     for (const tx of stale) {
 
-      await applyLedgerCreditRefund(app, tx.userId, tx).catch(() => {});
+      await applyLedgerCreditRefund(app, tx.userId, tx).catch(() => { });
       tx.status = 'failed';
       tx.logs.push({ level: 'error', message: 'Withdraw expired (previous day)', at: new Date().toISOString() });
       await tx.save();
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 
@@ -102,7 +102,7 @@ async function runWithTransactionOrFallback(executor) {
     return res;
   } catch (err) {
     if (session) {
-      try { await session.abortTransaction(); } catch (_) {}
+      try { await session.abortTransaction(); } catch (_) { }
       session.endSession();
     }
 
@@ -295,25 +295,27 @@ async function sendBalanceUpdateEvent(app, userId, payload) {
         data: payload
       });
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
-async function sendEscrowUpdateEvent(app, userId, escrowBalance, balance) {
+async function sendEscrowUpdateEvent(app, userId, escrowBalance, balance, cashbackBalance) {
   try {
     const notificationService = app?.locals?.notificationService;
     if (notificationService) {
       const normalizedBalance = typeof balance === 'number' ? round2(balance) : undefined;
+      const normalizedCashback = typeof cashbackBalance === 'number' ? round2(cashbackBalance) : undefined;
       notificationService.sendToUser(String(userId), {
         type: 'wallet:escrow_updated',
         data: {
           userId: String(userId),
           escrowBalance: round2(escrowBalance),
           balance: normalizedBalance,
+          cashbackBalance: normalizedCashback,
           timestamp: new Date().toISOString()
         }
       });
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 async function calculateAndSendEscrowUpdate(app, userId) {
@@ -384,8 +386,9 @@ async function calculateAndSendEscrowUpdate(app, userId) {
     }
 
     const balance = userDoc?.walletBalance || 0;
+    const cashbackBalance = userDoc?.cashbackBalance || 0;
 
-    await sendEscrowUpdateEvent(app, userId, totalEscrow, balance);
+    await sendEscrowUpdateEvent(app, userId, totalEscrow, balance, cashbackBalance);
 
     return totalEscrow;
   } catch (error) {
@@ -398,20 +401,20 @@ async function sendWalletNotification(app, userId, notification) {
   try {
     const notificationService = app?.locals?.notificationService;
     if (notificationService) {
-      notificationService.sendNotification(String(userId), notification).catch(() => {});
+      notificationService.sendNotification(String(userId), notification).catch(() => { });
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function afterResponse(res, fn) {
   try {
 
     res.on('finish', () => {
-      try { fn(); } catch (_) {}
+      try { fn(); } catch (_) { }
     });
   } catch (_) {
 
-    try { setTimeout(fn, 0); } catch (__) {}
+    try { setTimeout(fn, 0); } catch (__) { }
   }
 }
 
@@ -451,7 +454,7 @@ async function reconcilePendingWithdrawsForUser(app, userId, { limit = 10, timeo
             if (!user.pixKeyLocked) {
               user.pixKeyLocked = true;
               if (!user.pixKeyFirstWithdrawAt) user.pixKeyFirstWithdrawAt = new Date();
-              try { await user.save(); } catch (_) {}
+              try { await user.save(); } catch (_) { }
             }
           }
           await tx.save();
@@ -476,7 +479,7 @@ async function reconcilePendingWithdrawsForUser(app, userId, { limit = 10, timeo
         result.unchanged++;
       }
     }
-  } catch (_) {}
+  } catch (_) { }
   return result;
 }
 
@@ -500,11 +503,11 @@ async function handleWithdrawTimeoutsForUser(app, userId) {
         try {
           const t = await AsaasService.getTransfer(tx.asaasTransferId);
           tStatus = String(t?.status || '').toUpperCase();
-        } catch (_) {}
+        } catch (_) { }
       }
 
 
-      if (['DONE','CONFIRMED','COMPLETED','PAID'].some(s => tStatus.includes(s))) {
+      if (['DONE', 'CONFIRMED', 'COMPLETED', 'PAID'].some(s => tStatus.includes(s))) {
         if (tx.status !== 'withdraw_completed') {
           tx.status = 'withdraw_completed';
           tx.logs.push({ level: 'info', message: 'Withdraw finalized by timeout check (completed at provider)' });
@@ -534,7 +537,7 @@ async function handleWithdrawTimeoutsForUser(app, userId) {
         });
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 
@@ -567,7 +570,7 @@ router.post('/deposits/initiate', auth, async (req, res) => {
         try {
           user.cpfCnpj = cpfCnpj;
           await user.save();
-        } catch (_) {}
+        } catch (_) { }
       }
     }
 
@@ -705,7 +708,7 @@ router.get('/deposits/qr', auth, async (req, res) => {
       const qr = await AsaasService.getPixQrCodeWithRetry(paymentId, { attempts: 3, delayMs: 800, timeoutMs: 6000 });
 
       if (tx) {
-        try { tx.logs.push({ level: 'info', message: 'Pix QR Code fetched' }); await tx.save(); } catch (_) {}
+        try { tx.logs.push({ level: 'info', message: 'Pix QR Code fetched' }); await tx.save(); } catch (_) { }
       }
       return res.json({
         success: true,
@@ -768,7 +771,7 @@ router.post('/pix-key', auth, async (req, res) => {
     }
 
     const t = normalizePixType(pixKeyType);
-    if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf','cnpj'] });
+    if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf', 'cnpj'] });
     const digits = normalizePixKeyByType(t, pixKey);
     if (t === 'CPF' && digits.length !== 11) return res.status(400).json({ success: false, message: 'Chave PIX CPF inválida. Informe 11 dígitos.', error: 'INVALID_PIX_KEY' });
     if (t === 'CNPJ' && digits.length !== 14) return res.status(400).json({ success: false, message: 'Chave PIX CNPJ inválida. Informe 14 dígitos.', error: 'INVALID_PIX_KEY' });
@@ -832,7 +835,7 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
                 await byExt.save();
                 tx = byExt;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
 
 
@@ -847,7 +850,7 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
                   await byId.save();
                   tx = byId;
                 }
-              } catch (_) {}
+              } catch (_) { }
             }
           }
 
@@ -870,9 +873,9 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
                 await chosen.save();
                 tx = chosen;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (!tx) {
@@ -929,7 +932,7 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
           if (!user.pixKeyLocked) {
             user.pixKeyLocked = true;
             if (!user.pixKeyFirstWithdrawAt) user.pixKeyFirstWithdrawAt = new Date();
-            try { await user.save(); } catch (_) {}
+            try { await user.save(); } catch (_) { }
           }
         }
 
@@ -959,7 +962,7 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
               data: { transactionId: fresh._id, amount: fresh.amountNet }
             });
           }
-        } catch (_) {}
+        } catch (_) { }
 
         const u2 = await User.findById(userId);
         return res.json({ success: true, data: { status: fresh.status, balance: round2(u2?.walletBalance || 0) } });
@@ -977,7 +980,7 @@ router.post('/withdraw/reconcile', auth, async (req, res) => {
         if (refunded?.applied) {
           tx.logs.push({ level: 'warn', message: 'Wallet refunded', data: { reason: 'manual_reconcile_failed' } });
         }
-      } catch (_) {}
+      } catch (_) { }
       tx.status = 'failed';
       tx.logs.push({ level: 'error', message: 'Withdraw failed via manual reconcile', data: { asaasTransferId, status } });
       await tx.save();
@@ -1003,8 +1006,8 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
       || hdr['access_token']
       || hdr['access-token']
       || (typeof hdr['authorization'] === 'string' && hdr['authorization'].startsWith('Bearer ')
-          ? hdr['authorization'].slice(7)
-          : undefined)
+        ? hdr['authorization'].slice(7)
+        : undefined)
       || req.query.token;
     const expected = process.env.ASAAS_WEBHOOK_TOKEN;
     if (expected && providedToken !== expected) {
@@ -1034,7 +1037,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
         try {
           const fetched = await AsaasService.getPayment(paymentId);
           if (fetched && typeof fetched === 'object') payment = { ...fetched, id: fetched.id || paymentId };
-        } catch (_) {}
+        } catch (_) { }
       }
 
       const billingType = String(payment.billingType || '').toUpperCase();
@@ -1061,7 +1064,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
               await byExt.save();
               tx = byExt;
             }
-          } catch (_) {}
+          } catch (_) { }
         }
         if (!tx && paymentId) {
           // Fallback: if we fetched details above and found tx id in description
@@ -1076,7 +1079,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
                 await byId.save();
                 tx = byId;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
         }
       }
@@ -1087,7 +1090,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
 
       // Determine if payment is final (received/confirmed)
       const pStatus = String(payment.status || '').toUpperCase();
-      const isFinal = (evUpper === 'PAYMENT_RECEIVED' || evUpper === 'PAYMENT_CONFIRMED' || ['RECEIVED','CONFIRMED','RECEIVED_IN_CASH'].includes(pStatus));
+      const isFinal = (evUpper === 'PAYMENT_RECEIVED' || evUpper === 'PAYMENT_CONFIRMED' || ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(pStatus));
 
       if (!isFinal) {
         // Non-final events: just log and return, do not change status
@@ -1176,7 +1179,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
             }
           });
         }
-      } catch (_) {}
+      } catch (_) { }
 
       return res.json({ received: true });
     }
@@ -1288,7 +1291,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
           if (!user.pixKeyLocked) {
             user.pixKeyLocked = true;
             if (!user.pixKeyFirstWithdrawAt) user.pixKeyFirstWithdrawAt = new Date();
-            try { await user.save(); } catch (_) {}
+            try { await user.save(); } catch (_) { }
           }
         }
 
@@ -1319,7 +1322,7 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
               data: { transactionId: txLocked._id, amount: txLocked.amountNet }
             });
           }
-        } catch (_) {}
+        } catch (_) { }
 
         return res.json({ received: true });
       } else if (tStatus.includes('FAILED') || tStatus.includes('CANCELLED') || tStatus.includes('REFUSED')) {
@@ -1361,9 +1364,16 @@ router.post('/webhook/asaas', express.json({ type: '*/*' }), async (req, res) =>
 router.get('/balance', auth, async (req, res) => {
   try {
 
-    handleWithdrawTimeoutsForUser(req.app, req.user._id).catch(() => {});
+    handleWithdrawTimeoutsForUser(req.app, req.user._id).catch(() => { });
     const user = await User.findById(req.user._id);
-    return res.json({ success: true, data: { balance: round2(user.walletBalance || 0), currency: 'BRL' } });
+    return res.json({
+      success: true,
+      data: {
+        balance: round2(user.walletBalance || 0),
+        cashbackBalance: round2(user.cashbackBalance || 0),
+        currency: 'BRL'
+      }
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Erro ao obter saldo' });
   }
@@ -1373,7 +1383,7 @@ router.get('/balance', auth, async (req, res) => {
 router.get('/transactions', auth, async (req, res) => {
   try {
 
-    handleWithdrawTimeoutsForUser(req.app, req.user._id).catch(() => {});
+    handleWithdrawTimeoutsForUser(req.app, req.user._id).catch(() => { });
     const { page = 1, limit = 20 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [items, total] = await Promise.all([
@@ -1394,7 +1404,7 @@ router.post('/withdraw', auth, async (req, res) => {
     const idemHeader = req.headers['idempotency-key'] || req.headers['x-idempotency-key'];
     const idempotencyKey = String(req.body?.idempotencyKey || idemHeader || '').trim() || undefined;
     const amountNum = Number(amount);
-    
+
     // 🛡️ VALIDAÇÃO 1: Verificar bloqueio por tentativas falhas
     try {
       const oneHourAgo = new Date(Date.now() - BLOCK_DURATION_MS);
@@ -1405,7 +1415,7 @@ router.post('/withdraw', auth, async (req, res) => {
         createdAt: { $gte: oneHourAgo },
         'logs.message': { $in: ['Withdraw transfer create failed', 'Wallet reserve failed'] }
       });
-      
+
       if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
         // Calcular tempo restante
         const oldestFailed = await WalletTransaction.findOne({
@@ -1414,17 +1424,17 @@ router.post('/withdraw', auth, async (req, res) => {
           status: 'failed',
           createdAt: { $gte: oneHourAgo }
         }).sort({ createdAt: 1 }).select('createdAt');
-        
+
         const blockUntil = new Date(oldestFailed.createdAt.getTime() + BLOCK_DURATION_MS);
         const remainingMs = blockUntil.getTime() - Date.now();
         const remainingMinutes = Math.ceil(remainingMs / 60000);
-        
-        logger.warn('[WITHDRAW] User blocked due to failed attempts', { 
-          userId: user._id.toString(), 
-          failedAttempts, 
-          remainingMinutes 
+
+        logger.warn('[WITHDRAW] User blocked due to failed attempts', {
+          userId: user._id.toString(),
+          failedAttempts,
+          remainingMinutes
         });
-        
+
         return res.status(429).json({
           success: false,
           message: `Você excedeu o limite de ${MAX_FAILED_ATTEMPTS} tentativas falhas. Tente novamente em ${remainingMinutes} minuto${remainingMinutes > 1 ? 's' : ''}.`,
@@ -1440,25 +1450,25 @@ router.post('/withdraw', auth, async (req, res) => {
     } catch (blockCheckErr) {
       logger.error('[WITHDRAW] Error checking failed attempts', { error: blockCheckErr.message });
     }
-    
+
     // 🛡️ VALIDAÇÃO 2: Valor mínimo (deve ser maior que a taxa)
     if (!amountNum || amountNum <= WITHDRAW_FEE) {
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: `Valor inválido. O valor mínimo de saque é R$ ${(WITHDRAW_FEE + 0.01).toFixed(2)} (taxa de R$ ${WITHDRAW_FEE.toFixed(2)} + valor líquido)`,
         error: 'INVALID_AMOUNT',
         data: { minAmount: WITHDRAW_FEE + 0.01, withdrawFee: WITHDRAW_FEE }
       });
     }
-    
+
     // 🛡️ VALIDAÇÃO 3: Limite máximo de saque
     if (amountNum > MAX_WITHDRAW_AMOUNT) {
-      logger.warn('[WITHDRAW] Amount exceeds maximum limit', { 
-        userId: user._id.toString(), 
-        requestedAmount: amountNum, 
-        maxAmount: MAX_WITHDRAW_AMOUNT 
+      logger.warn('[WITHDRAW] Amount exceeds maximum limit', {
+        userId: user._id.toString(),
+        requestedAmount: amountNum,
+        maxAmount: MAX_WITHDRAW_AMOUNT
       });
-      
+
       return res.status(400).json({
         success: false,
         message: `O valor máximo por saque é de R$ ${MAX_WITHDRAW_AMOUNT.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
@@ -1494,12 +1504,12 @@ router.post('/withdraw', auth, async (req, res) => {
       normalizedPixKeyType = boundType;
       digits = boundDigits;
       if (normalizedPixKeyType === 'PHONE') {
-        return res.status(400).json({ success: false, message: 'Chave PIX por Telefone não é suportada. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf','cnpj'] });
+        return res.status(400).json({ success: false, message: 'Chave PIX por Telefone não é suportada. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf', 'cnpj'] });
       }
     } else {
 
       const t = normalizePixType(pixKeyType);
-      if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf','cnpj'] });
+      if (!t) return res.status(400).json({ success: false, message: 'Tipo de chave PIX não permitido. Utilize CPF ou CNPJ.', error: 'UNSUPPORTED_PIX_KEY_TYPE', allowedTypes: ['cpf', 'cnpj'] });
       normalizedPixKeyType = t;
       digits = normalizePixKeyByType(t, pixKey);
       if (t === 'CPF' && digits.length !== 11) return res.status(400).json({ success: false, message: 'Chave PIX CPF inválida. Informe 11 dígitos.', error: 'INVALID_PIX_KEY' });
@@ -1522,8 +1532,8 @@ router.post('/withdraw', auth, async (req, res) => {
 
 
 
-    try { await reconcilePendingWithdrawsForUser(req.app, user._id, { limit: 25, timeoutMs: 4000 }); } catch (_) {}
-    try { await expireStalePendingWithdrawsForUser(req.app, user._id); } catch (_) {}
+    try { await reconcilePendingWithdrawsForUser(req.app, user._id, { limit: 25, timeoutMs: 4000 }); } catch (_) { }
+    try { await expireStalePendingWithdrawsForUser(req.app, user._id); } catch (_) { }
 
 
     try {
@@ -1542,7 +1552,7 @@ router.post('/withdraw', auth, async (req, res) => {
           data: { todayCount, nextResetAt: startOfTomorrow().toISOString() }
         });
       }
-    } catch (_) {}
+    } catch (_) { }
 
 
     if (idempotencyKey) {
@@ -1560,16 +1570,16 @@ router.post('/withdraw', auth, async (req, res) => {
             message: 'Operação idempotente: saque já existente retornado.'
           });
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // Calcular valores com taxa de saque
     const feeAmount = round2(WITHDRAW_FEE);
     const amountNet = round2(amountNum - feeAmount);
-    
+
     if (amountNet <= 0) {
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: `Valor insuficiente após taxa de saque. Taxa: R$ ${feeAmount.toFixed(2)}`,
         error: 'INSUFFICIENT_AFTER_FEE',
         data: { withdrawFee: feeAmount }
@@ -1600,7 +1610,7 @@ router.post('/withdraw', auth, async (req, res) => {
         tx.status = 'failed';
         tx.logs.push({ level: 'error', message: 'Wallet reserve failed', data: { amount: amountNum, reason: e.message } });
         await tx.save();
-      } catch (_) {}
+      } catch (_) { }
       return res.status(400).json({ success: false, message: 'Saldo insuficiente', error: 'INSUFFICIENT_BALANCE' });
     }
     const newBalance = round2(reserveRes?.balance ?? user.walletBalance ?? 0);
@@ -1628,9 +1638,9 @@ router.post('/withdraw', auth, async (req, res) => {
             operationId: `withdraw_fee:${tx._id.toString()}`,
             balanceBefore: medBefore,
             balanceAfter: medAfter,
-            metadata: { 
-              source: 'withdraw', 
-              transactionId: tx._id.toString(), 
+            metadata: {
+              source: 'withdraw',
+              transactionId: tx._id.toString(),
               userId: user._id.toString(),
               withdrawAmount: amountNum,
               feeAmount: feeAmount,
@@ -1653,9 +1663,9 @@ router.post('/withdraw', auth, async (req, res) => {
                 transactionId: tx._id,
                 asaasTransferId: null
               },
-              metadata: { 
-                withdrawAmount: amountNum, 
-                feeAmount: feeAmount, 
+              metadata: {
+                withdrawAmount: amountNum,
+                feeAmount: feeAmount,
                 netAmount: amountNet,
                 userId: user._id.toString()
               },
@@ -1699,7 +1709,7 @@ router.post('/withdraw', auth, async (req, res) => {
       }, { attempts: 1, delayMs: 800, timeoutMs: 6000 });
 
       tx.externalReference = externalReference;
-      try { await tx.save(); } catch (_) {}
+      try { await tx.save(); } catch (_) { }
     } catch (err) {
       const status = err?.response?.status || 500;
       const asaasData = err?.response?.data || {};
@@ -1713,7 +1723,7 @@ router.post('/withdraw', auth, async (req, res) => {
           tx.status = 'failed';
           tx.logs.push({ level: 'error', message: 'Withdraw transfer create timeout', data: { message: err.message } });
           await tx.save();
-        } catch (_) {}
+        } catch (_) { }
         return res.status(504).json({
           success: false,
           message: 'Tempo esgotado ao comunicar com o provedor de pagamentos. Tente novamente em instantes.',
@@ -1727,7 +1737,7 @@ router.post('/withdraw', auth, async (req, res) => {
         tx.status = 'failed';
         tx.logs.push({ level: 'error', message: 'Withdraw transfer create failed', data: { code, description } });
         await tx.save();
-      } catch (_) {}
+      } catch (_) { }
 
 
       try {
@@ -1744,7 +1754,7 @@ router.post('/withdraw', auth, async (req, res) => {
             });
           });
         }
-      } catch (_) {}
+      } catch (_) { }
 
 
       let clientMessage = 'Erro ao solicitar saque.';
@@ -1813,7 +1823,7 @@ router.post('/withdraw', auth, async (req, res) => {
             if (!u.pixKeyFirstWithdrawAt) u.pixKeyFirstWithdrawAt = new Date();
             await u.save();
           }
-        } catch (_) {}
+        } catch (_) { }
 
         return res.json({ success: true, data: { transactionId: tx._id, transferId: transfer.id, transferStatus, newBalance: user.walletBalance } });
       } else if (transferStatus.includes('FAILED') || transferStatus.includes('CANCELLED') || transferStatus.includes('REFUSED')) {
@@ -1825,7 +1835,7 @@ router.post('/withdraw', auth, async (req, res) => {
           if (refunded?.applied) {
             tx.logs.push({ level: 'warn', message: 'Wallet refunded', data: { reason: 'immediate_failed' }, at: new Date().toISOString() });
           }
-        } catch (_) {}
+        } catch (_) { }
         await tx.save();
         return res.json({ success: true, data: { transactionId: tx._id, transferId: transfer.id, transferStatus, newBalance: user.walletBalance } });
       } else {
@@ -1850,7 +1860,7 @@ router.get('/withdraw/status', auth, async (req, res) => {
   try {
     const userId = req.user._id;
     const oneHourAgo = new Date(Date.now() - BLOCK_DURATION_MS);
-    
+
     // Contar tentativas falhas na última hora
     const failedAttempts = await WalletTransaction.countDocuments({
       userId,
@@ -1859,7 +1869,7 @@ router.get('/withdraw/status', auth, async (req, res) => {
       createdAt: { $gte: oneHourAgo },
       'logs.message': { $in: ['Withdraw transfer create failed', 'Wallet reserve failed'] }
     });
-    
+
     // Se não está bloqueado
     if (failedAttempts < MAX_FAILED_ATTEMPTS) {
       return res.json({
@@ -1872,7 +1882,7 @@ router.get('/withdraw/status', auth, async (req, res) => {
         }
       });
     }
-    
+
     // Está bloqueado: calcular tempo restante
     const oldestFailed = await WalletTransaction.findOne({
       userId,
@@ -1880,7 +1890,7 @@ router.get('/withdraw/status', auth, async (req, res) => {
       status: 'failed',
       createdAt: { $gte: oneHourAgo }
     }).sort({ createdAt: 1 }).select('createdAt');
-    
+
     if (!oldestFailed) {
       // Não deveria acontecer, mas retorna desbloqueado por segurança
       return res.json({
@@ -1888,11 +1898,11 @@ router.get('/withdraw/status', auth, async (req, res) => {
         data: { blocked: false, failedAttempts: 0 }
       });
     }
-    
+
     const blockUntil = new Date(oldestFailed.createdAt.getTime() + BLOCK_DURATION_MS);
     const remainingMs = blockUntil.getTime() - Date.now();
     const remainingMinutes = Math.ceil(remainingMs / 60000);
-    
+
     // Se o bloqueio já expirou
     if (remainingMs <= 0) {
       return res.json({
@@ -1900,7 +1910,7 @@ router.get('/withdraw/status', auth, async (req, res) => {
         data: { blocked: false, failedAttempts: 0 }
       });
     }
-    
+
     return res.json({
       success: true,
       data: {
@@ -1913,10 +1923,10 @@ router.get('/withdraw/status', auth, async (req, res) => {
     });
   } catch (error) {
     logger.error('[WITHDRAW] Error checking withdraw status', { error: error.message });
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Erro ao verificar status de saque', 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao verificar status de saque',
+      error: error.message
     });
   }
 });
@@ -1926,7 +1936,7 @@ router.post('/withdraw/sync', auth, async (req, res) => {
     const userId = req.user._id;
     const recon = await reconcilePendingWithdrawsForUser(req.app, userId, { limit: 50, timeoutMs: 4500 });
 
-    handleWithdrawTimeoutsForUser(req.app, userId).catch(() => {});
+    handleWithdrawTimeoutsForUser(req.app, userId).catch(() => { });
 
     await expireStalePendingWithdrawsForUser(req.app, userId);
     const pendingCount = await WalletTransaction.countDocuments({
@@ -1953,36 +1963,36 @@ router.get('/escrow', auth, async (req, res) => {
   try {
     const Purchase = require('../models/Purchase');
     const AcceptedProposal = require('../models/AcceptedProposal');
-    
+
     let totalEscrow = 0;
     let itemCount = 0;
-    
+
     // 1. Buscar PURCHASES onde usuário é VENDEDOR com status em escrow
     const purchases = await Purchase.find({
       sellerId: req.user._id,
       status: { $in: ['escrow_reserved', 'shipped', 'delivered'] }
     }).select('sellerReceives status');
-    
+
     for (const purchase of purchases) {
       totalEscrow += purchase.sellerReceives || 0;
       itemCount++;
     }
-    
+
     // 2. Buscar PROPOSTAS ACEITAS onde usuário é BOOSTER (prestador) ainda ativas
     const proposals = await AcceptedProposal.find({
       'booster.userid': req.user._id,
       status: 'active'
     }).select('price');
-    
+
     for (const proposal of proposals) {
       totalEscrow += proposal.price || 0;
       itemCount++;
     }
-    
+
     // Enviar atualização via WebSocket em tempo real
     const user = await User.findById(req.user._id).select('walletBalance');
     await sendEscrowUpdateEvent(req.app, req.user._id, totalEscrow, user?.walletBalance);
-    
+
     return res.json({
       success: true,
       data: {

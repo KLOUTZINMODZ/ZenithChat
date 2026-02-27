@@ -76,6 +76,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  cashbackBalance: {
+    type: Number,
+    default: 0
+  },
   lastSeen: {
     type: Date,
     default: Date.now
@@ -127,8 +131,8 @@ const userSchema = new mongoose.Schema({
     }
   },
   influencerSettings: {
-    buyerDiscountDefault: { type: Number, default: 0 },
-    influencerCommissionDefault: { type: Number, default: 0 },
+    buyerDiscountDefault: { type: Number, default: 2.5 },
+    influencerCommissionDefault: { type: Number, default: 2.5 },
     mediatorCommissionDefault: { type: Number, default: 5 }
   },
   // Complaints counters
