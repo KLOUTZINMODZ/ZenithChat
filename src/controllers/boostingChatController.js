@@ -15,8 +15,8 @@ const { sendSupportTicketNotification } = require('../services/TelegramService')
 const { calculateAndSendEscrowUpdate } = require('../routes/walletRoutes');
 
 // Helper functions
-function round2(v) { 
-  return Math.round(Number(v) * 100) / 100; 
+function round2(v) {
+  return Math.round(Number(v) * 100) / 100;
 }
 
 function normalizeId(value) {
@@ -105,14 +105,14 @@ async function getOrCreateBoostingOrderFromAgreement(agreement) {
  */
 async function findUserFlexible(id, options = {}) {
   if (!id) return null;
-  
+
   const idStr = String(id);
-  
+
   // Se for um ObjectId válido (24 caracteres hex), buscar por _id
   if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
     return await User.findById(idStr, null, options);
   }
-  
+
   // Caso contrário, buscar por userid (numérico)
   return await User.findOne({ userid: idStr }, null, options);
 }
@@ -128,28 +128,28 @@ async function findOrCreateUserFromAPI(id, options = {}) {
   // Primeiro tentar buscar localmente
   let user = await findUserFlexible(id, options);
   if (user) return user;
-  
+
   // Se não encontrou localmente e é um userid numérico, buscar na API
   const idStr = String(id);
   const isNumericUserId = /^\d+$/.test(idStr);
-  
+
   if (!isNumericUserId) {
     throw new Error(`Usuário não encontrado: ${id}`);
   }
-  
+
   console.log(`[USER] Usuário ${idStr} não encontrado localmente, buscando na API externa...`);
-  
+
   try {
     const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
     const response = await axios.get(`${apiUrl}/api/users/${idStr}`);
-    
+
     if (!response.data?.success || !response.data?.data) {
       throw new Error(`Usuário ${idStr} não encontrado na API externa`);
     }
-    
+
     const apiUser = response.data.data;
     console.log(`[USER] Usuário encontrado na API: ${apiUser.name || apiUser.username}`);
-    
+
     // Criar usuário localmente
     const newUser = new User({
       userid: apiUser.userid || idStr,
@@ -159,85 +159,85 @@ async function findOrCreateUserFromAPI(id, options = {}) {
       walletBalance: 0, // Saldo inicial zero
       role: 'user'
     });
-    
+
     // Se temos uma session, salvar com ela
     if (options.session) {
       await newUser.save({ session: options.session });
     } else {
       await newUser.save();
     }
-    
+
     console.log(`[USER] Usuário ${idStr} criado localmente no MongoDB`);
     return newUser;
-    
+
   } catch (error) {
     // Se for erro de API externa
     if (error.response) {
       console.error(`[USER] Erro ao buscar usuário ${idStr} na API:`, error.response.status);
       throw new Error(`Usuário ${idStr} não encontrado (API retornou ${error.response.status})`);
     }
-    
+
     // Se for erro de duplicate key (E11000) - usuário já existe com aquele email
     if (error.code === 11000 || error.message.includes('E11000')) {
       console.log(`[USER] Usuário com email duplicado detectado, buscando usuário existente...`);
-      
+
       try {
         // IMPORTANTE: Buscar FORA da transação porque ela foi abortada após o erro E11000
         // Não passar options.session aqui
-        
+
         // Tentar extrair o email do erro
         const emailMatch = error.message.match(/email: "([^"]+)"/);
         const email = emailMatch ? emailMatch[1] : null;
-        
+
         if (email) {
           // Buscar usuário por email (SEM session, fora da transação)
           const existingUser = await User.findOne({ email });
-          
+
           if (existingUser) {
             console.log(`[USER] Usuário encontrado por email: ${existingUser.name} (userid: ${existingUser.userid})`);
-            
+
             // Se o userid não está definido ou é diferente, atualizar
             if (!existingUser.userid || String(existingUser.userid) !== idStr) {
               console.log(`[USER] Atualizando userid de ${existingUser.userid} para ${idStr}`);
               existingUser.userid = idStr;
-              
+
               // Salvar SEM session (fora da transação)
               await existingUser.save();
             }
-            
+
             return existingUser;
           }
         }
-        
+
         // Se não conseguiu buscar por email, tentar buscar por outras formas
         console.warn(`[USER] Não foi possível extrair email do erro, tentando buscar de outras formas...`);
-        
+
         // Buscar qualquer usuário com userid similar ou null (SEM session)
-        const userByUserId = await User.findOne({ 
+        const userByUserId = await User.findOne({
           $or: [
             { userid: idStr },
             { userid: { $exists: false } },
             { userid: null }
           ]
         }).limit(1);
-        
+
         if (userByUserId) {
           console.log(`[USER] Usuário encontrado: ${userByUserId.name}`);
-          
+
           // Atualizar userid (SEM session)
           userByUserId.userid = idStr;
           await userByUserId.save();
-          
+
           return userByUserId;
         }
-        
+
       } catch (searchError) {
         console.error(`[USER] Erro ao buscar usuário existente:`, searchError.message);
       }
-      
+
       throw new Error(`Usuário ${idStr} já existe no banco mas não foi possível localizá-lo`);
     }
-    
+
     throw new Error(`Erro ao buscar/criar usuário ${idStr}: ${error.message}`);
   }
 }
@@ -249,14 +249,14 @@ async function sendBalanceUpdate(app, userId) {
     if (notificationService) {
       notificationService.sendToUser(String(userId), {
         type: 'wallet:balance_updated',
-        data: { 
-          userId: String(userId), 
-          balance: round2(u?.walletBalance || 0), 
-          timestamp: new Date().toISOString() 
+        data: {
+          userId: String(userId),
+          balance: round2(u?.walletBalance || 0),
+          timestamp: new Date().toISOString()
         }
       });
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 async function runTx(executor) {
@@ -269,9 +269,9 @@ async function runTx(executor) {
     session.endSession();
     return res;
   } catch (err) {
-    if (session) { 
-      try { await session.abortTransaction(); } catch (_) {} 
-      session.endSession(); 
+    if (session) {
+      try { await session.abortTransaction(); } catch (_) { }
+      session.endSession();
     }
     throw err;
   }
@@ -301,16 +301,16 @@ class BoostingChatController {
         return res.status(403).json({ success: false, message: 'Acesso negado à conversa' });
       }
 
-      return res.json({ 
-        success: true, 
-        conversation: conversation.toObject() 
+      return res.json({
+        success: true,
+        conversation: conversation.toObject()
       });
     } catch (error) {
       console.error('[BoostingChatController] Erro ao obter conversa:', error);
-      return res.status(500).json({ 
-        success: false, 
+      return res.status(500).json({
+        success: false,
         message: 'Erro ao buscar conversa',
-        error: error.message 
+        error: error.message
       });
     }
   }
@@ -336,7 +336,7 @@ class BoostingChatController {
 
 
       let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
-      
+
 
       if (acceptedProposal && !agreement) {
         try {
@@ -349,9 +349,9 @@ class BoostingChatController {
 
 
       if (!acceptedProposal && !agreement) {
-        return res.status(404).json({ 
-          success: false, 
-          message: 'Nenhuma proposta aceita encontrada para esta conversa' 
+        return res.status(404).json({
+          success: false,
+          message: 'Nenhuma proposta aceita encontrada para esta conversa'
         });
       }
 
@@ -438,7 +438,7 @@ class BoostingChatController {
 
 
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
-      
+
       try {
         await axios.post(`${apiUrl}/api/boosting-proposals/${conversation.proposal}/renegotiate`, {
           newPrice,
@@ -520,23 +520,23 @@ class BoostingChatController {
           }
           conversation.metadata.set('deletedFor', deletedFor);
         }
-      } catch (_) {}
+      } catch (_) { }
 
       await conversation.save();
 
 
       const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
-      
+
       // Tenta notificar a API principal (não-bloqueante)
       try {
         const itemId = conversation.marketplaceItem || conversation.proposal;
-        
+
         if (itemId) {
           console.log(`🔔 Tentando notificar API principal - itemId: ${itemId}`);
-          
+
           // Tenta métodos HTTP diferentes
           let notificationSuccess = false;
-          
+
           // Tentativa 1: PATCH (mais comum para atualizações parciais)
           try {
             await axios.patch(`${apiUrl}/api/boosting-requests/${itemId}/cancel`, {
@@ -592,7 +592,7 @@ class BoostingChatController {
               throw patchError;
             }
           }
-          
+
           if (!notificationSuccess) {
             console.warn('⚠️ Não foi possível notificar a API principal, mas o cancelamento local foi efetuado');
           }
@@ -613,7 +613,7 @@ class BoostingChatController {
 
       try {
         let agreement = await Agreement.findOne({ conversationId }).sort({ createdAt: -1 });
-        
+
         // 🔧 NOVO: DEVOLVER ESCROW AO CLIENTE ANTES DE CANCELAR
         if (agreement && ['pending', 'active'].includes(agreement.status)) {
           try {
@@ -625,10 +625,10 @@ class BoostingChatController {
                 reason: 'boosting_escrow',
                 'metadata.agreementId': agreement._id.toString()
               }).session(session);
-              
+
               if (existingEscrow && existingEscrow.amount > 0) {
                 console.log(`[BOOSTING CANCEL] Escrow encontrado, devolvendo R$ ${existingEscrow.amount} ao cliente ${clientUserId}`);
-                
+
                 // Devolver saldo ao cliente
                 const clientUser = await findOrCreateUserFromAPI(clientUserId, { session });
                 if (clientUser) {
@@ -636,7 +636,7 @@ class BoostingChatController {
                   const balanceAfter = round2(balanceBefore + existingEscrow.amount);
                   clientUser.walletBalance = balanceAfter;
                   await clientUser.save({ session });
-                  
+
                   // Registrar devolução do escrow
                   await WalletLedger.create([{
                     userId: clientUserId,
@@ -657,17 +657,17 @@ class BoostingChatController {
                       type: 'escrow_refund'
                     }
                   }], { session });
-                  
+
                   console.log(`[BOOSTING CANCEL] Escrow devolvido ao cliente:`, {
                     clientId: clientUserId.toString(),
                     amount: existingEscrow.amount,
                     balanceBefore,
                     balanceAfter
                   });
-                  
+
                   // Enviar atualização de saldo via WebSocket
                   await sendBalanceUpdate(req.app, clientUserId);
-                  
+
                   // Atualizar valor do Saldo Bloqueado na interface
                   await calculateAndSendEscrowUpdate(req.app, clientUserId);
                 } else {
@@ -681,24 +681,24 @@ class BoostingChatController {
             console.error(`[BOOSTING CANCEL] Erro ao devolver escrow:`, escrowErr.message);
             // Não bloqueia o cancelamento, apenas loga o erro
           }
-          
+
           // Agora sim, cancelar o agreement
           const idemKey = `cancel_${conversationId}_${Date.now()}`;
           await agreement.cancel(userId, reason || '', idemKey);
         }
-        
+
         let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
         if (acceptedProposal) {
-          try { await acceptedProposal.cancel(); } catch (_) {}
+          try { await acceptedProposal.cancel(); } catch (_) { }
 
-          try { await AcceptedProposal.deleteOne({ _id: acceptedProposal._id }); } catch (_) {}
+          try { await AcceptedProposal.deleteOne({ _id: acceptedProposal._id }); } catch (_) { }
         }
 
         try {
           conversation.acceptedProposal = undefined;
           conversation.proposal = undefined;
           await conversation.save();
-        } catch (_) {}
+        } catch (_) { }
       } catch (cleanupErr) {
         console.warn('⚠️ Erro ao cancelar/remover proposta/termo:', cleanupErr?.message || cleanupErr);
       }
@@ -744,7 +744,7 @@ class BoostingChatController {
                 data: { message: messageToSend, conversationId },
                 timestamp: new Date().toISOString()
               });
-            } catch (_) {}
+            } catch (_) { }
           });
         }
       } catch (wsErr) {
@@ -825,7 +825,7 @@ class BoostingChatController {
       // Buscar Agreement e AcceptedProposal
       let agreement = await Agreement.findOne({ conversationId });
       let acceptedProposal = await AcceptedProposal.findOne({ conversationId });
-      
+
       // Migração automática se necessário
       if (acceptedProposal && !agreement) {
         try {
@@ -864,25 +864,25 @@ class BoostingChatController {
         try {
           const BoostingRequest = require('../models/BoostingRequest');
           const boostingRequest = await BoostingRequest.findById(boostingId);
-          
+
           if (boostingRequest) {
             // Count accepted proposals in the boosting request
             const acceptedCount = (boostingRequest.proposals || []).filter(p => p.status === 'accepted').length;
-            
+
             if (acceptedCount > 1) {
               console.error('[CRITICAL] Multiple accepted proposals detected:', {
                 boostingId,
                 acceptedCount,
                 proposals: boostingRequest.proposals.map(p => ({ id: p._id, status: p.status }))
               });
-              
+
               return res.status(409).json({
                 success: false,
                 message: 'Erro crítico: múltiplas propostas aceitas detectadas para este pedido',
                 error: 'MULTIPLE_ACCEPTED_PROPOSALS'
               });
             }
-            
+
             if (acceptedCount === 0 && !boostingRequest.acceptedProposal?.boosterId) {
               return res.status(400).json({
                 success: false,
@@ -906,7 +906,7 @@ class BoostingChatController {
       }
 
       price = round2(price);
-      const feePercent = 0.05;
+      const feePercent = 0.10;
       const feeAmount = round2(price * feePercent);
       const boosterReceives = round2(price - feeAmount);
 
@@ -933,7 +933,7 @@ class BoostingChatController {
           idempotent: true
         });
       }
-      
+
       // IDEMPOTÊNCIA: verificar se conversation já está bloqueada por finalização
       if (conversation.isBlocked && conversation.blockedReason === 'pedido_finalizado') {
         console.log(`Conversation ${conversationId} já está finalizada - operação idempotente`);
@@ -944,7 +944,7 @@ class BoostingChatController {
           idempotent: true
         });
       }
-      
+
       // IDEMPOTÊNCIA: verificar se conversation já tem deliveryConfirmedAt
       if (conversation.deliveryConfirmedAt) {
         console.log(`Conversation ${conversationId} já tem deliveryConfirmedAt - operação idempotente`);
@@ -961,15 +961,15 @@ class BoostingChatController {
         // 1. VERIFICAR se cliente já foi debitado (escrow) ao aceitar proposta
         // Se já foi debitado, apenas registrar a liberação do escrow
         // Se não foi (boostings antigos), debitar agora
-        
+
         const existingEscrow = await WalletLedger.findOne({
           userId: clientUserDoc._id,
           reason: 'boosting_escrow',
           'metadata.agreementId': agreement?._id?.toString() || acceptedProposal?._id?.toString()
         }).session(session);
-        
+
         let clientBalanceBefore, clientBalanceAfter;
-        
+
         const clientUser = clientUserDoc;
         const boosterUser = boosterUserDoc;
 
@@ -980,11 +980,11 @@ class BoostingChatController {
             amount: existingEscrow.amount,
             date: existingEscrow.createdAt
           });
-          
+
           // Apenas registrar a liberação do escrow (não altera saldo)
           clientBalanceBefore = round2(clientUser.walletBalance || 0);
           clientBalanceAfter = clientBalanceBefore; // Saldo não muda
-          
+
           // Criar registro de liberação do escrow
           await WalletLedger.create([{
             userId: clientUserDoc._id,
@@ -1003,7 +1003,7 @@ class BoostingChatController {
               price: Number(price),
               feeAmount: Number(feeAmount),
               boosterReceives: Number(boosterReceives),
-              feePercent: 0.05,
+              feePercent: 0.10,
               type: 'boosting_service',
               serviceName: 'Serviço de Boosting',
               providerName: 'Booster',
@@ -1011,20 +1011,20 @@ class BoostingChatController {
               originalEscrowId: existingEscrow._id.toString()
             }
           }], { session });
-          
+
           console.log('[BOOSTING] Escrow liberado (saldo não alterado)');
         } else {
           // ⚠️ Cliente NÃO FOI DEBITADO no escrow (boostings antigos ou fluxo legado)
           // Debitar agora
           console.warn('[BOOSTING] Cliente NÃO foi debitado no escrow, debitando agora (fluxo legado)');
-          
+
           clientBalanceBefore = round2(clientUserDoc.walletBalance || 0);
 
           // Verificar se cliente tem saldo suficiente
           if (clientBalanceBefore < price) {
             throw new Error(`Saldo insuficiente. Necessário: R$ ${price.toFixed(2)}, Disponível: R$ ${clientBalanceBefore.toFixed(2)}`);
           }
-          
+
           clientBalanceAfter = round2(clientBalanceBefore - price);
           clientUser.walletBalance = clientBalanceAfter;
           await clientUser.save({ session });
@@ -1047,7 +1047,7 @@ class BoostingChatController {
               price: Number(price),
               feeAmount: Number(feeAmount),
               boosterReceives: Number(boosterReceives),
-              feePercent: 0.05,
+              feePercent: 0.10,
               type: 'boosting_service',
               serviceName: 'Serviço de Boosting',
               providerName: 'Booster'
@@ -1123,12 +1123,12 @@ class BoostingChatController {
               clientId: clientUserDoc._id?.toString(),
               boosterId: boosterUserDoc._id?.toString(),
               // Adicionar campos extras para compatibilidade
-              feePercent: 0.05,
+              feePercent: 0.10,
               serviceType: 'boosting'
             },
             description: 'Liberação de pagamento ao booster'
           }], { session });
-        } catch (_) {}
+        } catch (_) { }
 
         // 3. Transferir taxa ao mediador (5%)
         if (feeAmount > 0) {
@@ -1137,80 +1137,80 @@ class BoostingChatController {
           1
           try {
             const mediatorUser = await User.findOne({ email: mediatorEmail }).session(session);
-            
+
             if (!mediatorUser) {
               console.warn(`[BOOSTING] Mediador não encontrado (email: ${mediatorEmail}). Taxa não creditada.`);
             }
 
-          if (mediatorUser) {
-            const mediatorBalanceBefore = round2(mediatorUser.walletBalance || 0);
-            const mediatorBalanceAfter = round2(mediatorBalanceBefore + feeAmount);
-            mediatorUser.walletBalance = mediatorBalanceAfter;
-            await mediatorUser.save({ session });
+            if (mediatorUser) {
+              const mediatorBalanceBefore = round2(mediatorUser.walletBalance || 0);
+              const mediatorBalanceAfter = round2(mediatorBalanceBefore + feeAmount);
+              mediatorUser.walletBalance = mediatorBalanceAfter;
+              await mediatorUser.save({ session });
 
-            // Criar registro no WalletLedger (mediador) - Formato idêntico ao marketplace
-            const mediatorLedger = await WalletLedger.create([{
-              userId: mediatorUser._id,
-              txId: null,
-              direction: 'credit',
-              reason: 'boosting_fee',
-              amount: feeAmount,
-              operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
-              balanceBefore: mediatorBalanceBefore,
-              balanceAfter: mediatorBalanceAfter,
-              metadata: {
-                source: 'boosting',
-                agreementId: agreement?._id?.toString() || null,
-                conversationId: conversationId,
-                boosterId: boosterUserId?.toString(),
-                clientId: clientUserId?.toString(),
-                price: Number(price),
-                feeAmount: Number(feeAmount),
-                boosterReceives: Number(boosterReceives),
-                // Adicionar campos extras para compatibilidade com marketplace
-                feePercent: 0.05,
-                type: 'boosting_service'
-              }
-            }], { session });
-
-            console.log('[BOOSTING] Taxa transferida ao mediador:', {
-              mediatorId: mediatorUser._id?.toString(),
-              amount: feeAmount,
-              balanceBefore: mediatorBalanceBefore,
-              balanceAfter: mediatorBalanceAfter
-            });
-
-            // Criar log no Mediator (fee) - Formato idêntico ao marketplace
-            try {
-              await Mediator.create([{
-                eventType: 'fee',
+              // Criar registro no WalletLedger (mediador) - Formato idêntico ao marketplace
+              const mediatorLedger = await WalletLedger.create([{
+                userId: mediatorUser._id,
+                txId: null,
+                direction: 'credit',
+                reason: 'boosting_fee',
                 amount: feeAmount,
-                currency: 'BRL',
                 operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
-                source: 'ZenithChatApi',
-                occurredAt: new Date(),
-                reference: {
-                  agreementId: agreement?._id || null,
-                  conversationId: conversationId,
-                  walletLedgerId: mediatorLedger[0]?._id || null,
-                  // Adicionar campos de referência similares ao marketplace
-                  transactionId: null,
-                  asaasTransferId: null
-                },
+                balanceBefore: mediatorBalanceBefore,
+                balanceAfter: mediatorBalanceAfter,
                 metadata: {
+                  source: 'boosting',
+                  agreementId: agreement?._id?.toString() || null,
+                  conversationId: conversationId,
+                  boosterId: boosterUserId?.toString(),
+                  clientId: clientUserId?.toString(),
                   price: Number(price),
                   feeAmount: Number(feeAmount),
                   boosterReceives: Number(boosterReceives),
-                  boosterId: boosterUserId?.toString(),
-                  clientId: clientUserId?.toString(),
-                  // Adicionar campos extras para compatibilidade
-                  feePercent: 0.05,
-                  serviceType: 'boosting'
-                },
-                description: 'Taxa de mediação (5%) creditada ao mediador - Boosting'
+                  // Adicionar campos extras para compatibilidade com marketplace
+                  feePercent: 0.10,
+                  type: 'boosting_service'
+                }
               }], { session });
-            } catch (_) {}
-          }
+
+              console.log('[BOOSTING] Taxa transferida ao mediador:', {
+                mediatorId: mediatorUser._id?.toString(),
+                amount: feeAmount,
+                balanceBefore: mediatorBalanceBefore,
+                balanceAfter: mediatorBalanceAfter
+              });
+
+              // Criar log no Mediator (fee) - Formato idêntico ao marketplace
+              try {
+                await Mediator.create([{
+                  eventType: 'fee',
+                  amount: feeAmount,
+                  currency: 'BRL',
+                  operationId: `boosting_fee:${agreement?._id || acceptedProposal?._id}`,
+                  source: 'ZenithChatApi',
+                  occurredAt: new Date(),
+                  reference: {
+                    agreementId: agreement?._id || null,
+                    conversationId: conversationId,
+                    walletLedgerId: mediatorLedger[0]?._id || null,
+                    // Adicionar campos de referência similares ao marketplace
+                    transactionId: null,
+                    asaasTransferId: null
+                  },
+                  metadata: {
+                    price: Number(price),
+                    feeAmount: Number(feeAmount),
+                    boosterReceives: Number(boosterReceives),
+                    boosterId: boosterUserId?.toString(),
+                    clientId: clientUserId?.toString(),
+                    // Adicionar campos extras para compatibilidade
+                    feePercent: 0.10,
+                    serviceType: 'boosting'
+                  },
+                  description: 'Taxa de mediação (10%) creditada ao mediador - Boosting'
+                }], { session });
+              } catch (_) { }
+            }
           } catch (mediatorError) {
             console.error('[BOOSTING] Erro ao creditar mediador:', mediatorError.message);
           }
@@ -1261,7 +1261,7 @@ class BoostingChatController {
       const systemMessage = new Message({
         conversation: conversationId,
         sender: userId,
-        content: `Entrega confirmada pelo cliente\n💰 Valor total: ${formattedPrice}\n💵 Booster recebeu: ${formattedBoosterReceives} (95%)\n💰 Taxa da plataforma: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(feeAmount)} (5%)\n🔒 Chat finalizado`,
+        content: `Entrega confirmada pelo cliente\n💰 Valor total: ${formattedPrice}\n💵 Booster recebeu: ${formattedBoosterReceives} (90%)\n💰 Taxa da plataforma: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(feeAmount)} (10%)\n🔒 Chat finalizado`,
         type: 'system',
         metadata: {
           type: 'delivery_confirmed',
@@ -1327,7 +1327,7 @@ class BoostingChatController {
               data: { message: messageToSend, conversationId },
               timestamp: new Date().toISOString()
             });
-          } catch (_) {}
+          } catch (_) { }
         });
       }
 
@@ -1344,13 +1344,13 @@ class BoostingChatController {
       } catch (escrowEventError) {
         console.warn('[BOOSTING] Falha ao emitir escrow update após confirmação:', escrowEventError.message);
       }
-      
+
       // Enviar atualização ao mediador também (se existir)
       try {
         const envId = process.env.MEDIATOR_USER_ID;
         if (envId) await sendBalanceUpdate(req.app, envId);
-      } catch (_) {}
-      
+      } catch (_) { }
+
       // Notificações de sucesso via WebSocket (igual ao marketplace)
       try {
         const notificationService = req.app?.locals?.notificationService;
@@ -1368,7 +1368,7 @@ class BoostingChatController {
             data: { conversationId, agreementId: agreement?._id || agreement?.agreementId }
           });
         }
-      } catch (_) {}
+      } catch (_) { }
 
       console.log('[BOOSTING] Confirmação de entrega concluída com sucesso');
 
@@ -1386,10 +1386,10 @@ class BoostingChatController {
       });
     } catch (error) {
       console.error('[BOOSTING] Erro ao confirmar entrega:', error);
-      return res.status(500).json({ 
-        success: false, 
+      return res.status(500).json({
+        success: false,
         message: 'Erro interno do servidor ao processar confirmação',
-        error: error.message 
+        error: error.message
       });
     }
   }
@@ -1415,7 +1415,7 @@ class BoostingChatController {
 
       console.log('🔍 [DEBUG] Buscando conversa...');
       const conversation = await Conversation.findById(conversationId).populate('participants');
-      
+
       if (!conversation) {
         console.log('❌ [DEBUG] Conversa não encontrada');
         return res.status(404).json({ success: false, message: 'Conversa não encontrada' });
@@ -1429,10 +1429,10 @@ class BoostingChatController {
         return id;
       }));
       console.log('   Verificando se userId é participante:', userId, '(type:', typeof userId, ')');
-      
+
       const isParticipant = conversation.isParticipant(userId);
       console.log('   É participante?', isParticipant);
-      
+
 
       conversation.participants.forEach((p, index) => {
         const participantId = p._id ? p._id.toString() : p.toString();
@@ -1464,7 +1464,7 @@ class BoostingChatController {
 
       try {
         const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
-        
+
 
         try {
           const reporterResponse = await axios.get(`${apiUrl}/api/users/${reporter._id}`, {
@@ -1550,8 +1550,8 @@ class BoostingChatController {
           category: acceptedProposal?.category,
           proposalValue: acceptedProposal?.price,
           startDate: acceptedProposal?.acceptedAt,
-          expectedEndDate: acceptedProposal?.acceptedAt ? 
-            new Date(acceptedProposal.acceptedAt.getTime() + (24 * 60 * 60 * 1000)) : 
+          expectedEndDate: acceptedProposal?.acceptedAt ?
+            new Date(acceptedProposal.acceptedAt.getTime() + (24 * 60 * 60 * 1000)) :
             null,
           messagesCount: await Message.countDocuments({ conversation: conversationId }),
           conversationDuration: Math.floor((new Date() - conversation.createdAt) / (1000 * 60))
@@ -1583,7 +1583,7 @@ class BoostingChatController {
           } else if (reporter?._id) {
             clientUserId = reporter._id.toString ? reporter._id.toString() : String(reporter._id);
           }
-        } catch (_) {}
+        } catch (_) { }
 
         let clientApi = null;
         if (clientUserId) {
@@ -1630,12 +1630,12 @@ class BoostingChatController {
               try {
                 if (conversation?.marketplace?.purchaseId) return conversation.marketplace.purchaseId.toString?.() || conversation.marketplace.purchaseId;
                 if (conversation?.metadata && typeof conversation.metadata.get === 'function') return conversation.metadata.get('purchaseId') || null;
-              } catch (_) {}
+              } catch (_) { }
               return null;
             })()
           }
         });
-      } catch (_) {}
+      } catch (_) { }
 
 
       await Conversation.findByIdAndUpdate(conversationId, {
@@ -1677,7 +1677,7 @@ class BoostingChatController {
       try {
         const apiUrl = process.env.MAIN_API_URL || 'https://zenithggapi.vercel.app';
         const itemId = conversation.marketplaceItem || conversation.proposal;
-        
+
         if (itemId) {
           await axios.post(`${apiUrl}/api/reports/notification`, {
             type: 'boosting_service',
@@ -1714,32 +1714,32 @@ class BoostingChatController {
 
   async saveAcceptedProposal(req, res) {
     try {
-      const { 
-        conversationId, 
-        proposalId, 
+      const {
+        conversationId,
+        proposalId,
         proposalData,
         clientData,
-        boosterData 
+        boosterData
       } = req.body;
 
       const idempotencyKey = req.headers['x-idempotency-key'] || `save_${conversationId}_${proposalId}_${Date.now()}`;
 
       if (!conversationId || !proposalId || !proposalData) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Dados obrigatórios não fornecidos' 
+        return res.status(400).json({
+          success: false,
+          message: 'Dados obrigatórios não fornecidos'
         });
       }
 
 
 
       const existingProposal = await AcceptedProposal.findOne({ conversationId });
-      
+
 
       const existingAgreement = await Agreement.findOne({
         'actionHistory.idempotencyKey': idempotencyKey
       });
-      
+
       if (existingAgreement) {
         return res.json({
           success: true,
@@ -1804,7 +1804,7 @@ class BoostingChatController {
         acceptedProposalId: acceptedProposal?._id,
         boostingRequestId: boostingRequestId || null,
         price: proposalData.price,
-        
+
         proposalSnapshot: {
           game: proposalData.game,
           category: proposalData.category,
@@ -1815,7 +1815,7 @@ class BoostingChatController {
           originalPrice: proposalData.originalPrice || proposalData.price,
           estimatedTime: proposalData.estimatedTime
         },
-        
+
         parties: {
           client: {
             userid: clientData.userid,
@@ -1842,13 +1842,13 @@ class BoostingChatController {
             ])
           }
         },
-        
+
         financial: {
           totalAmount: proposalData.price,
           currency: 'BRL',
           paymentStatus: 'pending'
         },
-        
+
         status: 'active'
       });
 
@@ -1872,12 +1872,12 @@ class BoostingChatController {
         conversation.metadata = conversation.metadata || new Map();
         conversation.metadata.set('latestAgreementId', agreement.agreementId);
         conversation.metadata.set('status', 'active');
-        
+
 
         if (conversation.deliveryConfirmedAt) {
           conversation.deliveryConfirmedAt = undefined;
         }
-        
+
         await conversation.save();
         console.log(`Mensagens reativadas para nova proposta do booster na conversa ${conversationId}`);
       }
@@ -1917,7 +1917,7 @@ class BoostingChatController {
 
       res.json({
         success: true,
-        message: existingProposal 
+        message: existingProposal
           ? 'Nova proposta aceita criada com sucesso (múltiplas propostas permitidas)'
           : 'Proposta aceita salva com sucesso',
         proposalId: acceptedProposal?._id || agreement._id,
@@ -1954,7 +1954,7 @@ class BoostingChatController {
 
       const status = conversation.metadata.get('status') || 'active';
       const closingAt = conversation.metadata.get('closingAt');
-      
+
       let timeRemaining = null;
       if (closingAt && status === 'delivery_confirmed') {
         timeRemaining = Math.max(0, Math.floor((closingAt - new Date()) / 1000));
@@ -1995,7 +1995,7 @@ class BoostingChatController {
 
 
       await Conversation.findByIdAndUpdate(conversationId, {
-        $unset: { 
+        $unset: {
           isReported: "",
           reportedAt: "",
           reportedBy: ""
@@ -2046,21 +2046,21 @@ function calculateReportPriority(type, previousReportsCount) {
   if (['fraud', 'harassment'].includes(type)) {
     return 'critical';
   }
-  
+
 
   if (previousReportsCount >= 3) {
     return 'high';
   }
-  
+
   if (previousReportsCount >= 1) {
     return 'medium';
   }
-  
+
 
   if (['service_not_delivered', 'payment_issues'].includes(type)) {
     return 'high';
   }
-  
+
   return 'medium';
 }
 
