@@ -677,14 +677,11 @@ router.post('/initiate', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Preço inválido para a compra' });
     }
 
-    // CASHBACK USAGE: Check if user wants to use accumulated cashback
-    let cashbackUsed = 0;
-    if (useCashback && buyer.cashbackBalance > 0) {
-      cashbackUsed = round2(Math.min(priceUsed, buyer.cashbackBalance));
+    const finalPriceForBuyer = round2(Number(priceUsed));
+    // Initial check for non-cashback balance (approximate, re-checked in tx)
+    if (buyer.walletBalance < finalPriceForBuyer - (buyer.cashbackBalance || 0)) {
+      return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
     }
-
-    const finalPriceForBuyer = round2(Number(priceUsed) - cashbackUsed);
-    if (buyer.walletBalance < finalPriceForBuyer) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
 
     // Validate seller
     const seller = await User.findById(sellerUserIdFromItem);
@@ -785,20 +782,39 @@ router.post('/initiate', auth, async (req, res) => {
         );
       }
 
-      const before = round2(buyer.walletBalance || buyer.balance || 0);
-      const after = round2(before - finalPriceForBuyer);
-      buyer.walletBalance = after;
-      buyer.balance = after;
+      // RE-VALIDATE BALANCES INSIDE TRANSACTION
+      const buyerInTx = await User.findById(buyerId).session(session);
+      if (!buyerInTx) throw new Error('BUYER_NOT_FOUND');
 
-      const cbBefore = round2(buyer.cashbackBalance || 0);
-      if (cashbackUsed > 0) {
-        buyer.cashbackBalance = round2(cbBefore - cashbackUsed);
+      let currentCashbackUsed = 0;
+      if (useCashback && buyerInTx.cashbackBalance > 0) {
+        currentCashbackUsed = round2(Math.min(priceUsed, buyerInTx.cashbackBalance));
       }
 
-      if (!buyer.cpfCnpj) buyer.cpfCnpj = cpf;
-      if (!buyer.legalName) buyer.legalName = fullName;
-      if (!buyer.birthDate) buyer.birthDate = birthDate;
-      await buyer.save({ session });
+      const finalAmountFromBalance = round2(priceUsed - currentCashbackUsed);
+
+      if (buyerInTx.walletBalance < finalAmountFromBalance) {
+        throw new Error('INSUFFICIENT_FUNDS');
+      }
+
+      const before = round2(buyerInTx.walletBalance || 0);
+      const after = round2(before - finalAmountFromBalance);
+      buyerInTx.walletBalance = after;
+      buyerInTx.balance = after;
+
+      const cbBefore = round2(buyerInTx.cashbackBalance || 0);
+      if (currentCashbackUsed > 0) {
+        buyerInTx.cashbackBalance = round2(cbBefore - currentCashbackUsed);
+      }
+
+      if (!buyerInTx.cpfCnpj) buyerInTx.cpfCnpj = cpf;
+      if (!buyerInTx.legalName) buyerInTx.legalName = fullName;
+      if (!buyerInTx.birthDate) buyerInTx.birthDate = birthDate;
+      await buyerInTx.save({ session });
+
+      // Update the outside purchase object if needed, though we often use the returned 'p'
+      p.cashbackUsed = currentCashbackUsed;
+      await p.save({ session });
 
       await WalletLedger.create([{
         userId: buyerId,
@@ -812,16 +828,16 @@ router.post('/initiate', auth, async (req, res) => {
         metadata: { source: 'purchase', purchaseId: p._id.toString(), itemId }
       }], { session });
 
-      if (cashbackUsed > 0) {
+      if (currentCashbackUsed > 0) {
         await WalletLedger.create([{
           userId: buyerId,
           txId: null,
           direction: 'debit',
           reason: 'cashback_usage',
-          amount: cashbackUsed,
+          amount: currentCashbackUsed,
           operationId: `cashback_usage:${p._id.toString()}`,
           balanceBefore: cbBefore,
-          balanceAfter: round2(cbBefore - cashbackUsed),
+          balanceAfter: round2(cbBefore - currentCashbackUsed),
           metadata: { source: 'purchase', purchaseId: p._id.toString(), itemId }
         }], { session });
       }
