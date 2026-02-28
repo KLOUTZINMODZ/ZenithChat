@@ -635,6 +635,7 @@ class BoostingChatController {
                   const balanceBefore = round2(clientUser.walletBalance || 0);
                   const balanceAfter = round2(balanceBefore + existingEscrow.amount);
                   clientUser.walletBalance = balanceAfter;
+                  clientUser.balance = balanceAfter;
                   await clientUser.save({ session });
 
                   // Registrar devolução do escrow
@@ -1027,6 +1028,7 @@ class BoostingChatController {
 
           clientBalanceAfter = round2(clientBalanceBefore - price);
           clientUser.walletBalance = clientBalanceAfter;
+          clientUser.balance = clientBalanceAfter;
           await clientUser.save({ session });
 
           // Criar registro no WalletLedger (cliente - débito)
@@ -1066,6 +1068,7 @@ class BoostingChatController {
         const boosterBalanceBefore = round2(boosterUser.walletBalance || 0);
         const boosterBalanceAfter = round2(boosterBalanceBefore + boosterReceives);
         boosterUser.walletBalance = boosterBalanceAfter;
+        boosterUser.balance = boosterBalanceAfter;
         await boosterUser.save({ session });
 
         // Criar registro no WalletLedger (booster) - Formato idêntico ao marketplace
@@ -1146,6 +1149,7 @@ class BoostingChatController {
               const mediatorBalanceBefore = round2(mediatorUser.walletBalance || 0);
               const mediatorBalanceAfter = round2(mediatorBalanceBefore + feeAmount);
               mediatorUser.walletBalance = mediatorBalanceAfter;
+              mediatorUser.balance = mediatorBalanceAfter;
               await mediatorUser.save({ session });
 
               // Criar registro no WalletLedger (mediador) - Formato idêntico ao marketplace

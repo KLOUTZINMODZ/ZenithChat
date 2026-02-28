@@ -583,6 +583,7 @@ router.post('/:proposalId/accept', auth, async (req, res) => {
 
               const clientBalanceAfter = round2(clientBalanceBefore - proposalPrice);
               clientForDebit.walletBalance = clientBalanceAfter;
+              clientForDebit.balance = clientBalanceAfter;
               await clientForDebit.save();
 
               // Criar registro no WalletLedger (cliente - débito escrow)

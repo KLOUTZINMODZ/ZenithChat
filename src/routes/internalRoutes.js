@@ -91,7 +91,7 @@ async function runTx(callback) {
     if (session) {
       try {
         await session.abortTransaction();
-      } catch (_) {}
+      } catch (_) { }
       session.endSession();
     }
     throw error;
@@ -250,6 +250,7 @@ async function performInternalBoostingCancel({ app, conversationId, reason, admi
           const before = round2(user.walletBalance || 0);
           const after = round2(before + Number(escrow.amount));
           user.walletBalance = after;
+          user.balance = after;
           await user.save({ session });
 
           await WalletLedger.create([
@@ -643,99 +644,99 @@ router.post('/boosting/break', internalAuth, async (req, res) => {
 router.post('/proposal/broadcast', internalAuth, async (req, res) => {
   try {
     const { type, boostingId, proposal, proposalId } = req.body;
-    
+
     // Validações
     if (!type) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Broadcast type is required' 
+      return res.status(400).json({
+        success: false,
+        message: 'Broadcast type is required'
       });
     }
-    
+
     if (!boostingId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'boostingId is required' 
+      return res.status(400).json({
+        success: false,
+        message: 'boostingId is required'
       });
     }
-    
+
     // Obter ProposalHandler
     const proposalHandler = req.app.get('proposalHandler');
-    
+
     if (!proposalHandler) {
       logger.error('[Internal Broadcast] ProposalHandler not available');
-      return res.status(500).json({ 
-        success: false, 
-        message: 'ProposalHandler not available' 
+      return res.status(500).json({
+        success: false,
+        message: 'ProposalHandler not available'
       });
     }
-    
+
     logger.info(`[Internal Broadcast] Type: ${type}, BoostingId: ${boostingId}`);
-    
+
     // Executar broadcast baseado no tipo
     switch (type) {
       case 'new':
         if (!proposal) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Proposal data is required for type "new"' 
+          return res.status(400).json({
+            success: false,
+            message: 'Proposal data is required for type "new"'
           });
         }
         proposalHandler.broadcastNewProposal(boostingId, proposal);
         logger.info(`✅ [Internal Broadcast] New proposal broadcasted for boosting ${boostingId}`);
         break;
-        
+
       case 'updated':
         if (!proposal) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'Proposal data is required for type "updated"' 
+          return res.status(400).json({
+            success: false,
+            message: 'Proposal data is required for type "updated"'
           });
         }
         proposalHandler.broadcastProposalUpdated(boostingId, proposal);
         logger.info(`✅ [Internal Broadcast] Updated proposal broadcasted for boosting ${boostingId}`);
         break;
-        
+
       case 'rejected':
         if (!proposalId) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'proposalId is required for type "rejected"' 
+          return res.status(400).json({
+            success: false,
+            message: 'proposalId is required for type "rejected"'
           });
         }
         proposalHandler.broadcastProposalRejected(boostingId, proposalId);
         logger.info(`✅ [Internal Broadcast] Rejected proposal ${proposalId} broadcasted`);
         break;
-        
+
       case 'cancelled':
         if (!proposalId) {
-          return res.status(400).json({ 
-            success: false, 
-            message: 'proposalId is required for type "cancelled"' 
+          return res.status(400).json({
+            success: false,
+            message: 'proposalId is required for type "cancelled"'
           });
         }
         proposalHandler.broadcastProposalCancelled(boostingId, proposalId);
         logger.info(`✅ [Internal Broadcast] Cancelled proposal ${proposalId} broadcasted`);
         break;
-        
+
       case 'boosting_cancelled':
         proposalHandler.broadcastBoostingCancelled(boostingId);
         logger.info(`✅ [Internal Broadcast] Boosting ${boostingId} cancellation broadcasted`);
         break;
-        
+
       default:
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: `Invalid broadcast type: ${type}`,
           validTypes: ['new', 'updated', 'rejected', 'cancelled', 'boosting_cancelled']
         });
     }
-    
+
     // Obter estatísticas para logging
     const stats = proposalHandler.getStats();
     logger.info(`[Internal Broadcast] Current stats:`, stats);
-    
-    res.json({ 
+
+    res.json({
       success: true,
       message: `Broadcast type "${type}" executed successfully`,
       stats: {
@@ -743,13 +744,13 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
         thisBoostingSubscribers: stats.boostings.find(b => b.boostingId === boostingId)?.subscribers || 0
       }
     });
-    
+
   } catch (error) {
     logger.error('[Internal Broadcast] Error:', error);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       message: 'Internal server error during broadcast',
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -761,26 +762,26 @@ router.post('/proposal/broadcast', internalAuth, async (req, res) => {
 router.get('/proposal/stats', internalAuth, (req, res) => {
   try {
     const proposalHandler = req.app.get('proposalHandler');
-    
+
     if (!proposalHandler) {
-      return res.status(500).json({ 
-        success: false, 
-        message: 'ProposalHandler not available' 
+      return res.status(500).json({
+        success: false,
+        message: 'ProposalHandler not available'
       });
     }
-    
+
     const stats = proposalHandler.getStats();
-    
+
     res.json({
       success: true,
       data: stats
     });
-    
+
   } catch (error) {
     logger.error('[Internal Stats] Error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    res.status(500).json({
+      success: false,
+      message: error.message
     });
   }
 });
@@ -908,7 +909,7 @@ router.post('/boosting-cancelled', async (req, res) => {
     const ws = req.app?.get('webSocketServer');
     if (ws && updatedConversation) {
       const participants = updatedConversation.participants || [];
-      
+
       participants.forEach(participantId => {
         ws.notificationService?.notifyUser(participantId.toString(), {
           type: 'boosting:cancelled',
