@@ -55,7 +55,7 @@ const influencerController = {
                     updates.influencerSettings = {
                         buyerDiscountDefault: 0,
                         influencerCommissionDefault: 0,
-                        mediatorCommissionDefault: 0
+                        mediatorCommissionDefault: 10
                     };
                 } else {
                     // Only revert to user if currently influencer
@@ -70,7 +70,7 @@ const influencerController = {
                 updates.influencerSettings = {
                     buyerDiscountDefault: Number(influencerSettings.buyerDiscountDefault) || 0,
                     influencerCommissionDefault: Number(influencerSettings.influencerCommissionDefault) || 0,
-                    mediatorCommissionDefault: Number(influencerSettings.mediatorCommissionDefault) || 0
+                    mediatorCommissionDefault: Number(influencerSettings.mediatorCommissionDefault) || 10
                 };
 
                 // Validate 5% cap
@@ -216,7 +216,7 @@ const influencerController = {
                 commissionSplit: {
                     buyerDiscount: Number(discount) || 0,
                     influencerCommission: Number(commission) || 0,
-                    mediatorCommission: Number(mediatorCommission) || 0
+                    mediatorCommission: Number(mediatorCommission) || 10
                 }
             });
 
