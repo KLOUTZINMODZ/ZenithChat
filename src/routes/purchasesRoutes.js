@@ -678,6 +678,7 @@ router.post('/initiate', auth, async (req, res) => {
     }
 
     const finalPriceForBuyer = round2(Number(priceUsed));
+    let cashbackUsed = 0;
     // Initial check for non-cashback balance (approximate, re-checked in tx)
     if (buyer.walletBalance < finalPriceForBuyer - (buyer.cashbackBalance || 0)) {
       return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
@@ -821,7 +822,7 @@ router.post('/initiate', auth, async (req, res) => {
         txId: null,
         direction: 'debit',
         reason: 'purchase_reserve',
-        amount: finalPriceForBuyer,
+        amount: finalAmountFromBalance,
         operationId: `purchase_reserve:${p._id.toString()}`,
         balanceBefore: before,
         balanceAfter: after,
