@@ -254,6 +254,52 @@ const influencerController = {
             logger.error('Error deleting influencer coupon:', error);
             return res.status(500).json({ success: false, message: 'Erro ao excluir cupom' });
         }
+    },
+
+    /**
+     * Update an influencer coupon
+     */
+    updateInfluencerCoupon: async (req, res) => {
+        try {
+            const { userId, couponId } = req.params;
+            const { discount, commission, mediatorCommission, status } = req.body;
+
+            if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(couponId)) {
+                return res.status(400).json({ success: false, message: 'IDs inválidos' });
+            }
+
+            const coupon = await PromoCode.findOne({ _id: couponId, influencerId: userId });
+            if (!coupon) {
+                return res.status(404).json({ success: false, message: 'Cupom não encontrado' });
+            }
+
+            const updates = {};
+            if (status !== undefined) updates.status = status;
+
+            const split = { ...(coupon.commissionSplit || {}) };
+            if (discount !== undefined) split.buyerDiscount = Number(discount);
+            if (commission !== undefined) split.influencerCommission = Number(commission);
+            if (mediatorCommission !== undefined) split.mediatorCommission = Number(mediatorCommission);
+
+            // Validate commissions (15.001 to avoid precision issues)
+            const total = (split.buyerDiscount || 0) + (split.influencerCommission || 0) + (split.mediatorCommission || 0);
+            if (total > 15.001) {
+                return res.status(400).json({ success: false, message: 'O total das taxas não pode exceder 15%' });
+            }
+
+            updates.commissionSplit = split;
+
+            const updatedCoupon = await PromoCode.findByIdAndUpdate(
+                couponId,
+                { $set: updates },
+                { new: true }
+            );
+
+            return res.json({ success: true, data: updatedCoupon });
+        } catch (error) {
+            logger.error('Error updating influencer coupon:', error);
+            return res.status(500).json({ success: false, message: 'Erro ao atualizar cupom' });
+        }
     }
 };
 
