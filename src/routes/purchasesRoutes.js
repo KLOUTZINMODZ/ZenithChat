@@ -794,7 +794,8 @@ router.post('/initiate', auth, async (req, res) => {
 
       const finalAmountFromBalance = round2(priceUsed - currentCashbackUsed);
 
-      if (buyerInTx.walletBalance < finalAmountFromBalance) {
+      // Anti-bypass: Check both balance fields
+      if ((buyerInTx.walletBalance || 0) < finalAmountFromBalance || (buyerInTx.balance || 0) < finalAmountFromBalance) {
         throw new Error('INSUFFICIENT_FUNDS');
       }
 
@@ -813,8 +814,14 @@ router.post('/initiate', auth, async (req, res) => {
       if (!buyerInTx.birthDate) buyerInTx.birthDate = birthDate;
       await buyerInTx.save({ session });
 
+      // Recalculate awarded cashback based ONLY on the real balance portion
+      const actualAwardedCashback = round2((finalAmountFromBalance * buyerCashbackPercent) / 100);
+
       // Update the outside purchase object if needed, though we often use the returned 'p'
+      p.cashbackAmount = actualAwardedCashback;
       p.cashbackUsed = currentCashbackUsed;
+      // Adjust feeAmount (platform fee) to keep sellerReceives constant
+      p.feeAmount = round2(priceUsed - sellerReceives - influencerCommission - actualAwardedCashback);
       await p.save({ session });
 
       await WalletLedger.create([{
