@@ -160,8 +160,13 @@ const influencerController = {
                 .select('code currentUses maxUses status commissionSplit')
                 .lean();
 
-            // Get referred users count
-            const referredCount = await User.countDocuments({ referredBy: userId });
+            // Get referred users count (including those linked via active influencer coupon)
+            const referredCount = await User.countDocuments({
+                $or: [
+                    { referredBy: userId },
+                    { 'activeInfluencer.influencerId': userId }
+                ]
+            });
 
             return res.json({
                 success: true,

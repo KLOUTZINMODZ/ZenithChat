@@ -8,7 +8,7 @@ const achievementService = require('../services/achievementService');
 exports.getUserAchievements = async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id;
-    
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -17,7 +17,7 @@ exports.getUserAchievements = async (req, res) => {
     }
 
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -48,7 +48,7 @@ exports.getUserAchievements = async (req, res) => {
 exports.updateStats = async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id;
-    
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -57,7 +57,7 @@ exports.updateStats = async (req, res) => {
     }
 
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -121,7 +121,7 @@ exports.updateStats = async (req, res) => {
 exports.forceCheck = async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id;
-    
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -130,7 +130,7 @@ exports.forceCheck = async (req, res) => {
     }
 
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -174,7 +174,7 @@ exports.markAsNotified = async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id;
     const { achievementId } = req.params;
-    
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -183,7 +183,7 @@ exports.markAsNotified = async (req, res) => {
     }
 
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -227,7 +227,7 @@ exports.markAsNotified = async (req, res) => {
 exports.getUnnotified = async (req, res) => {
   try {
     const userId = req.user?._id || req.user?.id;
-    
+
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -236,7 +236,7 @@ exports.getUnnotified = async (req, res) => {
     }
 
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -269,7 +269,7 @@ exports.getUnnotified = async (req, res) => {
 exports.getUserAchievementsById = async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -277,14 +277,25 @@ exports.getUserAchievementsById = async (req, res) => {
       });
     }
 
-    const user = await User.findById(userId);
-    
+    const mongoose = require('mongoose');
+    let user;
+
+    if (mongoose.Types.ObjectId.isValid(userId)) {
+      user = await User.findById(userId);
+    } else {
+      // Tentar buscar por userid (id legado/numérico)
+      user = await User.findOne({ userid: userId });
+    }
+
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'Usuário não encontrado'
       });
     }
+
+    // Usar o _id real do documento para os cálculos subsequentes
+    const realUserId = user._id;
 
     // Buscar dados reais do usuário para calcular conquistas
     const Purchase = require('../models/Purchase');
@@ -293,31 +304,33 @@ exports.getUserAchievementsById = async (req, res) => {
     try {
       // Contar vendas completadas
       const totalSales = await Purchase.countDocuments({
-        sellerId: userId,
+        sellerId: realUserId,
         status: 'completed'
       });
 
       // Contar compras completadas
       const totalPurchases = await Purchase.countDocuments({
-        buyerId: userId,
+        buyerId: realUserId,
         status: 'completed'
       });
 
       // Buscar rating médio (reviews recebidas)
       const reviews = await Review.aggregate([
-        { $match: { targetUserId: userId } },
-        { $group: {
-          _id: null,
-          averageRating: { $avg: '$rating' },
-          count: { $sum: 1 }
-        }}
+        { $match: { targetUserId: realUserId } },
+        {
+          $group: {
+            _id: null,
+            averageRating: { $avg: '$rating' },
+            count: { $sum: 1 }
+          }
+        }
       ]);
 
       const averageRating = reviews.length > 0 ? reviews[0].averageRating : 0;
       const ratingCount = reviews.length > 0 ? reviews[0].count : 0;
 
       console.log('[getUserAchievementsById] Stats calculadas:', {
-        userId,
+        userId: realUserId,
         totalSales,
         totalPurchases,
         averageRating,
