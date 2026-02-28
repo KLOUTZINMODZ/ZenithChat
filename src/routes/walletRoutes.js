@@ -29,9 +29,10 @@ async function applyLedgerCreditDeposit(app, userId, tx) {
     if (existing) {
       return { applied: false, balance: u?.walletBalance ?? null };
     }
-    const before = round2(u?.walletBalance || 0);
+    const before = round2(u?.walletBalance || u?.balance || 0);
     const amount = Number(tx.amountNet);
     u.walletBalance = round2(before + amount);
+    u.balance = u.walletBalance;
     await u.save({ session });
     await WalletLedger.create([{
       userId,
@@ -123,8 +124,9 @@ async function applyLedgerDebitReserve(app, userId, tx, amount) {
     if (!u || Number(u.walletBalance) < Number(amount)) {
       throw new Error('INSUFFICIENT_BALANCE');
     }
-    const before = round2(u.walletBalance || 0);
+    const before = round2(u.walletBalance || u.balance || 0);
     u.walletBalance = round2(before - Number(amount));
+    u.balance = u.walletBalance;
     await u.save({ session });
     await WalletLedger.create([{
       userId,
@@ -166,9 +168,10 @@ async function applyLedgerCreditRefund(app, userId, tx) {
     if (!hadReserve && !legacyDebited) {
       return { applied: false, balance: u?.walletBalance ?? null };
     }
-    const before = round2(u?.walletBalance || 0);
+    const before = round2(u?.walletBalance || u?.balance || 0);
     const amount = Number(tx.amountNet);
     u.walletBalance = round2(before + amount);
+    u.balance = u.walletBalance;
     await u.save({ session });
     await WalletLedger.create([{
       userId,
@@ -209,9 +212,10 @@ async function applyLedgerDebitSettle(app, userId, tx) {
 
       return { applied: false, balance: u?.walletBalance ?? null };
     }
-    const before = round2(u.walletBalance || 0);
+    const before = round2(u.walletBalance || u.balance || 0);
     const amount = Number(tx.amountNet);
     u.walletBalance = round2(before - amount);
+    u.balance = u.walletBalance;
     await u.save({ session });
     await WalletLedger.create([{
       userId,

@@ -45,6 +45,8 @@ const purchaseSchema = new mongoose.Schema({
   // Influencer Fields
   influencerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   influencerCommission: { type: Number, default: 0 },
+  cashbackAmount: { type: Number, default: 0 }, // Amount to be awarded upon completion
+  cashbackUsed: { type: Number, default: 0 },   // Amount used to pay for the item
   couponCode: { type: String, default: null }
 }, { timestamps: true });
 

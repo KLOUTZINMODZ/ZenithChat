@@ -565,7 +565,7 @@ router.get('/:purchaseId/review', auth, async (req, res) => {
 router.post('/initiate', auth, async (req, res) => {
   try {
     const buyerId = req.user._id;
-    const { itemId, price, sellerUserId, itemTitle, itemImage, buyerInfo } = req.body || {};
+    const { itemId, price, sellerUserId, itemTitle, itemImage, buyerInfo, useCashback } = req.body || {};
 
     if (!itemId) {
       return res.status(400).json({ success: false, message: 'Parâmetros obrigatórios ausentes (itemId)' });
@@ -590,8 +590,8 @@ router.post('/initiate', auth, async (req, res) => {
     // Influencer Coupon Handling
     let influencerId = null;
     let influencerCommission = 0;
-    let buyerDiscount = 0;
-    let mediatorCommissionPercent = 5;
+    let buyerCashbackAmount = 0;
+    let mediatorCommissionPercent = 10;
     let couponCodeApplied = null;
     let renewInfluencer = false;
 
@@ -632,9 +632,9 @@ router.post('/initiate', auth, async (req, res) => {
 
         // Apply split from coupon
         const { commissionSplit } = activeCoupon;
-        buyerDiscount = round2((price * (commissionSplit.buyerDiscount || 0)) / 100);
+        buyerCashbackAmount = round2((price * (commissionSplit.buyerDiscount || 0)) / 100);
         influencerCommission = round2((price * (commissionSplit.influencerCommission || 0)) / 100);
-        mediatorCommissionPercent = commissionSplit.mediatorCommission || 5;
+        mediatorCommissionPercent = commissionSplit.mediatorCommission || 10;
         influencerId = activeCoupon.influencerId;
         couponCodeApplied = activeCoupon.code;
 
@@ -677,7 +677,13 @@ router.post('/initiate', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Preço inválido para a compra' });
     }
 
-    const finalPriceForBuyer = round2(Number(priceUsed) - buyerDiscount);
+    // CASHBACK USAGE: Check if user wants to use accumulated cashback
+    let cashbackUsed = 0;
+    if (useCashback && buyer.cashbackBalance > 0) {
+      cashbackUsed = round2(Math.min(priceUsed, buyer.cashbackBalance));
+    }
+
+    const finalPriceForBuyer = round2(Number(priceUsed) - cashbackUsed);
     if (buyer.walletBalance < finalPriceForBuyer) return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
 
     // Validate seller
@@ -704,10 +710,18 @@ router.post('/initiate', auth, async (req, res) => {
       return res.status(409).json({ success: false, message: 'E-mail informado difere do e-mail da conta.' });
     }
 
-    const feePercent = 5;
+    // FEE CALCULATION
+    // totalFee = mediator (default 10) + influencer + buyerCashback
+    const influencerPercent = influencerId ? round2((influencerCommission / priceUsed) * 100) : 0;
+    const buyerCashbackPercent = round2((buyerCashbackAmount / priceUsed) * 100);
+    const feePercent = mediatorCommissionPercent + influencerPercent + buyerCashbackPercent;
+
+    // Total potential fee is the total split from original price
     const totalPotentialFee = round2((Number(priceUsed) * feePercent) / 100);
-    const platformFee = round2(totalPotentialFee - buyerDiscount); // recorded fee in Purchase (split between influencer and mediator)
-    const sellerReceives = round2(Number(priceUsed) - totalPotentialFee); // Always 95% of original price
+    // recorded fee in Purchase (only what belongs to mediator + influencer, NOT buyer cashback)
+    // Actually, we record everything that is subtracted from seller as 'feeAmount'
+    const platformFee = round2(totalPotentialFee - buyerCashbackAmount);
+    const sellerReceives = round2(Number(priceUsed) - totalPotentialFee);
 
     const purchase = await runTx(async (session) => {
       // Stock and availability guard within the same transaction
@@ -746,13 +760,15 @@ router.post('/initiate', auth, async (req, res) => {
       }
 
       let p = await Purchase.create([{
-        buyerId, sellerId: sellerUserIdFromItem, itemId, price: finalPriceForBuyer, feePercent, feeAmount: platformFee, sellerReceives,
+        buyerId, sellerId: sellerUserIdFromItem, itemId, price: Number(priceUsed), feePercent, feeAmount: platformFee, sellerReceives,
         status: 'initiated',
         buyerInfo: { fullName, cpf, birthDate, email },
         influencerId,
         influencerCommission,
+        cashbackAmount: buyerCashbackAmount,
+        cashbackUsed,
         couponCode: couponCodeApplied,
-        logs: [{ level: 'info', message: 'Purchase initiated' + (couponCodeApplied ? ` with coupon ${couponCodeApplied}` : '') }]
+        logs: [{ level: 'info', message: 'Purchase initiated' + (couponCodeApplied ? ` with coupon ${couponCodeApplied}` : '') + (cashbackUsed > 0 ? ` using ${cashbackUsed.toFixed(2)} cashback` : '') }]
       }], { session });
       p = p[0];
 
@@ -769,9 +785,16 @@ router.post('/initiate', auth, async (req, res) => {
         );
       }
 
-      const before = round2(buyer.walletBalance || 0);
+      const before = round2(buyer.walletBalance || buyer.balance || 0);
       const after = round2(before - finalPriceForBuyer);
       buyer.walletBalance = after;
+      buyer.balance = after;
+
+      const cbBefore = round2(buyer.cashbackBalance || 0);
+      if (cashbackUsed > 0) {
+        buyer.cashbackBalance = round2(cbBefore - cashbackUsed);
+      }
+
       if (!buyer.cpfCnpj) buyer.cpfCnpj = cpf;
       if (!buyer.legalName) buyer.legalName = fullName;
       if (!buyer.birthDate) buyer.birthDate = birthDate;
@@ -788,6 +811,20 @@ router.post('/initiate', auth, async (req, res) => {
         balanceAfter: after,
         metadata: { source: 'purchase', purchaseId: p._id.toString(), itemId }
       }], { session });
+
+      if (cashbackUsed > 0) {
+        await WalletLedger.create([{
+          userId: buyerId,
+          txId: null,
+          direction: 'debit',
+          reason: 'cashback_usage',
+          amount: cashbackUsed,
+          operationId: `cashback_usage:${p._id.toString()}`,
+          balanceBefore: cbBefore,
+          balanceAfter: round2(cbBefore - cashbackUsed),
+          metadata: { source: 'purchase', purchaseId: p._id.toString(), itemId }
+        }], { session });
+      }
 
       p.status = 'escrow_reserved';
       p.escrowReservedAt = new Date();
@@ -1024,10 +1061,10 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
     if (!['shipped', 'delivered', 'escrow_reserved'].includes(purchase.status)) return res.status(400).json({ success: false, message: 'Compra não está apta para confirmação' });
 
     await runTx(async (session) => {
-      const seller = await User.findById(purchase.sellerId).session(session);
-      const before = round2(seller.walletBalance || 0);
+      const before = round2(seller.walletBalance || seller.balance || 0);
       const after = round2(before + Number(purchase.sellerReceives));
       seller.walletBalance = after;
+      seller.balance = after;
       await seller.save({ session });
       const releaseCreated = await WalletLedger.create([{
         userId: purchase.sellerId,
@@ -1080,9 +1117,10 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
           if (infCommission > 0 && purchase.influencerId) {
             const influencer = await User.findById(purchase.influencerId).session(session);
             if (influencer) {
-              const infBefore = round2(influencer.walletBalance || 0);
+              const infBefore = round2(influencer.walletBalance || influencer.balance || 0);
               const infAfter = round2(infBefore + infCommission);
               influencer.walletBalance = infAfter;
+              influencer.balance = infAfter;
               await influencer.save({ session });
 
               const infLedger = await WalletLedger.create([{
@@ -1129,9 +1167,10 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
               try { mediatorUser = await User.findOne({ email: envEmail }).session(session); } catch (_) { }
             }
             if (mediatorUser) {
-              const medBefore = round2(mediatorUser.walletBalance || 0);
+              const medBefore = round2(mediatorUser.walletBalance || mediatorUser.balance || 0);
               const medAfter = round2(medBefore + mediatorFee);
               mediatorUser.walletBalance = medAfter;
+              mediatorUser.balance = medAfter;
               await mediatorUser.save({ session });
               const created = await WalletLedger.create([{
                 userId: mediatorUser._id,
@@ -1167,6 +1206,33 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
         }
       } catch (e) {
         try { logger?.error?.('[PURCHASES] Failed to credit mediator/influencer fees', { error: e?.message }); } catch (_) { }
+      }
+
+      // 3. Award Cashback to Buyer if applicable
+      try {
+        if (purchase.cashbackAmount > 0) {
+          const buyer = await User.findById(purchase.buyerId).session(session);
+          if (buyer) {
+            const cbBefore = round2(buyer.cashbackBalance || 0);
+            const cbAfter = round2(cbBefore + purchase.cashbackAmount);
+            buyer.cashbackBalance = cbAfter;
+            await buyer.save({ session });
+
+            await WalletLedger.create([{
+              userId: purchase.buyerId,
+              txId: null,
+              direction: 'credit',
+              reason: 'cashback_reward',
+              amount: purchase.cashbackAmount,
+              operationId: `cashback_reward:${purchase._id.toString()}`,
+              balanceBefore: cbBefore,
+              balanceAfter: cbAfter,
+              metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId }
+            }], { session });
+          }
+        }
+      } catch (e) {
+        try { logger?.error?.('[PURCHASES] Failed to award buyer cashback', { error: e?.message }); } catch (_) { }
       }
 
       // Buyer settlement ledger (amount 0) to appear in history without changing balance
@@ -1630,23 +1696,48 @@ async function performPurchaseCancel(app, purchaseId, reason) {
     const buyer = await User.findById(purchase.buyerId).session(session);
     if (!buyer) throw new Error('BUYER_NOT_FOUND');
 
-    const before = round2(buyer.walletBalance || 0);
-    const after = round2(before + Number(purchase.price || 0));
-
+    // Refund Main Wallet
+    const walletRefundAmount = round2(Number(purchase.price || 0) - Number(purchase.cashbackUsed || 0));
+    const before = round2(buyer.walletBalance || buyer.balance || 0);
+    const after = round2(before + walletRefundAmount);
     buyer.walletBalance = after;
-    await buyer.save({ session });
+    buyer.balance = after;
 
-    await WalletLedger.create([{
-      userId: purchase.buyerId,
-      txId: null,
-      direction: 'credit',
-      reason: 'purchase_cancel_refund',
-      amount: Number(purchase.price || 0),
-      operationId: `purchase_cancel_refund:${purchase._id.toString()}`,
-      balanceBefore: before,
-      balanceAfter: after,
-      metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, adminReason: reason || null }
-    }], { session });
+    if (walletRefundAmount > 0) {
+      await WalletLedger.create([{
+        userId: purchase.buyerId,
+        txId: null,
+        direction: 'credit',
+        reason: 'purchase_cancel_refund',
+        amount: walletRefundAmount,
+        operationId: `purchase_cancel_refund:${purchase._id.toString()}`,
+        balanceBefore: before,
+        balanceAfter: after,
+        metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId, adminReason: reason || null }
+      }], { session });
+    }
+
+    // Refund Cashback Balance
+    const cbUsed = Number(purchase.cashbackUsed || 0);
+    if (cbUsed > 0) {
+      const cbBefore = round2(buyer.cashbackBalance || 0);
+      const cbAfter = round2(cbBefore + cbUsed);
+      buyer.cashbackBalance = cbAfter;
+
+      await WalletLedger.create([{
+        userId: purchase.buyerId,
+        txId: null,
+        direction: 'credit',
+        reason: 'cashback_refund',
+        amount: cbUsed,
+        operationId: `cashback_refund:${purchase._id.toString()}`,
+        balanceBefore: cbBefore,
+        balanceAfter: cbAfter,
+        metadata: { source: 'purchase', purchaseId: purchase._id.toString(), itemId: purchase.itemId }
+      }], { session });
+    }
+
+    await buyer.save({ session });
 
     purchase.status = 'cancelled';
     purchase.cancelledAt = new Date();
