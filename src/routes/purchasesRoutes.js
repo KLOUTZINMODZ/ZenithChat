@@ -1085,6 +1085,9 @@ router.post('/:purchaseId/confirm', auth, async (req, res) => {
     if (!['shipped', 'delivered', 'escrow_reserved'].includes(purchase.status)) return res.status(400).json({ success: false, message: 'Compra não está apta para confirmação' });
 
     await runTx(async (session) => {
+      const seller = await User.findById(purchase.sellerId).session(session);
+      if (!seller) throw new Error('SELLER_NOT_FOUND');
+
       const before = round2(seller.walletBalance || seller.balance || 0);
       const after = round2(before + Number(purchase.sellerReceives));
       seller.walletBalance = after;
