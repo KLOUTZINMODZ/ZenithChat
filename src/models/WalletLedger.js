@@ -28,7 +28,10 @@ const walletLedgerSchema = new mongoose.Schema({
       'boosting_payment',         // NOVO: Fluxo legado (sem escrow)
       'boosting_release',
       'boosting_fee',
-      'promo_code_redemption'
+      'promo_code_redemption',
+      'cashback_usage',
+      'cashback_award',
+      'cashback_refund'
     ], required: true
   },
 
