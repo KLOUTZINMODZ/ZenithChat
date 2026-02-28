@@ -672,15 +672,16 @@ router.post('/initiate', auth, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Item indisponível para compra' });
     }
     // Validate price
-    const priceUsed = Number(itemDoc.price ?? price);
+    const priceUsed = round2(itemDoc.price ?? price);
     if (!Number.isFinite(priceUsed) || priceUsed <= 0) {
       return res.status(400).json({ success: false, message: 'Preço inválido para a compra' });
     }
 
-    const finalPriceForBuyer = round2(Number(priceUsed));
+    const finalPriceForBuyer = priceUsed;
     let cashbackUsed = 0;
     // Initial check for non-cashback balance (approximate, re-checked in tx)
-    if (buyer.walletBalance < finalPriceForBuyer - (buyer.cashbackBalance || 0)) {
+    const currentEffectiveBalance = round2(buyer.walletBalance || buyer.balance || 0);
+    if (currentEffectiveBalance < finalPriceForBuyer - (buyer.cashbackBalance || 0)) {
       return res.status(400).json({ success: false, message: 'Saldo insuficiente' });
     }
 
@@ -794,12 +795,15 @@ router.post('/initiate', auth, async (req, res) => {
 
       const finalAmountFromBalance = round2(priceUsed - currentCashbackUsed);
 
-      // Anti-bypass: Check both balance fields
-      if ((buyerInTx.walletBalance || 0) < finalAmountFromBalance || (buyerInTx.balance || 0) < finalAmountFromBalance) {
+      // Effective balance from any of the two sources
+      const effectiveBalance = round2(buyerInTx.walletBalance || buyerInTx.balance || 0);
+
+      // Relaxed check: as long as there is enough combined/effective balance, proceed and sync
+      if (effectiveBalance < finalAmountFromBalance) {
         throw new Error('INSUFFICIENT_FUNDS');
       }
 
-      const before = round2(buyerInTx.walletBalance || 0);
+      const before = effectiveBalance;
       const after = round2(before - finalAmountFromBalance);
       buyerInTx.walletBalance = after;
       buyerInTx.balance = after;
