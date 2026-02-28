@@ -157,7 +157,7 @@ const influencerController = {
 
             // Get active coupons for this influencer
             const coupons = await PromoCode.find({ influencerId: userId, isInfluencerCoupon: true })
-                .select('code currentUses maxUses status')
+                .select('code currentUses maxUses status commissionSplit')
                 .lean();
 
             // Get referred users count
