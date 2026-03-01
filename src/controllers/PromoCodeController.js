@@ -88,6 +88,16 @@ const promoCodeController = {
         }
     },
 
+    deleteCode: async (req, res) => {
+        try {
+            const { id } = req.params;
+            await PromoCode.findByIdAndDelete(id);
+            return res.json({ success: true, message: 'Código excluído com sucesso' });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'Erro ao excluir código' });
+        }
+    },
+
     // --- USER METHODS ---
 
     redeemCode: async (req, res) => {

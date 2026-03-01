@@ -39,5 +39,6 @@ router.post('/redeem', auth, promoCodeController.redeemCode);
 router.post('/admin', requireAdminKey, promoCodeController.createCode);
 router.get('/admin', requireAdminKey, promoCodeController.listCodes);
 router.patch('/admin/:id', requireAdminKey, promoCodeController.updateCode);
+router.delete('/admin/:id', requireAdminKey, promoCodeController.deleteCode);
 
 module.exports = router;
