@@ -137,51 +137,60 @@ const promoCodeController = {
                 return res.status(400).json({ success: false, message: 'Você já resgatou este código' });
             }
 
-            // CPF Validation Logic
+            // --- CPF Validation Logic ---
             const user = await User.findById(userId);
-            let targetCpf = user.pixKeyNormalized || user.cpfCnpj || cpfInput;
 
-            // Se o usuário passou um CPF e não tinhamos um, vamos validar e usar esse
-            if (!targetCpf) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'CPF é obrigatório para resgate',
-                    error: 'MISSING_CPF'
-                });
+            // Normalize inputs
+            const inputDigits = cpfInput ? String(cpfInput).replace(/\D/g, '') : null;
+            const linkedDigits = user.pixKeyNormalized || user.cpfCnpj;
+
+            // Case 1: Already has a linked CPF
+            if (linkedDigits) {
+                // If user provided a different CPF, reject it
+                if (inputDigits && inputDigits !== linkedDigits) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'O CPF informado não coincide com o CPF vinculado à sua conta.'
+                    });
+                }
+                // Use the linked CPF for internal record
+                var finalCpfDigits = linkedDigits;
             }
+            // Case 2: No linked CPF (First redemption)
+            else {
+                if (!inputDigits) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'CPF é obrigatório para o primeiro resgate por motivos de segurança.'
+                    });
+                }
 
-            // Normalizar CPF
-            const digits = String(targetCpf).replace(/\D/g, '');
-            if (digits.length !== 11) {
-                return res.status(400).json({ success: false, message: 'CPF inválid' });
-            }
+                if (inputDigits.length !== 11) {
+                    return res.status(400).json({ success: false, message: 'CPF inválido. Certifique-se de preencher os 11 dígitos.' });
+                }
 
-            // Vincular CPF se ainda não vinculado
-            if (!user.pixKeyNormalized) {
-                // Verificar se outro usuário já usa este CPF
-                const h = crypto.createHash('sha256').update(`CPF:${digits}`).digest('hex');
+                // Verify if another user already uses this CPF
+                const h = crypto.createHash('sha256').update(`CPF:${inputDigits}`).digest('hex');
                 const fp = `sha256:${h}`;
 
                 const exists = await User.findOne({ pixKeyFingerprint: fp, _id: { $ne: user._id } });
                 if (exists) {
-                    return res.status(409).json({ success: false, message: 'Este CPF já está vinculado a outra conta' });
+                    return res.status(409).json({ success: false, message: 'Este CPF já está vinculado a outra conta.' });
                 }
 
+                // Bind CPF permanently
                 user.pixKeyType = 'CPF';
-                user.pixKeyNormalized = digits;
+                user.pixKeyNormalized = inputDigits;
                 user.pixKeyFingerprint = fp;
                 user.pixKeyLinkedAt = new Date();
-                user.cpfCnpj = digits; // Sincroniza tb o campo legado
+                user.cpfCnpj = inputDigits; // Legacy sync
                 await user.save();
-            } else {
-                // Se já tem CPF vinculado, o informado deve ser o mesmo
-                if (user.pixKeyNormalized !== digits) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'O CPF informado deve ser o mesmo cadastrado na sua conta'
-                    });
-                }
+
+                var finalCpfDigits = inputDigits;
+                logger.info('CPF linked to user during gift card redemption', { userId: user._id, cpf: inputDigits });
             }
+
+            const digits = finalCpfDigits;
 
             // Atomic Redemption
             const result = await runWithTransactionOrFallback(async (session) => {
