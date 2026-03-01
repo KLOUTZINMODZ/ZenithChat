@@ -137,69 +137,44 @@ const promoCodeController = {
                 return res.status(400).json({ success: false, message: 'Você já resgatou este código' });
             }
 
-            // --- CPF Validation Logic ---
-            const user = await User.findById(userId);
-
-            // Normalize inputs
-            const inputDigits = cpfInput ? String(cpfInput).replace(/\D/g, '') : null;
-            const linkedDigits = user.pixKeyNormalized || user.cpfCnpj;
-
-            // Case 1: Already has a linked CPF
-            if (linkedDigits) {
-                // If user provided a different CPF, reject it
-                if (inputDigits && inputDigits !== linkedDigits) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'O CPF informado não coincide com o CPF vinculado à sua conta.'
-                    });
-                }
-                // Use the linked CPF for internal record
-                var finalCpfDigits = linkedDigits;
-            }
-            // Case 2: No linked CPF (First redemption)
-            else {
-                if (!inputDigits) {
-                    return res.status(400).json({
-                        success: false,
-                        message: 'CPF é obrigatório para o primeiro resgate por motivos de segurança.'
-                    });
-                }
-
-                if (inputDigits.length !== 11) {
-                    return res.status(400).json({ success: false, message: 'CPF inválido. Certifique-se de preencher os 11 dígitos.' });
-                }
-
-                // Verify if another user already uses this CPF
-                const h = crypto.createHash('sha256').update(`CPF:${inputDigits}`).digest('hex');
-                const fp = `sha256:${h}`;
-
-                const exists = await User.findOne({ pixKeyFingerprint: fp, _id: { $ne: user._id } });
-                if (exists) {
-                    return res.status(409).json({ success: false, message: 'Este CPF já está vinculado a outra conta.' });
-                }
-
-                // Bind CPF permanently
-                user.pixKeyType = 'CPF';
-                user.pixKeyNormalized = inputDigits;
-                user.pixKeyFingerprint = fp;
-                user.pixKeyLinkedAt = new Date();
-                user.cpfCnpj = inputDigits; // Legacy sync
-                await user.save();
-
-                var finalCpfDigits = inputDigits;
-                logger.info('CPF linked to user during gift card redemption', { userId: user._id, cpf: inputDigits });
-            }
-
-            const digits = finalCpfDigits;
-
             // Atomic Redemption
             const result = await runWithTransactionOrFallback(async (session) => {
-                // Re-fetch promo to ensure limits in transaction if possible
+                // Fetch promo and user within session
                 const p = session ? await PromoCode.findById(promo._id).session(session) : promo;
+                const u = session ? await User.findById(userId).session(session) : await User.findById(userId);
 
                 if (p.maxUses !== null && p.currentUses >= p.maxUses) throw new Error('LIMIT_REACHED');
+                if (p.users.some(redemption => redemption.userId.toString() === userId.toString())) throw new Error('ALREADY_REDEEMED');
 
-                const u = await User.findById(userId).session(session);
+                // --- ATOMIC CPF VALIDATION ---
+                const inputDigits = cpfInput ? String(cpfInput).replace(/\D/g, '') : null;
+                const linkedDigits = u.pixKeyNormalized || u.cpfCnpj;
+                let finalCpfDigits;
+
+                if (linkedDigits) {
+                    if (inputDigits && inputDigits !== linkedDigits) {
+                        throw new Error('CPF_MISMATCH');
+                    }
+                    finalCpfDigits = linkedDigits;
+                } else {
+                    if (!inputDigits) throw new Error('CPF_REQUIRED');
+                    if (inputDigits.length !== 11) throw new Error('CPF_INVALID');
+
+                    const h = crypto.createHash('sha256').update(`CPF:${inputDigits}`).digest('hex');
+                    const fp = `sha256:${h}`;
+
+                    const exists = await User.findOne({ pixKeyFingerprint: fp, _id: { $ne: u._id } }).session(session);
+                    if (exists) throw new Error('CPF_ALREADY_IN_USE');
+
+                    u.pixKeyType = 'CPF';
+                    u.pixKeyNormalized = inputDigits;
+                    u.pixKeyFingerprint = fp;
+                    u.pixKeyLinkedAt = new Date();
+                    u.cpfCnpj = inputDigits;
+                    finalCpfDigits = inputDigits;
+                    // We'll save 'u' later along with balance
+                }
+
                 const balanceBefore = round2(u.walletBalance || 0);
 
                 let creditAmount = 0;
@@ -248,7 +223,7 @@ const promoCodeController = {
                     metadata: { cupomreward: true, code: p.code }
                 }], { session });
 
-                return { success: true, newBalance: u.walletBalance, amount: creditAmount };
+                return { success: true, newBalance: u.walletBalance, amount: creditAmount, user: u };
             });
 
             if (result.success) {
@@ -268,7 +243,10 @@ const promoCodeController = {
                 return res.json({
                     success: true,
                     message: `Código resgatado com sucesso! Você recebeu R$ ${result.amount.toFixed(2)}`,
-                    data: { balance: result.newBalance }
+                    data: {
+                        balance: result.newBalance,
+                        user: result.user
+                    }
                 });
             } else {
                 throw new Error('Falha no resgate');
@@ -277,6 +255,12 @@ const promoCodeController = {
         } catch (error) {
             logger.error('Redeem error:', error);
             if (error.message === 'LIMIT_REACHED') return res.status(400).json({ success: false, message: 'Limite de usos atingido' });
+            if (error.message === 'ALREADY_REDEEMED') return res.status(400).json({ success: false, message: 'Você já resgatou este código' });
+            if (error.message === 'CPF_MISMATCH') return res.status(400).json({ success: false, message: 'O CPF informado não coincide com o CPF vinculado à sua conta.' });
+            if (error.message === 'CPF_REQUIRED') return res.status(400).json({ success: false, message: 'CPF é obrigatório para o primeiro resgate por motivos de segurança.' });
+            if (error.message === 'CPF_INVALID') return res.status(400).json({ success: false, message: 'CPF inválido. Certifique-se de preencher os 11 dígitos.' });
+            if (error.message === 'CPF_ALREADY_IN_USE') return res.status(409).json({ success: false, message: 'Este CPF já está vinculado a outra conta.' });
+
             return res.status(500).json({ success: false, message: 'Erro ao processar resgate' });
         }
     }
