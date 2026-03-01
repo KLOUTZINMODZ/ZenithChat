@@ -479,8 +479,8 @@ router.get('/list', auth, async (req, res) => {
         // Para boosting, tentamos usar o request ID ou o item ID
         key = `boosting:${order.boostingRequest?._id || order.item?._id || order._id}`;
       } else {
-        // Para marketplace, usamos o ID do item e do comprador
-        key = `marketplace:${order.item?._id || ''}:${order.buyer?._id || ''}`;
+        // Para marketplace, usamos o ID único da compra para permitir múltiplos pedidos do mesmo item
+        key = `marketplace:${order._id}`;
       }
 
       // Se já temos um pedido com esta chave, vamos decidir qual manter
