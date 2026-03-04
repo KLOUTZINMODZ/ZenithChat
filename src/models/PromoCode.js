@@ -66,9 +66,9 @@ const promoCodeSchema = new mongoose.Schema({
         default: false
     },
     commissionSplit: {
-        buyerDiscount: { type: Number, default: 0, min: 0, max: 5 },
-        influencerCommission: { type: Number, default: 0, min: 0, max: 5 },
-        mediatorCommission: { type: Number, default: 5, min: 0, max: 5 }
+        buyerDiscount: { type: Number, default: 0, min: 0, max: 15 },
+        influencerCommission: { type: Number, default: 0, min: 0, max: 15 },
+        mediatorCommission: { type: Number, default: 5, min: 0, max: 15 }
     }
 }, { timestamps: true });
 
