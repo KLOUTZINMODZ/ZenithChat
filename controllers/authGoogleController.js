@@ -304,7 +304,8 @@ exports.completeGoogleRegistration = async (req, res) => {
           name: user.name,
           phone: cleanPhone,
           googleId: decoded.googleId,
-          avatar: user.avatar
+          avatar: user.avatar,
+          referredBy: user.referredBy
         }, {
           headers: {
             'X-Admin-Secret': adminSecret
@@ -322,7 +323,8 @@ exports.completeGoogleRegistration = async (req, res) => {
           name: user.name,
           phone: cleanPhone,
           googleId: decoded.googleId,
-          avatar: user.avatar
+          avatar: user.avatar,
+          referredBy: user.referredBy
         }, {
           headers: {
             'X-Admin-Secret': adminSecret
