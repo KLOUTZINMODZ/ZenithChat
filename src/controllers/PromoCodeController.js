@@ -204,7 +204,7 @@ const promoCodeController = {
                 p.users.push({
                     userId,
                     redeemedAt: new Date(),
-                    cpfCnpj: digits
+                    cpfCnpj: finalCpfDigits
                 });
                 await p.save({ session });
 
