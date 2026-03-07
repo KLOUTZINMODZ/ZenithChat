@@ -117,7 +117,17 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null,
-    index: true
+    index: true,
+    set: function (v) {
+      if (!v) return null;
+      if (typeof v === 'string') {
+        // Strip embedded quote characters from corrupted data
+        const cleaned = v.replace(/"/g, '').trim();
+        if (/^[0-9a-fA-F]{24}$/.test(cleaned)) return cleaned;
+        return null;
+      }
+      return v;
+    }
   },
   activeInfluencer: {
     influencerId: {
@@ -281,6 +291,25 @@ const userSchema = new mongoose.Schema({
   autoIndex: false // Desabilita criação automática de índices (evita conflitos)
 });
 
+// Fix corrupted ObjectId fields that may contain embedded quote characters from bad imports.
+// This override runs DURING document hydration (init phase), which is the only way to handle
+// corrupted data already in the database without a manual migration.
+['referredBy', 'bannedBy'].forEach(fieldPath => {
+  const schemaType = userSchema.path(fieldPath);
+  if (schemaType) {
+    const originalCast = schemaType.cast.bind(schemaType);
+    schemaType.cast = function (val) {
+      if (typeof val === 'string' && val.includes('"')) {
+        const cleaned = val.replace(/"/g, '').trim();
+        if (/^[0-9a-fA-F]{24}$/.test(cleaned)) {
+          return originalCast(cleaned);
+        }
+        return null;
+      }
+      return originalCast(val);
+    };
+  }
+});
 
 userSchema.index({ email: 1 });
 userSchema.index({ pixKeyFingerprint: 1 }, { unique: true, sparse: true });
@@ -492,6 +521,39 @@ userSchema.statics.ensureIndexes = async function () {
     }
   } catch (error) {
     console.error('❌ [User Model] Erro ao garantir índices:', error.message);
+  }
+};
+
+/**
+ * Fix corrupted ObjectId fields (e.g. referredBy stored as string with embedded quotes).
+ * Must run at startup BEFORE any findById() calls, because Mongoose crashes during
+ * document hydration (init phase) before any hooks or setters can intervene.
+ */
+userSchema.statics.ensureCleanObjectIds = async function () {
+  const objectIdFields = ['referredBy', 'bannedBy'];
+  try {
+    for (const field of objectIdFields) {
+      const filter = { [field]: { $type: 'string' } };
+      const docs = await this.collection.find(filter).project({ _id: 1, [field]: 1 }).toArray();
+
+      if (docs.length === 0) continue;
+
+      console.log(`⚠️  [User Model] Found ${docs.length} users with corrupted '${field}'. Fixing...`);
+
+      for (const doc of docs) {
+        const raw = doc[field];
+        const cleaned = typeof raw === 'string' ? raw.replace(/"/g, '').trim() : null;
+        let fixedValue = null;
+        if (cleaned && /^[0-9a-fA-F]{24}$/.test(cleaned)) {
+          fixedValue = new mongoose.Types.ObjectId(cleaned);
+        }
+        await this.collection.updateOne({ _id: doc._id }, { $set: { [field]: fixedValue } });
+      }
+
+      console.log(`✅ [User Model] Fixed ${docs.length} corrupted '${field}' values`);
+    }
+  } catch (error) {
+    console.error('❌ [User Model] Error cleaning ObjectId fields:', error.message);
   }
 };
 

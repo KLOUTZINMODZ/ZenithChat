@@ -10,7 +10,7 @@ const connectDB = async () => {
     try {
       const masked = uri.replace(/\/\/([^:@/]+):([^@/]+)@/, '//$1:****@');
       logger.info(`MongoDB connecting to: ${masked}`);
-    } catch {}
+    } catch { }
 
     const options = {
       serverSelectionTimeoutMS: Number(process.env.MONGODB_SERVER_SELECTION_TIMEOUT_MS) || 30000,
@@ -28,6 +28,13 @@ const connectDB = async () => {
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
 
+    // Fix corrupted ObjectId fields before any queries can crash
+    try {
+      const User = require('../models/User');
+      await User.ensureCleanObjectIds();
+    } catch (cleanErr) {
+      logger.warn('Could not run ObjectId cleanup:', cleanErr.message);
+    }
 
     mongoose.connection.on('error', (err) => {
       logger.error('MongoDB connection error:', err);
