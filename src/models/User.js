@@ -321,6 +321,19 @@ userSchema.pre('save', function (next) {
     }
   }
 
+  // Sanitizar referredBy (corrige dados corrompidos com aspas extras)
+  if (this.isModified('referredBy') || this.referredBy) {
+    if (this.referredBy && typeof this.referredBy === 'string') {
+      // Remove aspas extras que possam ter sido inseridas por import/edição manual
+      const cleaned = this.referredBy.replace(/"/g, '').trim();
+      if (/^[0-9a-fA-F]{24}$/.test(cleaned)) {
+        this.referredBy = cleaned;
+      } else {
+        this.referredBy = null;
+      }
+    }
+  }
+
   next();
 });
 

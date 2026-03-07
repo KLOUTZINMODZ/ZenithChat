@@ -151,7 +151,31 @@ const promoCodeController = {
             const result = await runWithTransactionOrFallback(async (session) => {
                 // Fetch promo and user within session
                 const p = session ? await PromoCode.findById(promo._id).session(session) : promo;
-                const u = session ? await User.findById(userId).session(session) : await User.findById(userId);
+
+                // Fetch user with fallback for corrupted ObjectId fields (e.g. referredBy with extra quotes)
+                let u;
+                try {
+                    u = session ? await User.findById(userId).session(session) : await User.findById(userId);
+                } catch (loadErr) {
+                    if (loadErr.name === 'ValidationError' || loadErr.name === 'CastError') {
+                        // Fix corrupted data directly via native driver, then reload
+                        const rawUser = await User.collection.findOne({ _id: new mongoose.Types.ObjectId(userId) });
+                        if (!rawUser) throw new Error('USER_NOT_FOUND');
+                        const fixes = {};
+                        for (const field of ['referredBy', 'bannedBy']) {
+                            if (rawUser[field] && typeof rawUser[field] === 'string') {
+                                const cleaned = rawUser[field].replace(/"/g, '').trim();
+                                fixes[field] = /^[0-9a-fA-F]{24}$/.test(cleaned) ? new mongoose.Types.ObjectId(cleaned) : null;
+                            }
+                        }
+                        if (Object.keys(fixes).length) {
+                            await User.collection.updateOne({ _id: rawUser._id }, { $set: fixes });
+                        }
+                        u = session ? await User.findById(userId).session(session) : await User.findById(userId);
+                    } else {
+                        throw loadErr;
+                    }
+                }
 
                 if (p.maxUses !== null && p.currentUses >= p.maxUses) throw new Error('LIMIT_REACHED');
                 if (p.users.some(redemption => redemption.userId.toString() === userId.toString())) throw new Error('ALREADY_REDEEMED');
